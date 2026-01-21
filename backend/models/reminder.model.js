@@ -36,8 +36,9 @@ const ReminderSchema = new mongoose.Schema(
   {
     timestamps: true,
     collection: "Reminders",
-  }
+  },
 );
 
-export default mongoose.models.Reminder ||
-  mongoose.model("Reminder", ReminderSchema);
+const UserDB = mongoose.connection.useDb("User");
+
+export default UserDB.models.Reminder || UserDB.model("Reminder", ReminderSchema);

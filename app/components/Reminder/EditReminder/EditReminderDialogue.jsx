@@ -21,9 +21,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CalendarClock } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export function NewReminderDialog({ children, onReminderCreated }) {
+export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -31,9 +31,21 @@ export function NewReminderDialog({ children, onReminderCreated }) {
   const [formData, setFormData] = useState({
     title: "",
     datetime: "",
-    module: "Confidence Coach",
+    module: "General",
     priority: "medium",
   });
+
+  // Load reminder data when dialog opens
+  useEffect(() => {
+    if (open && reminder) {
+      setFormData({
+        title: reminder.title || "",
+        datetime: reminder.date ? new Date(reminder.date).toISOString().slice(0, 16) : "",
+        module: reminder.module || "General",
+        priority: reminder.priority || "medium",
+      });
+    }
+  }, [open, reminder]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,11 +74,11 @@ export function NewReminderDialog({ children, onReminderCreated }) {
         priority: formData.priority,
       };
 
-      console.log("Submitting reminder:", reminderData);
+      console.log("Updating reminder:", reminderData);
 
-      // Send to API
-      const response = await fetch("/api/reminders", {
-        method: "POST",
+      // Send to API (you'll need to create a PUT/PATCH endpoint)
+      const response = await fetch(`/api/reminders/${reminder._id}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
@@ -76,31 +88,23 @@ export function NewReminderDialog({ children, onReminderCreated }) {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to create reminder");
+        throw new Error(result.error || "Failed to update reminder");
       }
 
-      console.log("Reminder created successfully:", result);
-
-      // Reset form
-      setFormData({
-        title: "",
-        datetime: "",
-        module: "Confidence Coach",
-        priority: "medium",
-      });
+      console.log("Reminder updated successfully:", result);
 
       // Close dialog
       setOpen(false);
 
       // Call callback if provided
-      if (onReminderCreated) {
-        onReminderCreated(result.data);
+      if (onReminderUpdated) {
+        onReminderUpdated(result.data);
       }
 
-      // Optional: Show success toast (if you have a toast library)
-      // toast.success("Reminder created successfully!");
+      // Optional: Show success toast
+      // toast.success("Reminder updated successfully!");
     } catch (err) {
-      console.error("Error creating reminder:", err);
+      console.error("Error updating reminder:", err);
       setError(err.message || "Something went wrong");
     } finally {
       setLoading(false);
@@ -130,10 +134,10 @@ export function NewReminderDialog({ children, onReminderCreated }) {
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-lg font-medium">
-              Add New Reminder
+              Edit Reminder
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Create a reminder to stay on track.
+              Update your reminder details.
             </DialogDescription>
           </DialogHeader>
 
@@ -186,6 +190,7 @@ export function NewReminderDialog({ children, onReminderCreated }) {
                   <SelectValue placeholder="Select a module" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="General">General</SelectItem>
                   <SelectItem value="Confidence Coach">Confidence Coach</SelectItem>
                   <SelectItem value="Social Mentor">Social Mentor</SelectItem>
                   <SelectItem value="Micro-Learning">Micro-Learning</SelectItem>
@@ -226,7 +231,7 @@ export function NewReminderDialog({ children, onReminderCreated }) {
               className="bg-primary text-primary-foreground"
               disabled={loading}
             >
-              {loading ? "Creating..." : "Add Reminder"}
+              {loading ? "Saving..." : "Apply Changes"}
             </Button>
           </DialogFooter>
         </form>

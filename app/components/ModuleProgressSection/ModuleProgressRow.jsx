@@ -37,15 +37,7 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
     : "Continue";
 
   return (
-    <div
-      className="
-      flex items-center justify-between 
-      border-2 border-muted rounded-lg px-4 py-4 
-      hover:bg-muted/40 hover:shadow-md hover:shadow-black/20 transition-all duration-200 hover:border-ring hover:border-2
-      cursor-pointer
-      
-    "
-    >
+    <div className="flex items-center justify-between border-2 border-muted rounded-lg px-4 py-4 hover:bg-muted/40 hover:shadow-md hover:shadow-black/20 transition-all duration-200 hover:border-ring hover:border-2 cursor-pointer">
       {/* LEFT AREA: ICON + TITLES */}
       <div className="flex flex-col gap-1 w-[220px]">
         <div className="flex items-center gap-3">

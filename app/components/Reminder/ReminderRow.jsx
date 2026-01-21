@@ -1,13 +1,15 @@
 import { EllipsisVertical, Pencil, Trash2 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 import { useState } from "react"
 import { formatCompletedDate, formatDate } from "./utils/formatDate";
 import { cn } from "@/lib/utils.js";
 
-export default function ReminderRow({ reminder, onToggle }) {
+import { EditReminderDialog } from "./EditReminder/EditReminderDialogue.jsx";
+
+export default function ReminderRow({ reminder, onToggle, onReminderUpdated }) {
     const formattedDate = reminder.status === "completed" ? `Completed • ${formatCompletedDate(reminder.completedAt)}` : formatDate(reminder.date);
 
     function getReminderStatus(reminder) {
@@ -49,12 +51,23 @@ export default function ReminderRow({ reminder, onToggle }) {
                         <EllipsisVertical className="w-5 h-5 text-muted-foreground hover:text-foreground cursor-pointer" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" side="top" sideOffset={10}>
-                        <DropdownMenuItem>
-                            <Pencil />
-                            Edit Reminder
-                        </DropdownMenuItem>
-                        <DropdownMenuItem variant="destructive">
-                            <Trash2 />
+                        <EditReminderDialog 
+                            reminder={reminder}
+                            onReminderUpdated={(updatedReminder) => {
+                                console.log("Reminder updated:", updatedReminder);
+                                if (onReminderUpdated) {
+                                    onReminderUpdated(updatedReminder);
+                                }
+                            }}
+                        >
+                            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                <Pencil className="w-4 h-4 mr-2" />
+                                Edit Reminder
+                            </DropdownMenuItem>
+                        </EditReminderDialog>
+                        
+                        <DropdownMenuItem className="text-destructive focus:text-destructive">
+                            <Trash2 className="w-4 h-4 mr-2" />
                             Delete Reminder
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -62,4 +75,4 @@ export default function ReminderRow({ reminder, onToggle }) {
             </div>
         </Label>
     )
-} 
+}

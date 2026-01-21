@@ -45,16 +45,23 @@ import { usePathname } from "next/navigation";
 import { EllipsisVertical, PanelRightOpen, PanelLeftOpen, UserPen, LogOut, Settings, MessageCircleQuestionMark } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const { toggleSidebar, state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme } = useTheme();
-  const isDarkMode = theme === "dark";
-
+  
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Only render theme-dependent content after mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDarkMode = theme === "dark";
 
   function handleLogout() {
     // Fake delay to simulate API / auth call
@@ -76,13 +83,21 @@ export default function AppSidebar() {
         <div className="h-full flex items-center justify-between px-2 group-data-[collapsible=icon]:px-0">
           {/* Logo + text */}
           <div className="flex items-center gap-2 overflow-hidden">
-            {/* Logo icon */}
-            <div className="w-10 h-10 rounded-xl dark:bg-background flex items-center justify-center border border-primary shrink-0 group/logo">
-              <Image
-                src={isDarkMode ? Assets.logo_dark : Assets.logo_light}
-                className="w-7.5 h-8"
-                alt="PersonaAI Logo"
-              />
+            {/* Logo icon - suppress hydration warning for theme-dependent rendering */}
+            <div className="w-10 h-10 rounded-xl dark:bg-background flex items-center justify-center border border-primary shrink-0 group/logo" suppressHydrationWarning>
+              {mounted ? (
+                <Image
+                  src={isDarkMode ? Assets.logo_dark : Assets.logo_light}
+                  className="w-7.5 h-8"
+                  alt="PersonaAI Logo"
+                />
+              ) : (
+                <Image
+                  src={Assets.logo_light}
+                  className="w-7.5 h-8"
+                  alt="PersonaAI Logo"
+                />
+              )}
             </div>
 
             {/* Brand text — hide when collapsed */}
