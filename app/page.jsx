@@ -13,47 +13,81 @@ import { getConfidenceScore, getConfidenceScoreBadge, getCurrentStreak, getCurre
 
 export default function Home() {
   const [selectedDate, onDateChange] = useState('today');
-  const today = new Date("2025-09-14").toUTCString().slice(0, 16);
 
-  function filterByDateRange(data, range) {
-    const today = new Date("2025-09-14");
-    const startDate = new Date(today);
+  // 1. Correctly destructure the object returned by the filter
+  const { currentData, previousData } = useMemo(() => {
+    const result = filterByDateRange(mockSessions, selectedDate);
+    return {
+      currentData: result?.currentPeriodData || [],
+      previousData: result?.previousPeriodData || []
+    };
+  }, [selectedDate]);
 
-    if (range === "today") {
-      startDate.setDate(today.getDate());
-    } else if (range === "last7") {
-      startDate.setDate(today.getDate() - 6);
-    } else if (range === "last30") {
-      startDate.setDate(today.getDate() - 29);
-    } else {
-      console.error("Error");
-    }
-
-    return data.filter(item => {
-      const itemDate = new Date(item.date);
-      return itemDate >= startDate && itemDate <= today;
-    });
-  }
+  const today = new Date().toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 
   const filteredSessions = useMemo(() => filterByDateRange(mockSessions, selectedDate), [mockSessions, selectedDate]);
 
   // Data for Metric Cards
-  const totalSessions = getTotalSessions(filteredSessions);
-  const ConfidenceCoach = getConfidenceScore(filteredSessions);
-  const VoiceQuizzes = getVoiceQuizzes(filteredSessions);
-  const CurrentStreak = getCurrentStreak(filteredSessions);
+  const totalSessions = getTotalSessions(currentData); // currentData is the array
+  const ConfidenceCoach = getConfidenceScore(currentData);
+  const VoiceQuizzes = getVoiceQuizzes(currentData);
+  const CurrentStreak = getCurrentStreak(mockSessions);
 
-  const totalSessionsBadge = getTotalSessionsBadge(totalSessions, 12);
-  const ConfidenceCoachBadge = getConfidenceScoreBadge(filteredSessions);
-  const VoiceQuizzesBadge = getVoiceQuizzesBadge(VoiceQuizzes, selectedDate);
-  const CurrentStreakBadge = getCurrentStreakBadge(CurrentStreak);
+  const totalSessionsBadge = getTotalSessionsBadge(currentData.length, previousData.length);
+  const ConfidenceCoachBadge = getConfidenceScoreBadge(currentData, previousData);
+  const VoiceQuizzesBadge = getVoiceQuizzesBadge(currentData, previousData, selectedDate);
+  const CurrentStreakBadge = getCurrentStreakBadge(CurrentStreak)
 
-  const ActivityChartData = getActivityChartData(filteredSessions);
+  const ActivityChartData = useMemo(() =>
+    getActivityChartData(currentData),
+    [currentData]
+  );
+
+  function filterByDateRange(data, range) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const currentStart = new Date(today);
+    const prevStart = new Date(today);
+    const prevEnd = new Date(today);
+
+    if (range === "today") {
+      currentStart.setDate(today.getDate());
+      prevStart.setDate(today.getDate() - 1);
+      prevEnd.setDate(today.getDate() - 1);
+    } else if (range === "last7") {
+      currentStart.setDate(today.getDate() - 6);
+      prevStart.setDate(today.getDate() - 13); // Start of previous 7 days
+      prevEnd.setDate(today.getDate() - 7);    // End of previous 7 days
+    } else if (range === "last30") {
+      currentStart.setDate(today.getDate() - 29);
+      prevStart.setDate(today.getDate() - 59); // Start of previous 30 days
+      prevEnd.setDate(today.getDate() - 30);   // End of previous 30 days
+    }
+
+    const currentPeriodData = data.filter(item => {
+      const d = new Date(item.date);
+      return d >= currentStart && d <= today;
+    });
+
+    const previousPeriodData = data.filter(item => {
+      const d = new Date(item.date);
+      return d >= prevStart && d <= prevEnd;
+    });
+
+    // MUST RETURN THIS OBJECT STRUCTURE
+    return { currentPeriodData, previousPeriodData };
+  }
 
   return (
     <div className="w-full flex flex-col min-h-screen">
       <div>
-        <Header DateValue={selectedDate} onDateChange={onDateChange} tempDate={today}/>
+        <Header DateValue={selectedDate} onDateChange={onDateChange} tempDate={today} />
       </div>
       <div className='h-fit p-2 px-3 rounded-md grid grid-cols-4 md:grid-cols-4 gap-3'>
         <MetricCard
@@ -83,7 +117,7 @@ export default function Home() {
         <MetricCard
           icon={Trophy}
           label="Current Streak"
-          value={7}
+          value={CurrentStreak}
           badgeText={CurrentStreakBadge.text}
           badgeTone={CurrentStreakBadge.tone}
           subtitle={selectedDate}

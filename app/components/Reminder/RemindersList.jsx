@@ -1,7 +1,7 @@
 import ReminderRow from "./ReminderRow";
 import { Inbox } from "lucide-react";
 
-export default function RemindersList({ selectedFilter, remindersData, onToggle }) {
+export default function RemindersList({ selectedFilter, remindersData, onToggle, onReminderUpdated, handleReminderDeleted }) {
 
     const filteredReminders = selectedFilter === 'all' ? remindersData : remindersData.filter((reminder) => {
         return reminder.status === selectedFilter;
@@ -15,7 +15,13 @@ export default function RemindersList({ selectedFilter, remindersData, onToggle 
                 </div>
             ) : (
                 filteredReminders.map((reminder) => {
-                    return <ReminderRow key={reminder.id} reminder={reminder} onToggle={onToggle}/>
+                    return <ReminderRow
+                        key={reminder._id}
+                        reminder={reminder}
+                        onToggle={onToggle}
+                        onReminderUpdated={onReminderUpdated}
+                        onReminderDeleted={handleReminderDeleted}
+                    />
                 })
             )}
         </div>

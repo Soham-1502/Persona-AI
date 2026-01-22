@@ -1,215 +1,47 @@
-export const chartData = [
-  {
-    date: "2024-06-01",
-    confidenceCoach: 3,
-    socialMentor: 1,
-    microLearning: 2,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-02",
-    confidenceCoach: 4,
-    socialMentor: 2,
-    microLearning: 3,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-03",
-    confidenceCoach: 2,
-    socialMentor: 1,
-    microLearning: 2,
-    inQuizzo: 0,
-  },
-  {
-    date: "2024-06-04",
-    confidenceCoach: 5,
-    socialMentor: 2,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-05",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-06",
-    confidenceCoach: 4,
-    socialMentor: 2,
-    microLearning: 3,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-07",
-    confidenceCoach: 5,
-    socialMentor: 3,
-    microLearning: 2,
-    inQuizzo: 2,
-  },
+const generateDynamicChartData = () => {
+  // Original activity values from your mock data to maintain the "look" of the chart
+  const activityPatterns = [
+    { cc: 3, sm: 1, ml: 2, iq: 1 }, { cc: 4, sm: 2, ml: 3, iq: 1 },
+    { cc: 2, sm: 1, ml: 2, iq: 0 }, { cc: 5, sm: 2, ml: 4, iq: 2 },
+    { cc: 6, sm: 3, ml: 4, iq: 2 }, { cc: 4, sm: 2, ml: 3, iq: 1 },
+    { cc: 5, sm: 3, ml: 2, iq: 2 }, { cc: 3, sm: 1, ml: 3, iq: 1 },
+    { cc: 4, sm: 2, ml: 4, iq: 2 }, { cc: 6, sm: 3, ml: 5, iq: 2 },
+    { cc: 5, sm: 2, ml: 4, iq: 1 }, { cc: 4, sm: 3, ml: 3, iq: 2 },
+    { cc: 6, sm: 4, ml: 5, iq: 3 }, { cc: 7, sm: 3, ml: 4, iq: 2 },
+    { cc: 5, sm: 2, ml: 3, iq: 2 }, { cc: 4, sm: 2, ml: 4, iq: 1 },
+    { cc: 6, sm: 3, ml: 5, iq: 3 }, { cc: 5, sm: 4, ml: 4, iq: 2 },
+    { cc: 7, sm: 3, ml: 5, iq: 3 }, { cc: 6, sm: 4, ml: 6, iq: 3 },
+    { cc: 5, sm: 3, ml: 4, iq: 2 }, { cc: 4, sm: 2, ml: 3, iq: 1 },
+    { cc: 6, sm: 3, ml: 5, iq: 2 }, { cc: 7, sm: 4, ml: 6, iq: 3 },
+    { cc: 6, sm: 3, ml: 5, iq: 2 }, { cc: 5, sm: 2, ml: 4, iq: 2 },
+    { cc: 6, sm: 3, ml: 5, iq: 3 }, { cc: 7, sm: 4, ml: 6, iq: 3 },
+    { cc: 6, sm: 3, ml: 5, iq: 2 }, { cc: 8, sm: 4, ml: 6, iq: 3 }
+  ];
 
-  {
-    date: "2024-06-08",
-    confidenceCoach: 3,
-    socialMentor: 1,
-    microLearning: 3,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-09",
-    confidenceCoach: 4,
-    socialMentor: 2,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-10",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-11",
-    confidenceCoach: 5,
-    socialMentor: 2,
-    microLearning: 4,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-12",
-    confidenceCoach: 4,
-    socialMentor: 3,
-    microLearning: 3,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-13",
-    confidenceCoach: 6,
-    socialMentor: 4,
-    microLearning: 5,
-    inQuizzo: 3,
-  },
-  {
-    date: "2024-06-14",
-    confidenceCoach: 7,
-    socialMentor: 3,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
+  const data = [];
+  const today = new Date();
 
-  {
-    date: "2024-06-15",
-    confidenceCoach: 5,
-    socialMentor: 2,
-    microLearning: 3,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-16",
-    confidenceCoach: 4,
-    socialMentor: 2,
-    microLearning: 4,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-17",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 3,
-  },
-  {
-    date: "2024-06-18",
-    confidenceCoach: 5,
-    socialMentor: 4,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-19",
-    confidenceCoach: 7,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 3,
-  },
-  {
-    date: "2024-06-20",
-    confidenceCoach: 6,
-    socialMentor: 4,
-    microLearning: 6,
-    inQuizzo: 3,
-  },
+  for (let i = 29; i >= 0; i--) {
+    // Calculate the date for 'i' days ago
+    const date = new Date();
+    date.setDate(today.getDate() - i);
+    
+    // Format to YYYY-MM-DD
+    const dateString = date.toISOString().split('T')[0];
+    
+    // Pick the pattern for this index
+    const pattern = activityPatterns[29 - i];
 
-  {
-    date: "2024-06-21",
-    confidenceCoach: 5,
-    socialMentor: 3,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-22",
-    confidenceCoach: 4,
-    socialMentor: 2,
-    microLearning: 3,
-    inQuizzo: 1,
-  },
-  {
-    date: "2024-06-23",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-24",
-    confidenceCoach: 7,
-    socialMentor: 4,
-    microLearning: 6,
-    inQuizzo: 3,
-  },
-  {
-    date: "2024-06-25",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-26",
-    confidenceCoach: 5,
-    socialMentor: 2,
-    microLearning: 4,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-27",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 3,
-  },
-  {
-    date: "2024-06-28",
-    confidenceCoach: 7,
-    socialMentor: 4,
-    microLearning: 6,
-    inQuizzo: 3,
-  },
-  {
-    date: "2024-06-29",
-    confidenceCoach: 6,
-    socialMentor: 3,
-    microLearning: 5,
-    inQuizzo: 2,
-  },
-  {
-    date: "2024-06-30",
-    confidenceCoach: 8,
-    socialMentor: 4,
-    microLearning: 6,
-    inQuizzo: 3,
-  },
-];
+    data.push({
+      date: dateString,
+      confidenceCoach: pattern.cc,
+      socialMentor: pattern.sm,
+      microLearning: pattern.ml,
+      inQuizzo: pattern.iq,
+    });
+  }
+
+  return data;
+};
+
+export const chartData = generateDynamicChartData();

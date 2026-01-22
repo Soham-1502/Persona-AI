@@ -135,6 +135,11 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
 });
 
 export function getActivityChartData(sessions = []) {
+  if (!Array.isArray(sessions)) {
+    console.error("getActivityChartData received non-array data:", sessions);
+    return [];
+  }
+
   const dailyMap = {};
 
   sessions.forEach((session) => {

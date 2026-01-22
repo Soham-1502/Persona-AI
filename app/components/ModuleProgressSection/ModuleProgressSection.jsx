@@ -12,12 +12,6 @@ export default function ModuleProgressSection() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOption, setSortOption] = useState('recent');
 
-  // console.log('Status Filter:', statusFilter);
-  // console.log('Selected Category:', selectedCategory);
-  // console.log('Sort Option:', sortOption);
-
-  // console.log("Hydration check:", typeof window === "undefined" ? "server" : "client");
-
   return (
     <Card className={cn("col-span-3 h-fit p-4","hover:shadow-md")}>
       <div className='flex -mb-2 items-center'>

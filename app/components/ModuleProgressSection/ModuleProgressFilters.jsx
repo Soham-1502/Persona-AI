@@ -14,8 +14,6 @@ import {
   DropdownMenuContent,
   DropdownMenuRadioItem,
   DropdownMenuRadioGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -26,8 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-import { useState } from "react";
 
 export function ProgressStatusFilter({value, onValueChange}) {
   return (

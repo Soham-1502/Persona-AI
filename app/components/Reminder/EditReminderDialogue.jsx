@@ -28,20 +28,22 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Styled exactly like your NewReminderDialog
   const [formData, setFormData] = useState({
     title: "",
     datetime: "",
-    module: "General",
+    module: "Confidence Coach",
     priority: "medium",
   });
 
-  // Load reminder data when dialog opens
+  // Load existing reminder data when dialog opens
   useEffect(() => {
     if (open && reminder) {
       setFormData({
         title: reminder.title || "",
+        // Formats the Date object for the datetime-local input
         datetime: reminder.date ? new Date(reminder.date).toISOString().slice(0, 16) : "",
-        module: reminder.module || "General",
+        module: reminder.module || "Confidence Coach",
         priority: reminder.priority || "medium",
       });
     }
@@ -53,7 +55,7 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
     setError(null);
 
     try {
-      // Validate
+      // Validations matching your style
       if (!formData.title.trim()) {
         setError("Title is required");
         setLoading(false);
@@ -66,7 +68,7 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
         return;
       }
 
-      // Prepare data for API
+      // Prepare data for API matching your Schema
       const reminderData = {
         title: formData.title.trim(),
         module: formData.module,
@@ -76,7 +78,7 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
 
       console.log("Updating reminder:", reminderData);
 
-      // Send to API (you'll need to create a PUT/PATCH endpoint)
+      // Dynamic PUT request to your API
       const response = await fetch(`/api/reminders/${reminder._id}`, {
         method: "PUT",
         headers: {
@@ -93,16 +95,12 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
 
       console.log("Reminder updated successfully:", result);
 
-      // Close dialog
+      // Close dialog and notify parent
       setOpen(false);
 
-      // Call callback if provided
       if (onReminderUpdated) {
         onReminderUpdated(result.data);
       }
-
-      // Optional: Show success toast
-      // toast.success("Reminder updated successfully!");
     } catch (err) {
       console.error("Error updating reminder:", err);
       setError(err.message || "Something went wrong");
@@ -111,6 +109,7 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
     }
   };
 
+  // Input handlers adopted from NewReminderDialog
   const handleInputChange = (e) => {
     const { id, value } = e.target;
     setFormData((prev) => ({
@@ -141,16 +140,13 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Error Message */}
           {error && (
             <div className="bg-destructive/10 text-destructive px-4 py-2 rounded-md text-sm mt-4">
               {error}
             </div>
           )}
 
-          {/* FORM BODY */}
           <div className="grid gap-4 py-4">
-            {/* Title */}
             <div className="grid gap-2">
               <Label htmlFor="title">Reminder title</Label>
               <Input
@@ -162,7 +158,6 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
               />
             </div>
 
-            {/* Date & Time */}
             <div className="grid gap-2">
               <Label htmlFor="datetime">Date & time</Label>
               <div className="relative">
@@ -178,7 +173,6 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
               </div>
             </div>
 
-            {/* Module */}
             <div className="grid gap-2">
               <Label htmlFor="module">Module</Label>
               <Select
@@ -199,7 +193,6 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
               </Select>
             </div>
 
-            {/* Priority */}
             <div className="grid gap-2">
               <Label htmlFor="priority">Priority</Label>
               <Select
@@ -219,7 +212,6 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
             </div>
           </div>
 
-          {/* FOOTER */}
           <DialogFooter className="flex gap-2">
             <DialogClose asChild>
               <Button type="button" variant="outline" disabled={loading}>

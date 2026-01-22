@@ -1,5 +1,6 @@
 import { createReminder } from "@/backend/services/reminders/reminder.service";
 import connectDB from "@/backend/config/db.js";
+import Reminder from "@/backend/models/reminder.model";
 import { NextResponse } from "next/server";
 
 export async function POST(req) {
@@ -43,46 +44,15 @@ export async function POST(req) {
   }
 }
 
-export async function PUT(req, { params }) {
-  try {
-    await connectDB();
-    const { id } = params;
-    const body = await req.json();
-
-    const reminder = await Reminder.findByIdAndUpdate(
-      id,
-      {
-        title: body.title,
-        module: body.module,
-        date: body.date,
-        priority: body.priority,
-      },
-      { new: true, runValidators: true }
-    );
-
-    if (!reminder) {
-      return NextResponse.json(
-        { success: false, error: "Reminder not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ success: true, data: reminder });
-  } catch (error) {
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
-  }
-}
-
-// Add GET method for testing
+// Get all reminders
 export async function GET(req) {
   try {
     await connectDB();
     
+    const reminders = await Reminder.find({}).sort({ date: 1 });
+    
     return NextResponse.json(
-      { success: true, message: 'Reminders API is working' },
+      { success: true, data: reminders },
       { status: 200 }
     );
   } catch (error) {
