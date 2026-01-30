@@ -1,15 +1,23 @@
 import { EllipsisVertical, Pencil, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 import { formatCompletedDate, formatDate } from "./utils/formatDate";
 import { cn } from "@/lib/utils.js";
+import { toast } from "sonner";
 
 import { EditReminderDialog } from "./EditReminderDialogue.jsx";
 import { DeleteReminderAlert } from "./DeleteReminderAlert.jsx";
 
 export default function ReminderRow({ reminder, onToggle, onReminderUpdated, onReminderDeleted }) {
+    const [isChecked, setIsChecked] = useState(reminder.status === "completed");
+
+    useEffect(() => {
+        setIsChecked(reminder.status === "completed");
+    }, [reminder.status]);
+
     const formattedDate = reminder.status === "completed" ? `Completed • ${formatCompletedDate(reminder.completedAt)}` : formatDate(reminder.date);
 
     function getReminderStatus(reminder) {
@@ -38,7 +46,16 @@ export default function ReminderRow({ reminder, onToggle, onReminderUpdated, onR
         )}>
             <div className="flex flex-row gap-3 items-center">
                 <Checkbox id={`reminder-${reminder._id}`}
-                    checked={reminder.status === "completed"} onCheckedChange={() => onToggle(reminder._id)}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => {
+                        setIsChecked(checked);
+                        onToggle(reminder._id);
+                        if (checked) {
+                            toast.success("Reminder completed");
+                        } else {
+                            toast("Reminder marked as incomplete");
+                        }
+                    }}
                 />
                 <div className="flex flex-col">
                     <p className="text-md font-medium">{reminder.title}</p>

@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/provider/ThemeProvider.jsx";
 import { SidebarLayout } from "@/app/components/sidebar/sidebar-layout";
+import { Toaster } from "@/components/ui/sonner"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +32,20 @@ export default function RootLayout({ children }) {
           disableTransitionOnChange
         >
           <SidebarLayout>{children}</SidebarLayout>
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              classNames: {
+                toast:
+                  "group toast group-[.toaster]:bg-card group-[.toaster]:text-card-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+                description: "group-[.toast]:text-muted-foreground",
+                actionButton:
+                  "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+                cancelButton:
+                  "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+              },
+            }}
+          />
         </ThemeProvider>
       </body>
     </html>

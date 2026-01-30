@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CalendarClock } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export function NewReminderDialog({ children, onReminderCreated }) {
   const [open, setOpen] = useState(false);
@@ -97,11 +98,11 @@ export function NewReminderDialog({ children, onReminderCreated }) {
         onReminderCreated(result.data);
       }
 
-      // Optional: Show success toast (if you have a toast library)
-      // toast.success("Reminder created successfully!");
+      toast.success("Reminder created successfully!");
     } catch (err) {
       console.error("Error creating reminder:", err);
       setError(err.message || "Something went wrong");
+      toast.error(err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

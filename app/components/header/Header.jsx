@@ -1,6 +1,6 @@
 import { DateFilter, Notifications, Theme } from './HeaderComponents';
 
-export default function Header({ DateValue, onDateChange, tempDate }) {
+export default function Header({ DateValue, onDateChange, tempDate, showDateFilter = true }) {
     return (
         <header className='h-20 w-full bg-background text-foreground p-2 px-4 flex justify-between items-center'>
             <div>
@@ -13,7 +13,7 @@ export default function Header({ DateValue, onDateChange, tempDate }) {
                 </p>
             </div>
             <div className='w-fit h-20 flex items-center gap-2'>
-                <DateFilter value={DateValue} onValueChange={onDateChange} />
+                {showDateFilter && <DateFilter value={DateValue} onValueChange={onDateChange} />}
                 <Notifications />
                 <Theme />
             </div>

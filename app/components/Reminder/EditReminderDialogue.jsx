@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CalendarClock } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
   const [open, setOpen] = useState(false);
@@ -101,9 +102,11 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
       if (onReminderUpdated) {
         onReminderUpdated(result.data);
       }
+      toast.success("Reminder updated successfully!");
     } catch (err) {
       console.error("Error updating reminder:", err);
       setError(err.message || "Something went wrong");
+      toast.error(err.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

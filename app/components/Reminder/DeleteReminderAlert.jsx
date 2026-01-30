@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trash2, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export function DeleteReminderAlert({ children, reminder, onReminderDeleted }) {
   const [loading, setLoading] = useState(false);
@@ -43,9 +44,10 @@ export function DeleteReminderAlert({ children, reminder, onReminderDeleted }) {
       if (onReminderDeleted) {
         onReminderDeleted(reminder._id);
       }
+      toast.success("Reminder deleted.");
     } catch (err) {
       console.error("Delete error:", err);
-      alert(err.message);
+      toast.error(err.message || "Could not delete reminder.");
     } finally {
       setLoading(false);
     }
