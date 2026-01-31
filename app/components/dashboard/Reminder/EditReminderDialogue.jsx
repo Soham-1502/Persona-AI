@@ -43,7 +43,12 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
       setFormData({
         title: reminder.title || "",
         // Formats the Date object for the datetime-local input
-        datetime: reminder.date ? new Date(reminder.date).toISOString().slice(0, 16) : "",
+        datetime: reminder.date ? new Date(
+          new Date(reminder.date).getTime() -
+          new Date(reminder.date).getTimezoneOffset() * 60000
+        )
+          .toISOString()
+          .slice(0, 16) : "",
         module: reminder.module || "Confidence Coach",
         priority: reminder.priority || "medium",
       });

@@ -39,7 +39,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar"
-import { Assets } from "../../../assets/assets";
+import { Assets } from "../../../../assets/assets";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { EllipsisVertical, PanelRightOpen, PanelLeftOpen, UserPen, LogOut, Settings, MessageCircleQuestionMark } from "lucide-react";

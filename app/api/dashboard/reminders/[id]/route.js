@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import connectDB from "@/backend/config/db.js";
-import Reminder from "@/backend/models/reminder.model";
+import connectDB from "@/lib/db.js";
+import Reminder from "@/models/reminder.model";
 
 // Get a single reminder by ID
 export async function GET(req, { params }) {

@@ -19,7 +19,7 @@ export default function ReminderSection() {
     const fetchReminders = async () => {
         try {
             setLoading(true);
-            const response = await fetch("/api/reminders"); // Targets your GET route
+            const response = await fetch("/api/dashboard/reminders"); // Targets your GET route
             const result = await response.json();
 
             if (response.ok && result.success) {

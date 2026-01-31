@@ -1,7 +1,7 @@
 "use client";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
-import AppSidebar from "@/app/components/sidebar/Sidebar";
+import AppSidebar from "@/app/components/shared/sidebar/Sidebar";
 
 export function SidebarLayout({ children }) {
 

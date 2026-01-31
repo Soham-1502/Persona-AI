@@ -1,6 +1,6 @@
-import { createReminder } from "@/backend/services/reminders/reminder.service";
-import connectDB from "@/backend/config/db.js";
-import Reminder from "@/backend/models/reminder.model";
+import { createReminder } from "@/services/reminders/reminder.service";
+import connectDB from "@/lib/db.js";
+import Reminder from "@/models/reminder.model";
 import { NextResponse } from "next/server";
 
 export async function POST(req) {

@@ -1,15 +1,15 @@
 'use client'
 
-import Header from '@/app/components/header/Header.jsx';
-import MetricCard from './components/Card/MetricCard';
+import Header from '@/app/components/shared/header/Header.jsx';
+import MetricCard from './components/dashboard/Card/MetricCard';
 import { Trophy, Mic, Sparkles, Activity, UserStar } from "lucide-react";
-import { ActivityChart, getActivityChartData } from './components/ActivityChart/ActivityChart.jsx';
-import InsightsCard from './components/Card/InsightsCard';
-import ModuleProgressSection from './components/ModuleProgressSection/ModuleProgressSection.jsx';
-import ReminderSection from './components/Reminder/ReminderSection';
+import { ActivityChart, getActivityChartData } from './components/dashboard/ActivityChart/ActivityChart.jsx';
+import InsightsCard from './components/dashboard/Card/InsightsCard';
+import ModuleProgressSection from './components/dashboard/ModuleProgressSection/ModuleProgressSection.jsx';
+import ReminderSection from './components/dashboard/Reminder/ReminderSection';
 import { useMemo, useState } from 'react';
 import { mockSessions } from './mockData';
-import { getConfidenceScore, getConfidenceScoreBadge, getCurrentStreak, getCurrentStreakBadge, getTotalSessions, getTotalSessionsBadge, getVoiceQuizzes, getVoiceQuizzesBadge } from './components/Card/Metrics';
+import { getConfidenceScore, getConfidenceScoreBadge, getCurrentStreak, getCurrentStreakBadge, getTotalSessions, getTotalSessionsBadge, getVoiceQuizzes, getVoiceQuizzesBadge } from './components/dashboard/Card/Metrics';
 
 export default function Home() {
   const [selectedDate, onDateChange] = useState('today');

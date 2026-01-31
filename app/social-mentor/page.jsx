@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Header from '@/app/components/header/Header.jsx'; // Consistent Header from Home page
-import { ChatInterface } from "@/app/components/ChatInterface/ChatInterface.jsx";
-import { AvatarExperience } from "@/app/components/Avatar/AvatarExperience.jsx";
+import Header from '@/app/components/shared/header/Header.jsx'; // Consistent Header from Home page
+import { ChatInterface } from "@/app/components/socialmentor/ChatInterface/ChatInterface.jsx";
+import { AvatarExperience } from "@/app/components/socialmentor/Avatar/AvatarExperience.jsx";
 
 export default function SocialMentorPage() {
     const [isTalking, setIsTalking] = useState(false);
