@@ -488,7 +488,7 @@ const QuizDomainSelection = () => {
     return (
       <div className="w-full max-w-6xl mx-auto animate-fadeIn">
         <div className="text-center mb-12">
-          <h2 className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
+          <h2 className="text-5xl md:text-6xl font-extrabold bg-linear-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
             Choose Your Domain
           </h2>
           <p className="text-gray-300 text-xl">
@@ -503,7 +503,7 @@ const QuizDomainSelection = () => {
               onClick={() => handleDomainSelect(key)}
               className="group relative glass-card p-8 rounded-3xl cursor-pointer transform hover:scale-105 transition-all duration-300 hover:shadow-2xl border border-white/10 hover:border-white/30"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="absolute inset-0 bg-linear-to-br from-white/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
               <div className="relative z-10">
                 <div className="text-6xl mb-4 transform group-hover:scale-110 transition-transform">
@@ -544,7 +544,7 @@ const QuizDomainSelection = () => {
 
         <div className="text-center mb-12">
           <div className="text-6xl mb-4">{domain.icon}</div>
-          <h2 className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
+          <h2 className="text-5xl md:text-6xl font-extrabold bg-linear-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
             {domain.name}
           </h2>
           <p className="text-gray-300 text-xl">Choose a category to continue</p>
@@ -601,7 +601,7 @@ const QuizDomainSelection = () => {
 
         <div className="text-center mb-12">
           <div className="text-6xl mb-4">{category.icon}</div>
-          <h2 className="text-5xl md:text-6xl font-extrabold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
+          <h2 className="text-5xl md:text-6xl font-extrabold bg-linear-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
             {category.name}
           </h2>
           <p className="text-gray-300 text-xl">Select a topic to start the quiz</p>
@@ -797,11 +797,11 @@ const QuizDomainSelection = () => {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-blue-950 to-slate-900 text-white font-sans overflow-hidden">
+    <div className="relative min-h-screen flex flex-col bg-linear-to-br from-gray-950 via-blue-950 to-slate-900 text-white font-sans overflow-hidden">
       {/* Background Effects */}
       <div className="absolute inset-0 z-0">
         <div className="absolute w-[120vw] h-[120vw] bg-gradient-radial from-indigo-700/30 via-blue-600/10 to-transparent blur-3xl -top-1/2 -left-1/2 animate-spin-slow"></div>
-        <div className="absolute w-[100vw] h-[110vw] bg-gradient-radial from-pink-500/10 via-blue-800/20 to-transparent blur-2xl -bottom-1/3 -right-1/3 opacity-90"></div>
+        <div className="absolute w-screen h-[110vw] bg-gradient-radial from-pink-500/10 via-blue-800/20 to-transparent blur-2xl -bottom-1/3 -right-1/3 opacity-90"></div>
       </div>
 
       {/* Floating Particles */}
@@ -839,7 +839,7 @@ const QuizDomainSelection = () => {
           <h1 className="text-4xl md:text-5xl font-extrabold bg-white bg-clip-text text-transparent drop-shadow-2xl tracking-tight uppercase">
             InQuizo
           </h1>
-          <div className="h-1 w-0 group-hover:w-full bg-gradient-to-r from-yellow-200 to-blue-500 transition-all duration-500 rounded-full mt-1"></div>
+          <div className="h-1 w-0 group-hover:w-full bg-linear-to-r from-yellow-200 to-blue-500 transition-all duration-500 rounded-full mt-1"></div>
         </div>
 
         {/* Breadcrumb Navigation */}
@@ -847,7 +847,7 @@ const QuizDomainSelection = () => {
           <div className="glass-card px-4 py-2 rounded-2xl border border-white/20 text-gray-200 text-sm">
             <div className="flex items-center space-x-2">
               <BookOpen className="w-4 h-4" />
-              <span className="truncate max-w-[200px]">
+              <span className="truncate max-w-50">
                 {[
                   selectedDomain && QUIZ_STRUCTURE[selectedDomain]?.name,
                   selectedCategory &&

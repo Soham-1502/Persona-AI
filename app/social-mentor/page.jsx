@@ -33,7 +33,7 @@ export default function SocialMentorPage() {
                 
                 {/* Left Panel: Chat Interface */}
                 {/* Pattern: Defined width, card-style background, and shadows */}
-                <section className="w-1/3 min-w-[350px] flex flex-col bg-card rounded-md border border-border shadow-md overflow-hidden">
+                <section className="w-1/3 min-w-87.5 flex flex-col bg-card rounded-md border border-border shadow-md overflow-hidden">
                     <ChatInterface onTalkingStateChange={setIsTalking} />
                 </section>
 

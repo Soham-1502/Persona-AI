@@ -134,7 +134,7 @@ const Hero = () => {
   };
 
   return (
-    <div className="radial-animated-bg min-h-screen flex items-center justify-center text-white text-center px-4 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-[#070e1d] via-[#1b176b] to-[#000000]">
+    <div className="radial-animated-bg min-h-screen flex items-center justify-center text-white text-center px-4 bg-[radial-gradient(ellipse_at_bottom_right,var(--tw-gradient-stops))] from-[#070e1d] via-[#1b176b] to-[#000000]">
       <div>
         <h1 className="text-6xl text-white md:text-7xl font-bold mb-6 leading-tight font-inter">
           {renderMessage()}
