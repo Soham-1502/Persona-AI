@@ -2,7 +2,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/app/components/shared/provider/ThemeProvider.jsx";
 import { SidebarLayout } from "@/app/components/shared/sidebar/sidebar-layout";
-import { Toaster } from "@/components/ui/sonner"
+import { Toaster } from "@/components/ui/sonner";
+import GoogleOAuthProvider from "./components/shared/provider/GoogleOAuthProvider.jsx";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,7 +32,9 @@ export default function RootLayout({ children }) {
           enableSystem
           disableTransitionOnChange
         >
-          <SidebarLayout>{children}</SidebarLayout>
+          <GoogleOAuthProvider>
+            <SidebarLayout>{children}</SidebarLayout>
+          </GoogleOAuthProvider>
           <Toaster
             position="bottom-right"
             toastOptions={{

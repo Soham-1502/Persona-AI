@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { User, validate } from "../../../../models/User";
+import User from "../../../../models/User";
 import bcrypt from "bcrypt";
 import connectDB from "@/lib/db";
 

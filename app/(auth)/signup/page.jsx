@@ -1,358 +1,136 @@
-// import SignUpStyles from "./SignUp.css";
-// import { useState } from "react";
-// import axios from "axios";
-// import { Link, useNavigate } from "react-router-dom";
+'use client';
 
-// const SignUp = () => {
-//   const [data, setData] = useState({
-//     firstName: "",
-//     lastName: "",
-//     email: "",
-//     password: "",
-//   });
-//   const [error, setError] = useState("");
-//   const navigate = useNavigate();
-//   const handleChange = ({ currentTarget: input }) => {
-//     setData({ ...data, [input.name]: input.value });
-//   };
+import Link from 'next/link';
+import SignUpForm from './signup-form';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     try {
-//       const url = "http://localhost:8080/api/users";
-//       const { data: res } = await axios.post(url, data);
-//       localStorage.setItem("token", res.data); // optional
-//       navigate("/"); // ✅ Corrected redirection
-//     } catch (error) {
-//       if (
-//         error.response &&
-//         error.response.status >= 400 &&
-//         error.response.status <= 500
-//       ) {
-//         setError(error.response.data.message);
-//       }
-//     }
-//   };
+export default function SignUpPage() {
+  const router = useRouter();
+  const [error, setError] = useState('');
 
-//   return (
-//     <div className={SignUpStyles.signup_container}>
-//       <div className={SignUpStyles.signup_form_container}>
-//         <div className={SignUpStyles.left}>
-//           <h1> Welcome Back </h1>
-//           <Link to="/login">
-//             <button type="button" className={SignUpStyles.white_btn}>
-//               Sign In
-//             </button>
-//           </Link>
-//         </div>
-//         <div className={SignUpStyles.right}>
-//           <form
-//             className={SignUpStyles.signup_form_container}
-//             onSubmit={handleSubmit}
-//           >
-//             <h1> Create Account </h1>
-//             <input
-//               type="text"
-//               placeholder="First Name"
-//               name="firstName"
-//               onChange={handleChange}
-//               value={data.firstName}
-//               required
-//               className={SignUpStyles.input}
-//             ></input>
-
-//             <input
-//               type="text"
-//               placeholder="Last Name"
-//               name="lastName"
-//               onChange={handleChange}
-//               value={data.lastName}
-//               required
-//               className={SignUpStyles.input}
-//             ></input>
-
-//             <input
-//               type="email"
-//               placeholder="email"
-//               name="email"
-//               onChange={handleChange}
-//               value={data.email}
-//               required
-//               className={SignUpStyles.input}
-//             ></input>
-//             <input
-//               type="password"
-//               placeholder="password"
-//               name="password"
-//               onChange={handleChange}
-//               value={data.password}
-//               required
-//               className={SignUpStyles.input}
-//             ></input>
-//             {error && <div className={SignUpStyles.error_msg}>{error}</div>}
-//             <button type="submit" className={SignUpStyles.green_btn}>
-//               Sign Up
-//             </button>
-//           </form>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default SignUp;
-
-// import { useState } from "react";
-// import axios from "axios";
-// import { Link, useNavigate } from "react-router-dom";
-// import "./SignUp.css"; // Fixed import
-
-// const SignUp = () => {
-//   const [data, setData] = useState({
-//     firstName: "",
-//     lastName: "",
-//     email: "",
-//     password: "",
-//   });
-//   const [error, setError] = useState("");
-//   const navigate = useNavigate();
-  
-//   const handleChange = ({ currentTarget: input }) => {
-//     setData({ ...data, [input.name]: input.value });
-//   };
-
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     try {
-//       const url = "http://localhost:5000/api/auth/register"; // Fixed port to 5000
-//       console.log("Submitting data:", data); // Debugging line
-//       const { data: res } = await axios.post(url, data);
-//       localStorage.setItem("token", res.data);
-//       navigate("/Home");
-//     } catch (error) {
-//       if (
-//         error.response &&
-//         error.response.status >= 400 &&
-//         error.response.status <= 500
-//       ) {
-//         setError(error.response.data.message);
-//       }
-//     }
-//   };
-
-//   return (
-//     <div className="signup_container"> {/* Fixed className */}
-//       <div className="signup_form_container"> {/* Fixed className */}
-//         <div className="left"> {/* Fixed className */}
-//           <h1>Welcome Back</h1>
-//           <Link to="/login">
-//             <button type="button" className="white_btn"> {/* Fixed className */}
-//               Sign In
-//             </button>
-//           </Link>
-//         </div>
-//         <div className="right"> {/* Fixed className */}
-//           <form
-//             className="form_container" 
-//             onSubmit={handleSubmit}
-//           >
-//             <h1>Create Account</h1>
-//             <input
-//               type="text"
-//               placeholder="First Name"
-//               name="firstName"
-//               onChange={handleChange}
-//               value={data.firstName}
-//               required
-//               className="input" 
-//             />
-
-//             <input
-//               type="text"
-//               placeholder="Last Name"
-//               name="lastName"
-//               onChange={handleChange}
-//               value={data.lastName}
-//               required
-//               className="input" /* Fixed className */
-//             />
-
-//             <input
-//               type="email"
-//               placeholder="Email"
-//               name="email"
-//               onChange={handleChange}
-//               value={data.email}
-//               required
-//               className="input" /* Fixed className */
-//             />
-            
-//             <input
-//               type="password"
-//               placeholder="Password"
-//               name="password"
-//               onChange={handleChange}
-//               value={data.password}
-//               required
-//               className="input" /* Fixed className */
-//             />
-            
-//             {error && <div className="error_msg">{error}</div>} {/* Fixed className */}
-            
-//             <button type="submit" className="green_btn"> {/* Fixed className */}
-//               Sign Up
-//             </button>
-//           </form>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default SignUp;
-
-import { useState } from "react";
-import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
-import "./SignUp.css";
-
-const SignUp = () => {
-  const [data, setData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-  });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-
-  const handleChange = ({ currentTarget: input }) => {
-    setData({ ...data, [input.name]: input.value });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
+  const handleGoogleSignup = async (credentialResponse) => {
     try {
-      const url = "http://localhost:5000/api/auth/register";
-      console.log("Submitting data:", data);
+      const decoded = jwtDecode(credentialResponse.credential);
 
-      const response = await axios.post(url, data);
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: decoded.email,
+          name: decoded.name,
+          picture: decoded.picture,
+          googleId: decoded.sub,
+        }),
+      });
 
-      // ✅ FIXED: Access the correct response structure
-      console.log("Response:", response.data);
+      const responseData = await res.json();
 
-      if (response.data.success) {
-        // Store token and user data
-        localStorage.setItem("token", response.data.token);
-        localStorage.setItem("user", JSON.stringify(response.data.user));
-
-        // Show success message with generated username
-        const generatedUsername = data.firstName + data.lastName;
-        console.log("Account created! Username:", generatedUsername);
-
-        // Navigate to home/dashboard
-        navigate("/Home");
-      } else {
-        setError(response.data.message || "Registration failed");
+      if (!res.ok) {
+        setError(responseData.message || 'Google signup failed');
+        toast.error('Google signup failed');
+        return;
       }
+
+      localStorage.setItem('token', responseData.data);
+      if (responseData.user) {
+        localStorage.setItem('user', JSON.stringify(responseData.user));
+      }
+
+      toast.success('Account created successfully!');
+      router.push('/dashboard');
     } catch (error) {
-      console.error("Registration error:", error);
-
-      if (
-        error.response &&
-        error.response.status >= 400 &&
-        error.response.status <= 500
-      ) {
-        // ✅ FIXED: Access the correct error message structure
-        setError(error.response.data.message || "Registration failed");
-      } else {
-        setError("Network error. Please try again.");
-      }
-    } finally {
-      setLoading(false);
+      console.error('Google signup error:', error);
+      setError('Failed to signup with Google');
+      toast.error('Failed to signup with Google');
     }
   };
 
   return (
-    <div className="signup_container">
-      <div className="signup_form_container">
-        <div className="left">
-          <h1>Welcome Back</h1>
-          <Link to="/login">
-            <button type="button" className="white_btn">
+    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-[900px] flex rounded-2xl shadow-2xl overflow-hidden bg-card">
+        {/* Left Side - Sign Up Prompt */}
+        <div className="hidden lg:flex lg:flex-1 flex-col items-center justify-center gradient-persona-primary p-8 text-center">
+          <h1 className="text-white font-bold text-3xl sm:text-4xl mb-6">
+            Welcome Back!
+          </h1>
+          <p className="text-white/90 mb-8 text-sm max-w-xs">
+            Already have an account? Sign in to continue your journey with us!
+          </p>
+          <Link href="/login">
+            <button
+              type="button"
+              className="bg-white text-primary hover:bg-white/90 transition-colors duration-200 py-3 px-8 font-bold text-sm rounded-full shadow-lg hover:shadow-xl"
+            >
               Sign In
             </button>
           </Link>
         </div>
-        <div className="right">
-          <form className="form_container" onSubmit={handleSubmit}>
-            <h1>Create Account</h1>
 
-            <input
-              type="text"
-              placeholder="First Name"
-              name="firstName"
-              onChange={handleChange}
-              value={data.firstName}
-              required
-              className="input"
-            />
+        {/* Right Side - Sign Up Form */}
+        <div className="flex-[2] flex flex-col items-center justify-center bg-card px-8 py-12 sm:px-16">
+          <div className="w-full max-w-[370px] space-y-6">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <h1 className="text-foreground font-bold text-3xl sm:text-4xl mb-3">
+                Create Account
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                Sign up to get started with PersonaAI!
+              </p>
+            </div>
 
-            <input
-              type="text"
-              placeholder="Last Name"
-              name="lastName"
-              onChange={handleChange}
-              value={data.lastName}
-              required
-              className="input"
-            />
+            {/* Google Sign Up */}
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={handleGoogleSignup}
+                onError={() => {
+                  setError('Google signup failed');
+                  toast.error('Google signup failed');
+                }}
+              />
+            </div>
 
-            <input
-              type="email"
-              placeholder="Email"
-              name="email"
-              onChange={handleChange}
-              value={data.email}
-              required
-              className="input"
-            />
+            {/* Divider */}
+            <div className="relative py-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 text-muted-foreground bg-card">
+                  Or continue with email
+                </span>
+              </div>
+            </div>
 
-            <input
-              type="password"
-              placeholder="Password"
-              name="password"
-              onChange={handleChange}
-              value={data.password}
-              required
-              className="input"
-              minLength="6"
-            />
+            {/* Sign Up Form */}
+            <SignUpForm />
 
-            {/* Username Preview */}
-            {data.firstName && data.lastName && (
-              <div className="username_preview">
-                <small>
-                  Your username will be:{" "}
-                  <strong>{data.firstName + data.lastName}</strong>
-                </small>
+            {/* Error Message */}
+            {error && (
+              <div className="w-full px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm text-center">
+                {error}
               </div>
             )}
-
-            {error && <div className="error_msg">{error}</div>}
-
-            <button type="submit" className="green_btn" disabled={loading}>
-              {loading ? "Creating Account..." : "Sign Up"}
-            </button>
-          </form>
+          </div>
         </div>
+      </div>
+
+      {/* Mobile Sign In Link */}
+      <div className="lg:hidden fixed bottom-8 left-0 right-0 text-center">
+        <p className="text-muted-foreground text-sm mb-2">
+          Already have an account?{' '}
+          <Link
+            href="/login"
+            className="text-primary font-semibold hover:text-primary/80 transition-colors"
+          >
+            Sign In
+          </Link>
+        </p>
       </div>
     </div>
   );
-};
-
-export default SignUp;
+}
