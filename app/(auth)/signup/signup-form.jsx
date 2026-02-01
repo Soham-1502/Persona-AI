@@ -72,7 +72,7 @@ export default function SignUpForm() {
     }
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="w-full max-w-[370px]">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="w-full max-w-92.5">
             <div className="space-y-4">
                 {/* First Name Input */}
                 <div>

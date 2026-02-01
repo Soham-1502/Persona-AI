@@ -51,10 +51,10 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen w-full bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-[900px] flex rounded-2xl shadow-2xl overflow-hidden bg-card">
+      <div className="w-full max-w-225 flex rounded-2xl shadow-2xl overflow-hidden bg-card">
         {/* Left Side - Sign In Form */}
-        <div className="flex-[2] flex flex-col items-center justify-center bg-card px-8 py-12 sm:px-16">
-          <div className="w-full max-w-[370px] space-y-6">
+        <div className="flex-2 flex flex-col items-center justify-center bg-card px-8 py-12 sm:px-16">
+          <div className="w-full max-w-92.5 space-y-6">
             {/* Header */}
             <div className="text-center mb-8">
               <h1 className="text-foreground font-bold text-3xl sm:text-4xl mb-3">
