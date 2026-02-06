@@ -12,7 +12,7 @@ export const sidebarItems = [
   {
     title: "Dashboard",
     icon: <LayoutDashboard/>,
-    href: "/",
+    href: "/dashboard",
   },
   {
     title: "Confidence Coach",
@@ -34,14 +34,14 @@ export const sidebarItems = [
     icon: <Brain/>,
     href: "/inquizzo",
   },
-  {
-    title: "Analytics",
-    icon: <BarChart3/>,
-    href: "/analytics",
-  },
-  {
-    title: "My Progress",
-    icon: <LineChart/>,
-    href: "/progress",
-  },
+  // {
+  //   title: "Analytics",
+  //   icon: <BarChart3/>,
+  //   href: "/analytics",
+  // },
+  // {
+  //   title: "My Progress",
+  //   icon: <LineChart/>,
+  //   href: "/progress",
+  // },
 ];

@@ -46,35 +46,80 @@ import { EllipsisVertical, PanelRightOpen, PanelLeftOpen, UserPen, LogOut, Setti
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const { toggleSidebar, state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { theme } = useTheme();
-  
+  const router = useRouter();
+
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // ✅ ADD USER STATE
+  const [user, setUser] = useState({
+    name: "Guest User",
+    email: "guest@example.com",
+    picture: null,
+  });
 
   // Only render theme-dependent content after mounting
   useEffect(() => {
     setMounted(true);
+
+    // ✅ FETCH USER DATA FROM LOCALSTORAGE
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser({
+          name: userData.name || "Guest User",
+          email: userData.email || "guest@example.com",
+          picture: userData.picture || null,
+        });
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
   }, []);
 
   const isDarkMode = theme === "dark";
 
+  // ✅ GET INITIALS FOR AVATAR FALLBACK
+  const getInitials = (name) => {
+    if (!name) return "GU";
+    const parts = name.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
   function handleLogout() {
-    // Fake delay to simulate API / auth call
+    setIsLoggingOut(true);
+
+    // Clear authentication data directly
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    // Show success message
+    toast.success('Logged out successfully');
+
+    // Small delay for UX, then redirect
     setTimeout(() => {
-      // TODO: replace with real sign-out logic
-      console.log("Logged out");
-      // e.g. router.push("/login");
-    }, 1500); // 1.5s delay
+      setIsLoggingOut(false);
+      setOpenLogoutDialog(false);
+      router.push('/login');
+    }, 500);
   }
 
   return (
     <Sidebar
-    data-sidebar="sidebar"
+      data-sidebar="sidebar"
       className="h-screen border-r dark:border-white/10"
       collapsible="icon"
     >
@@ -100,7 +145,7 @@ export default function AppSidebar() {
               )}
             </div>
 
-            {/* Brand text — hide when collapsed */}
+            {/* Brand text – hide when collapsed */}
             <span className="text-persona-dark dark:text-foreground text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden">
               Persona
               <span className="font-bold text-sidebar-primary">AI</span>
@@ -165,36 +210,47 @@ export default function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="flex justify-center items-center h-auto hover:bg-black/20 text-foreground active:bg-white/10"
+              className="flex items-center h-auto hover:bg-black/20 text-foreground active:bg-white/10"
             >
-              <div className="text-foreground relative flex items-center w-full rounded-lg group-hover/footer:bg-white/10 cursor-pointer group-data-[collapsible=icon]:ml-1">
-                {/* Avatar + info (hide entirely when collapsed) */}
-                <div className="flex items-center justify-center gap-3 w-full group-data-[collapsible=icon]:w-0">
-                  <div className="relative shrink-0 w-8 group-data-[collapsible=icon]:w-0">
-                    <Avatar className="rounded-lg group-data-[collapsible=icon]:w-0">
+              <div className="relative flex items-center w-full rounded-lg group-hover/footer:bg-white/10 cursor-pointer">
+
+                {/* LEFT: Avatar + text */}
+                <div className="flex items-center gap-3 flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+
+                  {/* Avatar (strict size, never shrink) */}
+                  <div className="relative w-8 h-8 shrink-0">
+                    <Avatar className="w-8 h-8 rounded-lg">
                       <AvatarImage
-                        src="https://github.com/evilrabbit.png"
-                        alt="@evilrabbit"
+                        src={user.picture || "https://github.com/shadcn.png"}
+                        alt={user.name}
                       />
-                      <AvatarFallback>JD</AvatarFallback>
+                      <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                     </Avatar>
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-persona-dark group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:-translate-x-4" />
+
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-persona-dark" />
                   </div>
-                  <div className="flex flex-col text-left flex-1 min-w-0 text-foreground dark:text-foreground group-data-[collapsible=icon]:hidden">
-                    <span className="text-sm font-semibold truncate">
-                      John Doe
+
+                  {/* Text block (flexible, truncates) */}
+                  <div className="flex flex-col flex-1 min-w-0 text-left">
+                    <span className="text-sm font-semibold truncate" title={user.name}>
+                      {user.name}
                     </span>
-                    <span className="text-xs truncate">
-                      johndoe@gmail.com
+
+                    <span
+                      className="text-xs truncate text-muted-foreground"
+                      title={user.email}
+                    >
+                      {user.email}
                     </span>
                   </div>
                 </div>
 
+                {/* RIGHT: Menu button (fixed) */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       aria-label="User options"
-                      className="w-9 h-9 rounded-lg text-foreground flex items-center justify-center cursor-pointer shrink-0 hover:bg-black/20 active:bg-black/30 dark:text-persona-cream/60 dark:hover:text-persona-cream dark:hover:bg-white/5 dark:active:bg-white/10 group-data-[collapsible=icon]:absolute"
+                      className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center hover:bg-black/20 active:bg-black/30 dark:hover:bg-white/5 dark:active:bg-white/10"
                     >
                       <EllipsisVertical className="w-5 h-5" />
                     </button>
@@ -215,21 +271,34 @@ export default function AppSidebar() {
                       <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
                         <UserPen className="dark:text-white" /> Profile
                       </DropdownMenuItem>
+
                       <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <Settings className="dark:text-white" />Settings
+                        <Settings className="dark:text-white" /> Settings
                       </DropdownMenuItem>
+
                       <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <MessageCircleQuestionMark className="dark:text-white" />Help &amp; Support
+                        <MessageCircleQuestionMark className="dark:text-white" />
+                        Help & Support
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
+
                     <DropdownMenuSeparator className="dark:bg-black/10" />
-                    <DropdownMenuItem variant="destructive" onClick={() => { setOpenLogoutDialog(true) }} className={cn("cursor-pointer", "dark:text-persona-cream/80 dark:hover:bg-white/10 dark:hover:text-persona-cream dark:focus:bg-white/10 dark:focus:text-persona-cream", "hover:text-persona-cream hover:bg-red focus:text-persona-cream")}>
-                      <LogOut className="text-red" />Log out
+
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setOpenLogoutDialog(true)}
+                      className={cn(
+                        "cursor-pointer",
+                        "dark:text-persona-cream/80 dark:hover:bg-white/10 dark:hover:text-persona-cream",
+                        "hover:text-persona-cream hover:bg-red"
+                      )}
+                    >
+                      <LogOut className="text-red" /> Log out
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {/* Logout confirmation dialog */}
+                {/* Logout dialog */}
                 <AlertDialog open={openLogoutDialog} onOpenChange={setOpenLogoutDialog}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
@@ -238,11 +307,18 @@ export default function AppSidebar() {
                         You can log back in anytime to continue your journey.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
+
                     <AlertDialogFooter>
-                      <AlertDialogCancel className="cursor-pointer hover:bg-persona-indigo hover:text-black">Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleLogout} className="bg-red-500 hover:bg-red-700 text-white cursor-pointer">
+                      <AlertDialogCancel className="cursor-pointer hover:bg-persona-indigo hover:text-black">
+                        Cancel
+                      </AlertDialogCancel>
+
+                      <AlertDialogAction
+                        onClick={handleLogout}
+                        className="bg-red-500 hover:bg-red-700 text-white cursor-pointer"
+                      >
                         <LogOut />
-                        Log out
+                        {isLoggingOut ? "Logging out..." : "Log out"}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -253,6 +329,7 @@ export default function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
     </Sidebar>
   );
 }

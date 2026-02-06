@@ -50,17 +50,17 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4 auth-page-enter">
       <div className="w-full max-w-225 flex rounded-2xl shadow-2xl overflow-hidden bg-card">
         {/* Left Side - Sign Up Prompt */}
-        <div className="hidden lg:flex lg:flex-1 flex-col items-center justify-center gradient-persona-primary p-8 text-center">
+        <div className="hidden lg:flex lg:flex-1 flex-col items-center justify-center gradient-persona-primary p-8 text-center auth-form-slide-left">
           <h1 className="text-white font-bold text-3xl sm:text-4xl mb-6">
             Welcome Back!
           </h1>
           <p className="text-white/90 mb-8 text-sm max-w-xs">
             Already have an account? Sign in to continue your journey with us!
           </p>
-          <Link href="/login">
+          <Link href="/login" className="transform transition-transform hover:scale-105">
             <button
               type="button"
               className="bg-white text-primary hover:bg-white/90 transition-colors duration-200 py-3 px-8 font-bold text-sm rounded-full shadow-lg hover:shadow-xl"
@@ -71,7 +71,7 @@ export default function SignUpPage() {
         </div>
 
         {/* Right Side - Sign Up Form */}
-        <div className="flex-2 flex flex-col items-center justify-center bg-card px-8 py-12 sm:px-16">
+        <div className="flex-2 flex flex-col items-center justify-center bg-card px-8 py-12 sm:px-16 auth-form-slide-right">
           <div className="w-full max-w-92.5 space-y-6">
             {/* Header */}
             <div className="text-center mb-8">

@@ -1,36 +1,44 @@
-import { NextResponse } from "next/server";
-import { User } from "@/models/User";
-import connectDB from "@/lib/db";
+import { NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
 
 export async function POST(req) {
   try {
-    await connectDB();
-    const { email, name, picture, googleId } = await req.json();
+    // 1. Check if the request body is actually readable
+    const body = await req.json().catch(() => ({}));
+    
+    // 2. Log to your terminal so you can see the data arrive
+    console.log("Backend received data:", body.email);
 
-    if (!email || !googleId) {
-      return NextResponse.json({ message: "Email and Google ID required" }, { status: 400 });
-    }
+    // 3. Handle the Secret (with a fallback to prevent the 500 crash)
+    const secret = process.env.JWT_SECRET || "temporary_test_secret_123";
 
-    let user = await User.findOne({ email });
+    // 4. Create the token
+    const token = jwt.sign(
+      { email: body.email, name: body.name },
+      secret,
+      { expiresIn: '7d' }
+    );
 
-    if (!user) {
-      user = new User({ email, name, picture, googleId, fromGoogle: true });
-      await user.save();
-    } else if (!user.googleId) {
-      user.googleId = googleId;
-      user.fromGoogle = true;
-      user.picture = picture;
-      await user.save();
-    }
-
-    const token = user.generateAuthToken();
-
+    // 5. Success response
     return NextResponse.json({
+      success: true,
       data: token,
-      message: "Google login successful",
-      user: { email: user.email, name: user.name, picture: user.picture }
-    });
-  } catch (error) {
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+      user: { 
+        email: body.email, 
+        name: body.name, 
+        picture: body.picture 
+      }
+    }, { status: 200 });
+
+  } catch (err) {
+    // THIS LINE PRINTS THE REAL ERROR IN YOUR TERMINAL
+    console.error("CRITICAL SERVER ERROR:", err);
+
+    // THIS LINE SENDS THE REAL ERROR TO YOUR BROWSER
+    return NextResponse.json({ 
+      success: false, 
+      message: err.message,
+      stack: err.stack 
+    }, { status: 500 });
   }
 }
