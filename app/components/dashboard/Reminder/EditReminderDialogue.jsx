@@ -86,7 +86,7 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
 
       // Dynamic PUT request to your API
       const response = await fetch(`/api/dashboard/reminders/${reminder._id}`, {
-        method: "PUT",
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${localStorage.getItem('token')}`, // ADD THIS
@@ -138,7 +138,7 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
 
-      <DialogContent className="sm:max-w-[420px] bg-card text-card-foreground border-border">
+      <DialogContent className="sm:max-w-105 bg-card text-card-foreground border-border">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-lg font-medium">

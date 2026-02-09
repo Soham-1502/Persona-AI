@@ -128,7 +128,7 @@ export function NewReminderDialog({ children, onReminderCreated }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
 
-      <DialogContent className="sm:max-w-[420px] bg-card text-card-foreground border-border">
+      <DialogContent className="sm:max-w-105 bg-card text-card-foreground border-border">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="text-lg font-medium">

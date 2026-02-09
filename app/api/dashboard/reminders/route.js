@@ -1,6 +1,9 @@
 // This is app/api/dashboard/reminders/route.js
 
-import { createReminder, getUserReminders } from "@/services/reminders/reminder.service";
+import {
+  createReminder,
+  getUserReminders,
+} from "@/services/reminders/reminder.service";
 import connectDB from "@/lib/db.js";
 import { authenticate } from "@/lib/auth";
 import { NextResponse } from "next/server";
@@ -13,25 +16,25 @@ export async function POST(req) {
 
     // Authenticate user
     const user = await authenticate(req);
-    
+
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
       );
     }
 
     // Parse request body
     const body = await req.json();
-    
-    console.log('Creating reminder for user:', user._id);
-    console.log('Reminder data:', body);
+
+    console.log("Creating reminder for user:", user._id);
+    console.log("Reminder data:", body);
 
     // Validate required fields
     if (!body.title || !body.date) {
       return NextResponse.json(
-        { success: false, error: 'Title and date are required' },
-        { status: 400 }
+        { success: false, error: "Title and date are required" },
+        { status: 400 },
       );
     }
 
@@ -44,30 +47,34 @@ export async function POST(req) {
     // Create reminder
     const reminder = await createReminder(reminderData);
 
-    console.log('Reminder created successfully:', reminder);
+    console.log("Reminder created successfully:", reminder);
 
     return NextResponse.json(
       { success: true, data: reminder },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
-    console.error('Error in POST /api/reminders:', error);
-    
+    console.error("Error in POST /api/reminders:", error);
+
     // Handle authentication errors
-    if (error.message === 'No token provided' || error.message === 'Authentication failed') {
+    if (
+      error.message === "No token provided" ||
+      error.message === "Authentication failed"
+    ) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
       );
     }
-    
+
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message || 'Failed to create reminder',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      {
+        success: false,
+        error: error.message || "Failed to create reminder",
+        details:
+          process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -76,40 +83,43 @@ export async function POST(req) {
 export async function GET(req) {
   try {
     await connectDB();
-    
+
     // Authenticate user
     const user = await authenticate(req);
-    
+
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
       );
     }
 
-    console.log('Fetching reminders for user:', user._id);
-    
+    console.log("Fetching reminders for user:", user._id);
+
     // Get reminders for this user only
     const reminders = await getUserReminders(user._id.toString());
-    
+
     return NextResponse.json(
       { success: true, data: reminders },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
-    console.error('Error in GET /api/reminders:', error);
-    
+    console.error("Error in GET /api/reminders:", error);
+
     // Handle authentication errors
-    if (error.message === 'No token provided' || error.message === 'Authentication failed') {
+    if (
+      error.message === "No token provided" ||
+      error.message === "Authentication failed"
+    ) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
       );
     }
-    
+
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
