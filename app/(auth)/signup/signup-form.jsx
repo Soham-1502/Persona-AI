@@ -15,6 +15,7 @@ export default function SignUpForm() {
     const form = useForm({
         resolver: zodResolver(authValidation.register),
         defaultValues: {
+            username: '',
             firstName: '',
             lastName: '',
             email: '',
@@ -34,6 +35,7 @@ export default function SignUpForm() {
     async function onSubmit(data) {
         if (!agreeTerms) {
             setError('Please agree to the terms and conditions');
+            toast.error('Please agree to the terms and conditions');
             return;
         }
 
@@ -44,7 +46,13 @@ export default function SignUpForm() {
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify({
+                    username: data.username,
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    email: data.email,
+                    password: data.password,
+                }),
             });
 
             const responseData = await res.json();
@@ -55,6 +63,7 @@ export default function SignUpForm() {
                 return;
             }
 
+            // Store token and user data
             localStorage.setItem('token', responseData.token || responseData.data);
             if (responseData.user) {
                 localStorage.setItem('user', JSON.stringify(responseData.user));
@@ -74,6 +83,25 @@ export default function SignUpForm() {
     return (
         <form onSubmit={form.handleSubmit(onSubmit)} className="w-full max-w-92.5">
             <div className="space-y-4">
+                {/* Username Input */}
+                <div>
+                    <Input
+                        type="text"
+                        placeholder="Username"
+                        disabled={isLoading}
+                        className="w-full px-4 py-3.5 rounded-xl bg-muted/50 border border-transparent focus:border-primary focus:bg-background transition-all duration-200 text-foreground placeholder:text-muted-foreground"
+                        {...form.register('username')}
+                    />
+                    {form.formState.errors.username && (
+                        <p className="text-destructive text-sm mt-1">
+                            {form.formState.errors.username.message}
+                        </p>
+                    )}
+                    <p className="text-muted-foreground text-xs mt-1">
+                        Letters, numbers, and underscores only
+                    </p>
+                </div>
+
                 {/* First Name Input */}
                 <div>
                     <Input
@@ -149,26 +177,17 @@ export default function SignUpForm() {
                     )}
                 </div>
 
-                {/* Username Preview */}
-                {form.watch('firstName') && form.watch('lastName') && (
-                    <div className="px-4 py-2 rounded-lg bg-muted/30 border border-border/50">
-                        <p className="text-xs text-muted-foreground">
-                            Your username will be:{' '}
-                            <span className="font-semibold text-foreground">
-                                {form.watch('firstName')}{form.watch('lastName')}
-                            </span>
-                        </p>
-                    </div>
-                )}
-
                 {/* Terms & Conditions */}
                 <div className="flex items-start gap-3">
                     <Checkbox
+                        id="agree_terms"
                         checked={agreeTerms}
-                        onChange={(e) => setAgreeTerms(e.target.checked)}
-                        name="agree_terms"
+                        onCheckedChange={setAgreeTerms}
                     />
-                    <label className="text-sm text-muted-foreground leading-tight cursor-pointer">
+                    <label 
+                        htmlFor="agree_terms"
+                        className="text-sm text-muted-foreground leading-tight cursor-pointer"
+                    >
                         I agree to the{' '}
                         <a href="/terms" className="text-primary hover:text-primary/80 transition-colors">
                             Terms and Conditions

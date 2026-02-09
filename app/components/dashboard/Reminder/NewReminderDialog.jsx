@@ -66,10 +66,11 @@ export function NewReminderDialog({ children, onReminderCreated }) {
       console.log("Submitting reminder:", reminderData);
 
       // Send to API
-      const response = await fetch("/api/reminders", {
+      const response = await fetch("/api/dashboard/reminders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify(reminderData),
       });

@@ -1,119 +1,128 @@
-import { NextResponse } from "next/server";
-import connectDB from "@/lib/db.js";
-import Reminder from "@/models/reminder.model";
+// This is app/api/dashboard/reminders/[id]/route.js
 
-// Get a single reminder by ID
+import { 
+  getReminderById, 
+  updateReminder, 
+  completeReminder,
+  deleteReminder 
+} from "@/services/reminders/reminder.service";
+import connectDB from "@/lib/db.js";
+import { authenticate } from "@/lib/auth";
+import { NextResponse } from "next/server";
+
+// Get a specific reminder
 export async function GET(req, { params }) {
   try {
     await connectDB();
-
-    // Await params in Next.js 15+
-    const { id } = await params;
-
-    console.log("Fetching reminder with ID:", id);
-
-    // Validate MongoDB ObjectId format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+    
+    const user = await authenticate(req);
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: "Invalid reminder ID format" },
-        { status: 400 },
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    const reminder = await Reminder.findById(id);
-
+    const { id } = params;
+    const reminder = await getReminderById(id, user._id.toString());
+    
     if (!reminder) {
       return NextResponse.json(
-        { success: false, error: "Reminder not found" },
-        { status: 404 },
+        { success: false, error: 'Reminder not found' },
+        { status: 404 }
       );
     }
-
-    return NextResponse.json({ success: true, data: reminder });
+    
+    return NextResponse.json(
+      { success: true, data: reminder },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error("Error in GET /api/reminders/[id]:", error);
+    console.error('Error in GET /api/reminders/[id]:', error);
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
-// Update a reminder by ID
-export async function PUT(req, { params }) {
+// Update a specific reminder
+export async function PATCH(req, { params }) {
   try {
     await connectDB();
-    const { id } = await params;
-    const body = await req.json();
-
-    // The frontend sends 'date' as 'datetime' in some contexts,
-    // ensure we map it correctly to the schema field
-    const updateData = {
-      title: body.title,
-      module: body.module,
-      date: body.date,
-      priority: body.priority,
-      status: body.status, // Ensure status can be updated
-      completedAt: body.completedAt, // Ensure completion dates are saved
-    };
-
-    const reminder = await Reminder.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!reminder) {
+    
+    const user = await authenticate(req);
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: "Reminder not found" },
-        { status: 404 },
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    return NextResponse.json({ success: true, data: reminder });
+    const { id } = params;
+    const body = await req.json();
+    
+    console.log('Updating reminder:', id, 'for user:', user._id);
+    
+    const reminder = await updateReminder(id, user._id.toString(), body);
+    
+    return NextResponse.json(
+      { success: true, data: reminder },
+      { status: 200 }
+    );
   } catch (error) {
+    console.error('Error in PATCH /api/reminders/[id]:', error);
+    
+    if (error.message === 'Reminder not found') {
+      return NextResponse.json(
+        { success: false, error: 'Reminder not found' },
+        { status: 404 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
-// Delete a reminder by ID
+// Delete a specific reminder (soft delete)
 export async function DELETE(req, { params }) {
   try {
     await connectDB();
-
-    const { id } = await params;
-
-    console.log("Deleting reminder with ID:", id);
-
-    // Validate MongoDB ObjectId format
-    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+    
+    const user = await authenticate(req);
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: "Invalid reminder ID format" },
-        { status: 400 },
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    const reminder = await Reminder.findByIdAndDelete(id);
-
-    if (!reminder) {
-      return NextResponse.json(
-        { success: false, error: "Reminder not found" },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Reminder deleted successfully",
-      data: reminder,
-    });
+    const { id } = params;
+    
+    console.log('Deleting reminder:', id, 'for user:', user._id);
+    
+    const reminder = await deleteReminder(id, user._id.toString());
+    
+    return NextResponse.json(
+      { success: true, data: reminder, message: 'Reminder deleted successfully' },
+      { status: 200 }
+    );
   } catch (error) {
-    console.error("Error in DELETE /api/reminders/[id]:", error);
+    console.error('Error in DELETE /api/reminders/[id]:', error);
+    
+    if (error.message === 'Reminder not found') {
+      return NextResponse.json(
+        { success: false, error: 'Reminder not found' },
+        { status: 404 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

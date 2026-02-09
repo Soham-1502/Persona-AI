@@ -1,17 +1,31 @@
-import { createReminder } from "@/services/reminders/reminder.service";
+// This is app/api/dashboard/reminders/route.js
+
+import { createReminder, getUserReminders } from "@/services/reminders/reminder.service";
 import connectDB from "@/lib/db.js";
-import Reminder from "@/models/reminder.model";
+import { authenticate } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
+// Create a new reminder for the authenticated user
 export async function POST(req) {
   try {
     // Connect to database
     await connectDB();
 
+    // Authenticate user
+    const user = await authenticate(req);
+    
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     // Parse request body
     const body = await req.json();
     
-    console.log('Creating reminder with data:', body);
+    console.log('Creating reminder for user:', user._id);
+    console.log('Reminder data:', body);
 
     // Validate required fields
     if (!body.title || !body.date) {
@@ -21,8 +35,14 @@ export async function POST(req) {
       );
     }
 
+    // Add userId to the reminder data
+    const reminderData = {
+      ...body,
+      userId: user._id.toString(),
+    };
+
     // Create reminder
-    const reminder = await createReminder(body);
+    const reminder = await createReminder(reminderData);
 
     console.log('Reminder created successfully:', reminder);
 
@@ -32,6 +52,14 @@ export async function POST(req) {
     );
   } catch (error) {
     console.error('Error in POST /api/reminders:', error);
+    
+    // Handle authentication errors
+    if (error.message === 'No token provided' || error.message === 'Authentication failed') {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     
     return NextResponse.json(
       { 
@@ -44,18 +72,41 @@ export async function POST(req) {
   }
 }
 
-// Get all reminders
+// Get all reminders for the authenticated user
 export async function GET(req) {
   try {
     await connectDB();
     
-    const reminders = await Reminder.find({}).sort({ date: 1 });
+    // Authenticate user
+    const user = await authenticate(req);
+    
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    console.log('Fetching reminders for user:', user._id);
+    
+    // Get reminders for this user only
+    const reminders = await getUserReminders(user._id.toString());
     
     return NextResponse.json(
       { success: true, data: reminders },
       { status: 200 }
     );
   } catch (error) {
+    console.error('Error in GET /api/reminders:', error);
+    
+    // Handle authentication errors
+    if (error.message === 'No token provided' || error.message === 'Authentication failed') {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

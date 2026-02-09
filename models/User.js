@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
   },
 
   seenQuestions: {
-    type: [String], // ✅ Correct: Array of strings
+    type: [String],
     default: [],
   },
   // Google OAuth fields
@@ -110,9 +110,6 @@ const userSchema = new mongoose.Schema({
   },
 
   // Password reset
-  // resetPasswordToken: String,
-  // resetPasswordExpires: Date,
-
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
 
@@ -126,12 +123,6 @@ const userSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
-
-userSchema.methods.generateAuthToken = function () {
-  return jwt.sign({ userId: this._id.toString() }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
-};
 
 // ✅ Virtual for full name
 userSchema.virtual("fullName").get(function () {
@@ -168,7 +159,7 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// ✅ Method to update game statistics - THIS IS THE MISSING METHOD!
+// ✅ Method to update game statistics
 userSchema.methods.updateGameStats = async function (scoreEarned, isCorrect) {
   console.log(`🎮 Updating game stats for ${this.username}:`);
   console.log(`   Score earned: ${scoreEarned}`);
@@ -213,7 +204,7 @@ userSchema.methods.updateGameStats = async function (scoreEarned, isCorrect) {
   }
 };
 
-// ✅ Method to get user's rank (optional)
+// ✅ Method to get user's rank
 userSchema.methods.getUserRank = async function () {
   const User = this.constructor;
   const usersWithHigherScores = await User.countDocuments({
@@ -230,6 +221,16 @@ userSchema.statics.getLeaderboard = async function (limit = 10) {
     .limit(limit);
 };
 
+// ✅ Generate auth token
+userSchema.methods.generateAuthToken = function () {
+  const token = jwt.sign(
+    { userId: this._id, email: this.email },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" },
+  );
+  return token;
+};
+
 // ✅ Ensure virtual fields are included in JSON
 userSchema.set("toJSON", { virtuals: true });
 userSchema.set("toObject", { virtuals: true });
@@ -241,6 +242,8 @@ userSchema.index({ googleId: 1 }, { sparse: true });
 userSchema.index({ "gameStats.totalScore": -1 });
 userSchema.index({ "gameStats.gamesPlayed": -1 });
 
+// ✅ IMPORTANT: This makes User model use the same database as Reminder
+// Since db.js connects to "User" database by default, this will work automatically
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export { User };

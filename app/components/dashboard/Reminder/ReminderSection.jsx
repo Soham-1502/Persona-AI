@@ -65,7 +65,7 @@ export default function ReminderSection() {
 
         try {
             // 2. Persist to Database
-            const response = await fetch(`/api/reminders/${id}`, {
+            const response = await fetch(`/api/dashboard/reminders/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

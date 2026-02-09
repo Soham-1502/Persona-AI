@@ -85,10 +85,11 @@ export function EditReminderDialog({ children, reminder, onReminderUpdated }) {
       console.log("Updating reminder:", reminderData);
 
       // Dynamic PUT request to your API
-      const response = await fetch(`/api/reminders/${reminder._id}`, {
+      const response = await fetch(`/api/dashboard/reminders/${reminder._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('token')}`, // ADD THIS
         },
         body: JSON.stringify(reminderData),
       });

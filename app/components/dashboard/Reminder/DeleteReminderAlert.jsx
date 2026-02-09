@@ -25,8 +25,11 @@ export function DeleteReminderAlert({ children, reminder, onReminderDeleted }) {
     setLoading(true);
 
     try {
-      const response = await fetch(`/api/reminders/${reminder._id}`, {
+      const response = await fetch(`/api/dashboard/reminders/${reminder._id}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem('token')}`, // ADD THIS
+        },
       });
 
       const result = await response.json();
@@ -36,7 +39,7 @@ export function DeleteReminderAlert({ children, reminder, onReminderDeleted }) {
       }
 
       console.log("Reminder deleted:", result);
-      
+
       // Close the dialog
       setOpen(false);
 
@@ -58,20 +61,20 @@ export function DeleteReminderAlert({ children, reminder, onReminderDeleted }) {
       <AlertDialogTrigger asChild>
         {children}
       </AlertDialogTrigger>
-      
+
       <AlertDialogContent className="bg-card border-border">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete this reminder?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the reminder: 
+            This action cannot be undone. This will permanently delete the reminder:
             <span className="font-semibold text-foreground block mt-1 italic">
               "{reminder.title}"
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        
+
         <AlertDialogFooter>
-          <AlertDialogCancel 
+          <AlertDialogCancel
             disabled={loading}
             className="cursor-pointer hover:bg-muted"
           >

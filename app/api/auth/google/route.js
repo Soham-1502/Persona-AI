@@ -1,44 +1,87 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import User from '@/models/User';
+import connectDB from '@/lib/db';
 
 export async function POST(req) {
   try {
-    // 1. Check if the request body is actually readable
-    const body = await req.json().catch(() => ({}));
+    await connectDB();
     
-    // 2. Log to your terminal so you can see the data arrive
-    console.log("Backend received data:", body.email);
+    const body = await req.json();
+    console.log("📧 Google login attempt:", body.email);
 
-    // 3. Handle the Secret (with a fallback to prevent the 500 crash)
-    const secret = process.env.JWT_SECRET || "temporary_test_secret_123";
+    // Find user by email OR googleId
+    let user = await User.findOne({ 
+      $or: [
+        { email: body.email },
+        { googleId: body.googleId }
+      ]
+    });
 
-    // 4. Create the token
+    if (user) {
+      // Update existing user with Google info if missing
+      if (!user.googleId) {
+        user.googleId = body.googleId;
+        user.picture = body.picture;
+        user.fromGoogle = true;
+        user.isVerified = true;
+        await user.save();
+        console.log("✅ Updated existing user with Google data");
+      }
+    } else {
+      // Create new Google user
+      const username = body.email.split('@')[0].toLowerCase();
+      let finalUsername = username;
+      let counter = 1;
+      
+      while (await User.findOne({ username: finalUsername })) {
+        finalUsername = `${username}${counter}`;
+        counter++;
+      }
+
+      const nameParts = (body.name || '').split(' ');
+      
+      user = new User({
+        username: finalUsername,
+        email: body.email,
+        firstName: nameParts[0] || 'User',
+        lastName: nameParts.slice(1).join(' ') || '',
+        picture: body.picture,
+        googleId: body.googleId,
+        fromGoogle: true,
+        isVerified: true,
+        isActive: true,
+        password: Math.random().toString(36).slice(-8)
+      });
+
+      await user.save();
+      console.log("✅ New Google user created:", user._id);
+    }
+
     const token = jwt.sign(
-      { email: body.email, name: body.name },
-      secret,
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // 5. Success response
     return NextResponse.json({
       success: true,
       data: token,
       user: { 
-        email: body.email, 
-        name: body.name, 
-        picture: body.picture 
+        id: user._id,
+        email: user.email, 
+        name: `${user.firstName} ${user.lastName}`,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        picture: user.picture
       }
     }, { status: 200 });
 
   } catch (err) {
-    // THIS LINE PRINTS THE REAL ERROR IN YOUR TERMINAL
-    console.error("CRITICAL SERVER ERROR:", err);
-
-    // THIS LINE SENDS THE REAL ERROR TO YOUR BROWSER
+    console.error("❌ Google auth error:", err);
     return NextResponse.json({ 
-      success: false, 
-      message: err.message,
-      stack: err.stack 
+      message: err.message
     }, { status: 500 });
   }
 }

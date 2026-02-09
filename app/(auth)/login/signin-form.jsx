@@ -38,16 +38,21 @@ export default function SignInForm() {
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify({
+                    email: data.email,
+                    password: data.password,
+                }),
             });
 
             const responseData = await res.json();
 
             if (!res.ok) {
                 setError(responseData.message || 'Login failed');
+                toast.error(responseData.message || 'Login failed');
                 return;
             }
 
+            // Store token and user data
             localStorage.setItem('token', responseData.data);
             if (responseData.user) {
                 localStorage.setItem('user', JSON.stringify(responseData.user));
@@ -58,6 +63,7 @@ export default function SignInForm() {
         } catch (error) {
             console.error('Login error:', error);
             setError('Cannot reach server. Please try again.');
+            toast.error('Cannot reach server. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -111,12 +117,19 @@ export default function SignInForm() {
 
                 {/* Remember Me & Forgot Password */}
                 <div className="flex items-center justify-between flex-wrap gap-3">
-                    <Checkbox
-                        label="Keep me logged in"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        name="remember_me"
-                    />
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="remember_me"
+                            checked={rememberMe}
+                            onCheckedChange={setRememberMe}
+                        />
+                        <label
+                            htmlFor="remember_me"
+                            className="text-sm text-muted-foreground cursor-pointer select-none"
+                        >
+                            Keep me logged in
+                        </label>
+                    </div>
 
                     <Link
                         href="/forgot-password"
