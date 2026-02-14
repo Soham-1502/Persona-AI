@@ -68,10 +68,10 @@ export async function getUserUpcomingReminders(userId) {
  */
 export async function getReminderById(reminderId, userId) {
   try {
-    return await Reminder.findOne({ 
-      _id: reminderId, 
+    return await Reminder.findOne({
+      _id: reminderId,
       userId,
-      isDeleted: false 
+      isDeleted: false,
     });
   } catch (error) {
     console.error("Error fetching reminder by ID:", error);
@@ -88,16 +88,29 @@ export async function getReminderById(reminderId, userId) {
  */
 export async function updateReminder(reminderId, userId, updateData) {
   try {
-    const reminder = await Reminder.findOne({ 
-      _id: reminderId, 
+    const reminder = await Reminder.findOne({
+      _id: reminderId,
       userId,
-      isDeleted: false 
+      isDeleted: false,
     });
-    
+
     if (!reminder) {
       throw new Error("Reminder not found");
     }
-    
+
+    if (updateData.date) {
+      const newDate = new Date(updateData.date);
+      const now = new Date();
+
+      if (newDate > now && reminder.status === "completed") {
+        updateData.status = "pending";
+        updateData.completedAt = null;
+        console.log(
+          `🔄 Resetting completed reminder to pending (new date: ${newDate})`,
+        );
+      }
+    }
+
     Object.assign(reminder, updateData);
     await reminder.save();
     return reminder;
@@ -115,16 +128,16 @@ export async function updateReminder(reminderId, userId, updateData) {
  */
 export async function completeReminder(reminderId, userId) {
   try {
-    const reminder = await Reminder.findOne({ 
-      _id: reminderId, 
+    const reminder = await Reminder.findOne({
+      _id: reminderId,
       userId,
-      isDeleted: false 
+      isDeleted: false,
     });
-    
+
     if (!reminder) {
       throw new Error("Reminder not found");
     }
-    
+
     return await reminder.markAsCompleted();
   } catch (error) {
     console.error("Error completing reminder:", error);
@@ -140,15 +153,15 @@ export async function completeReminder(reminderId, userId) {
  */
 export async function deleteReminder(reminderId, userId) {
   try {
-    const reminder = await Reminder.findOne({ 
-      _id: reminderId, 
-      userId 
+    const reminder = await Reminder.findOne({
+      _id: reminderId,
+      userId,
     });
-    
+
     if (!reminder) {
       throw new Error("Reminder not found");
     }
-    
+
     return await reminder.softDelete();
   } catch (error) {
     console.error("Error deleting reminder:", error);
@@ -164,9 +177,9 @@ export async function deleteReminder(reminderId, userId) {
  */
 export async function permanentlyDeleteReminder(reminderId, userId) {
   try {
-    return await Reminder.findOneAndDelete({ 
-      _id: reminderId, 
-      userId 
+    return await Reminder.findOneAndDelete({
+      _id: reminderId,
+      userId,
     });
   } catch (error) {
     console.error("Error permanently deleting reminder:", error);
@@ -182,15 +195,23 @@ export async function permanentlyDeleteReminder(reminderId, userId) {
 export async function getReminderStats(userId) {
   try {
     const total = await Reminder.countDocuments({ userId, isDeleted: false });
-    const pending = await Reminder.countDocuments({ userId, status: 'pending', isDeleted: false });
-    const completed = await Reminder.countDocuments({ userId, status: 'completed', isDeleted: false });
-    const overdue = await Reminder.countDocuments({ 
-      userId, 
-      status: 'pending',
-      date: { $lt: new Date() },
-      isDeleted: false 
+    const pending = await Reminder.countDocuments({
+      userId,
+      status: "pending",
+      isDeleted: false,
     });
-    
+    const completed = await Reminder.countDocuments({
+      userId,
+      status: "completed",
+      isDeleted: false,
+    });
+    const overdue = await Reminder.countDocuments({
+      userId,
+      status: "pending",
+      date: { $lt: new Date() },
+      isDeleted: false,
+    });
+
     return {
       total,
       pending,
@@ -202,3 +223,4 @@ export async function getReminderStats(userId) {
     throw error;
   }
 }
+    

@@ -1,21 +1,23 @@
+// This is in app/components/dashboard/Reminder/ReminderSection.jsx
+
 'use client';
 
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ReminderFilters } from "./ReminderFilters.jsx";
 import ReminderList from "./RemindersList.jsx";
 
-import { useState, useEffect } from "react"; // Added useEffect
-import { Plus, Loader2 } from "lucide-react"; // Added Loader2 for better UX
+import { useState, useEffect } from "react";
+import { Plus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NewReminderDialog } from "./NewReminderDialog.jsx";
 
 export default function ReminderSection() {
     const [selectedFilter, setSelectedFilter] = useState('all');
-    // Initialize with an empty array instead of mock data
     const [reminders, setReminders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // 1. Function to fetch all reminders from the database
+    // Fetch reminders function
     const fetchReminders = async () => {
         try {
             setLoading(true);
@@ -23,11 +25,11 @@ export default function ReminderSection() {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
-            }); // Targets your GET route
+            });
             const result = await response.json();
 
             if (response.ok && result.success) {
-                setReminders(result.data); // result.data matches your route.js structure
+                setReminders(result.data);
             } else {
                 console.error("Failed to fetch:", result.error);
             }
@@ -38,12 +40,38 @@ export default function ReminderSection() {
         }
     };
 
-    // 2. Fetch data on component mount
+    // Refresh reminders function
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        try {
+            const [response] = await Promise.all([
+                fetch("/api/dashboard/reminders", {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                }),
+                new Promise(resolve => setTimeout(resolve, 600)) // Min delay to show animation
+            ]);
+            
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                setReminders(result.data);
+            } else {
+                console.error("Failed to fetch:", result.error);
+            }
+        } catch (error) {
+            console.error("Error fetching reminders:", error);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    // Fetch on mount
     useEffect(() => {
         fetchReminders();
     }, []);
 
-    // 3. Callback to update UI when a new reminder is created via NewReminderDialog
     const handleReminderCreated = (newReminder) => {
         setReminders((prev) => [newReminder, ...prev]);
     };
@@ -55,12 +83,10 @@ export default function ReminderSection() {
     };
 
     const handleReminderDeleted = (deletedId) => {
-        // Filter out the reminder that has the matching MongoDB _id
         setReminders((prev) => prev.filter(reminder => reminder._id !== deletedId));
     };
 
     const toggleReminderStatus = async (id) => {
-        // 1. Find the current status to toggle it
         const reminderToUpdate = reminders.find(r => r._id === id);
         if (!reminderToUpdate) return;
 
@@ -68,7 +94,6 @@ export default function ReminderSection() {
         const completedAt = newStatus === "completed" ? new Date().toISOString() : null;
 
         try {
-            // 2. Persist to Database
             const response = await fetch(`/api/dashboard/reminders/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -80,7 +105,6 @@ export default function ReminderSection() {
             });
 
             if (response.ok) {
-                // 3. Update Local State for instant UI feedback
                 setReminders(prev =>
                     prev.map(rem =>
                         rem._id === id
@@ -99,7 +123,7 @@ export default function ReminderSection() {
             <CardHeader className="flex flex-col">
                 <div className="flex items-center justify-between w-full mb-1">
                     <p className="text-lg font-medium">Reminders</p>
-                    {/* Pass the callback to the dialog */}
+                    {/* Add Reminder Button */}
                     <NewReminderDialog onReminderCreated={handleReminderCreated}>
                         <Button className="cursor-pointer">
                             <Plus size={20} />
@@ -113,13 +137,19 @@ export default function ReminderSection() {
                         onValueChange={(value) => {
                             if (!value) return;
                             setSelectedFilter(value);
-                        }} />
+                        }}
+                        onRefresh={handleRefresh}
+                        refreshing={refreshing}
+                    />
                 </div>
             </CardHeader>
             <CardContent className="flex-1 h-20 overflow-y-auto pr-2">
-                {loading ? (
-                    <div className="flex items-center justify-center h-full">
-                        <Loader2 className="animate-spin text-muted-foreground" />
+                {loading || refreshing ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">
+                            {refreshing ? 'Refreshing reminders...' : 'Loading reminders...'}
+                        </p>
                     </div>
                 ) : (
                     <ReminderList

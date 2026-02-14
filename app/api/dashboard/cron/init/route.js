@@ -1,3 +1,5 @@
+// This is in app/api/dashboard/cron/init/route.js
+
 import { NextResponse } from "next/server";
 import { runReminderJob } from "@/services/reminders/ReminderRunner";
 

@@ -1,3 +1,5 @@
+// This is in app/api/dashboard/reminders/run/route.js
+
 import { connectToDB } from "@/lib/db";
 import { sendInAppNotification } from "@/lib/notifications";
 

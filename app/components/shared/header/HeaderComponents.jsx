@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Bell, Sun, Moon, MonitorCog } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useEffect, useState, useRef } from "react";
 
 export function DateFilter({ value, onValueChange }) {
     return (
@@ -41,18 +42,172 @@ export function DateFilter({ value, onValueChange }) {
 }
 
 export function Notifications() {
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const lastNotificationCount = useRef(0);
+    const audioRef = useRef(null);
+
+    // Request notification permission & setup audio
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        audioRef.current = new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3');
+    }, []);
+
+    const fetchNotifications = async () => {
+        try {
+            setLoading(true);
+            const response = await fetch("/api/notifications", {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                const newNotifications = result.data || [];
+                const newUnreadCount = newNotifications.filter((n) => !n.read).length;
+
+                // New notification detected
+                if (newUnreadCount > lastNotificationCount.current) {
+                    const latest = newNotifications.find(n => !n.read);
+
+                    // Play sound
+                    audioRef.current?.play().catch(() => { });
+
+                    // Browser notification
+                    if (Notification.permission === 'granted' && latest) {
+                        new Notification(latest.title, {
+                            body: latest.message,
+                            icon: '/favicon.ico',
+                        });
+                    }
+                }
+
+                lastNotificationCount.current = newUnreadCount;
+                setNotifications(newNotifications);
+                setUnreadCount(newUnreadCount);
+            }
+        } catch (error) {
+            console.error("Error fetching notifications:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const markAsRead = async (id) => {
+        try {
+            await fetch(`/api/notifications/${id}`, {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+            });
+            fetchNotifications();
+        } catch (error) {
+            console.error("Error marking as read:", error);
+        }
+    };
+
+    const markAllAsRead = async () => {
+        try {
+            await fetch("/api/notifications", {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+            });
+            fetchNotifications();
+        } catch (error) {
+            console.error("Error marking all as read:", error);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 10000); // 10s for testing
+        return () => clearInterval(interval);
+    }, []);
+
     return (
-        <div className={cn("h-10 w-10 border-0 border-ring flex items-center justify-center rounded-lg transition-all duration-100 ease-in-out cursor-pointer",
-            "hover:border-ring hover:border-2")}>
+        <div className={cn(
+            "h-10 w-10 border-0 border-ring flex items-center justify-center rounded-lg transition-all duration-100 ease-in-out cursor-pointer relative",
+            "hover:border-ring hover:border-2"
+        )}>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild className="cursor-pointer">
-                    <button>
+                    <button className="relative">
                         <Bell />
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={15} alignOffset={-5}>
-                    <div className='p-2'>
-                        No Notifications
+                <DropdownMenuContent align="end" sideOffset={15} alignOffset={-5} className="w-96">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                        <h3 className="font-semibold text-base">Notifications</h3>
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={markAllAsRead}
+                                className="text-xs text-primary hover:underline"
+                            >
+                                Mark all read
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Notifications List */}
+                    <div className="max-h-96 overflow-y-auto">
+                        {loading ? (
+                            <div className="p-4 text-center text-muted-foreground">
+                                Loading...
+                            </div>
+                        ) : notifications.length === 0 ? (
+                            <div className="p-6 text-center text-muted-foreground">
+                                <Bell className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                                <p>No notifications</p>
+                            </div>
+                        ) : (
+                            notifications.map((notification) => (
+                                <DropdownMenuItem
+                                    key={notification._id}
+                                    className={cn(
+                                        "p-4 cursor-pointer border-b last:border-b-0 focus:bg-muted",
+                                        !notification.read && "bg-muted/30"
+                                    )}
+                                    onClick={() => markAsRead(notification._id)}
+                                >
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex-1">
+                                                <span className="font-semibold text-sm block">
+                                                    {notification.title}
+                                                </span>
+                                                <p className="text-sm text-muted-foreground mt-1">
+                                                    {notification.message}
+                                                </p>
+                                            </div>
+                                            {!notification.read && (
+                                                <span className="h-2 w-2 bg-blue-500 rounded-full mt-1 shrink-0" />
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between mt-2">
+                                            <span className="text-xs text-muted-foreground">
+                                                {notification.module}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {new Date(notification.createdAt).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </DropdownMenuItem>
+                            ))
+                        )}
                     </div>
                 </DropdownMenuContent>
             </DropdownMenu>

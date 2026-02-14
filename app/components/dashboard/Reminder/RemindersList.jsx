@@ -1,3 +1,5 @@
+// This is in app/components/dashboard/Reminder/RemindersList.jsx
+
 import ReminderRow from "./ReminderRow";
 import { Inbox } from "lucide-react";
 

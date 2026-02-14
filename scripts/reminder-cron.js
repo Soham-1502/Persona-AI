@@ -1,3 +1,5 @@
+// This is in app/scripts/reminder-cron.js
+
 import "dotenv/config";
 import cron from "node-cron";
 import { runReminderJob } from "../services/reminders/ReminderRunner.js";

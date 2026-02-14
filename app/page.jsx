@@ -9,7 +9,7 @@ export default function HomePage() {
   useEffect(() => {
     // Check if user is logged in
     const token = localStorage.getItem('token');
-    
+
     if (token) {
       // User is logged in, redirect to dashboard
       router.push('/dashboard');
@@ -18,6 +18,10 @@ export default function HomePage() {
       router.push('/login');
     }
   }, [router]);
+
+  useEffect(() => {
+    fetch('/api/dashboard/cron/init'); // Triggers cron initialization
+  }, []);
 
   // Show a loading state while checking auth
   return (
