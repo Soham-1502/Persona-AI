@@ -4,10 +4,8 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Toaster } from 'sonner';
 import '../../../globals.css';
 
-export default function RootLayout({ children }) {
+export default function GoogleOAuthWrapper({ children }) {
   return (
-    <html lang="en">
-      <body>
         <GoogleOAuthProvider 
           clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
           onScriptLoadError={() => console.error('Failed to load Google script')}
@@ -16,7 +14,5 @@ export default function RootLayout({ children }) {
           {children}
           <Toaster position="top-right" richColors />
         </GoogleOAuthProvider>
-      </body>
-    </html>
   );
 }

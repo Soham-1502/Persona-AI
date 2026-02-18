@@ -2,7 +2,7 @@
 
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { SidebarLayout } from "@/app/components/shared/sidebar/sidebar-layout";
-import GoogleOAuthProvider from "../provider/GoogleOAuthProvider.jsx";
+import GoogleOAuthWrapper from "../provider/GoogleOAuthProvider";
 
 export default function Providers({ children }) {
   return (
@@ -14,9 +14,9 @@ export default function Providers({ children }) {
       storageKey="persona-ai-theme"
       enableColorScheme={false}
     >
-      <GoogleOAuthProvider>
+      <GoogleOAuthWrapper>
         <SidebarLayout>{children}</SidebarLayout>
-      </GoogleOAuthProvider>
+      </GoogleOAuthWrapper>
     </NextThemesProvider>
   );
 }
