@@ -36,10 +36,29 @@ const Quiz = () => {
   const [error, setError] = useState("");
   const [username, setUsername] = useState("");
   const [particles, setParticles] = useState([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
 
   useEffect(() => {
-    setUsername(localStorage.getItem("username") || "");
+    // ✅ Load user data from localStorage (set by login/signup pages)
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+
+    if (token && userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setUsername(userData.name || userData.username || userData.email || "");
+        setIsAuthenticated(true);
+        console.log("✅ User authenticated from localStorage:", userData.email);
+      } catch {
+        setUsername("");
+        setIsAuthenticated(false);
+      }
+    } else {
+      setUsername(localStorage.getItem("username") || "");
+      setIsAuthenticated(false);
+    }
+
     setParticles(
       [...Array(22)].map((_, i) => ({
         left: `${(i * 97 + Math.random() * 30) % 100}%`,
@@ -57,6 +76,42 @@ const Quiz = () => {
 
   const recognitionRef = useRef(null);
   const currentQuestionRef = useRef({ question: "", answer: "" });
+  const seenQuestionsRef = useRef([]);
+  const voicesRef = useRef([]);
+
+  // ✅ Helper: get localStorage key for this user's seen questions
+  const getSeenQuestionsKey = () => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        return `quiz_seen_${u.id || u.email || "default"}`;
+      } catch { return "quiz_seen_default"; }
+    }
+    return "quiz_seen_default";
+  };
+
+  // ✅ Load seen questions from localStorage on mount
+  useEffect(() => {
+    const key = getSeenQuestionsKey();
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || "[]");
+      seenQuestionsRef.current = Array.isArray(stored) ? stored : [];
+      console.log(`📦 Loaded ${seenQuestionsRef.current.length} seen questions from localStorage`);
+    } catch { seenQuestionsRef.current = []; }
+  }, []);
+
+  // ✅ Preload TTS voices (Chrome loads them asynchronously)
+  useEffect(() => {
+    if ("speechSynthesis" in window) {
+      const loadVoices = () => {
+        voicesRef.current = speechSynthesis.getVoices();
+        console.log(`🔊 Loaded ${voicesRef.current.length} TTS voices`);
+      };
+      loadVoices();
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
 
   // ✅ Helper function to get authentication token
   const getAuthToken = () => {
@@ -67,9 +122,8 @@ const Quiz = () => {
   const handleAuthError = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("authToken");
+    setIsAuthenticated(false);
     setError("Authentication failed. Please login again.");
-    // You might want to redirect to login page here
-    // window.location.href = '/login';
   };
 
   // ✅ Helper function for authenticated API calls
@@ -116,76 +170,110 @@ const Quiz = () => {
     };
   }, [currentQuestion, correctAnswer]);
 
+  // ✅ FIXED: SpeechRecognition setup
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setError("Speech recognition not supported in this browser");
+      console.warn("⚠️ Speech recognition not supported in this browser");
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = false; // ✅ FIXED: single result mode
     recognition.interimResults = false;
     recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      console.log("🎤 Speech recognition started");
       setIsListening(true);
     };
 
     recognition.onend = () => {
+      console.log("🎤 Speech recognition ended");
       setIsListening(false);
     };
 
     recognition.onresult = (event) => {
-      const lastResultIndex = event.results.length - 1;
-      const result = event.results[lastResultIndex][0].transcript;
-      setTranscript(result);
+      let finalTranscript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        finalTranscript += event.results[i][0].transcript;
+      }
+      console.log("🎤 Transcript:", finalTranscript);
+      setTranscript(finalTranscript);
       setIsAnswering(true);
       setTimeout(() => {
-        checkAnswer(result);
+        checkAnswer(finalTranscript);
         setIsAnswering(false);
       }, 500);
-      recognition.stop();
     };
 
     recognition.onerror = (event) => {
-      setFeedback("Speech error: " + event.error);
+      console.error("🎤 Speech error:", event.error);
       setIsListening(false);
+      if (event.error === "not-allowed" || event.error === "permission-denied") {
+        setFeedback("Microphone permission denied. Please allow mic access in browser settings.");
+      } else if (event.error === "no-speech") {
+        setFeedback("No speech detected. Please try again and speak clearly.");
+      } else if (event.error === "network") {
+        setFeedback("Network error with speech recognition. Please check your connection.");
+      } else {
+        setFeedback("Speech error: " + event.error);
+      }
     };
 
-    recognitionRef.current = recognition; // ✅ CRITICAL: Set the ref
+    recognitionRef.current = recognition;
 
     return () => {
-      if (recognitionRef.current) recognitionRef.current.stop();
+      try { if (recognitionRef.current) recognitionRef.current.abort(); } catch { }
     };
-  }, []); 
+  }, []);
 
-  const startListening = () => {
-    // Added a try-catch and extra safety checks
-    if (recognitionRef.current && !isListening && currentQuestion) {
-      try {
-        setTranscript("");
-        setFeedback("");
-        setShowResult(false);
-        setTimer(30);
+  // ✅ FIXED: Request mic permission first, then start recognition
+  const startListening = async () => {
+    if (!currentQuestion) return;
+
+    // Request mic permission explicitly
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop()); // release immediately
+    } catch (err) {
+      console.error("Mic permission error:", err);
+      setFeedback("Microphone access denied. Please allow mic access and try again.");
+      return;
+    }
+
+    if (!recognitionRef.current) {
+      setFeedback("Speech recognition not available in this browser.");
+      return;
+    }
+
+    try {
+      // Abort any existing session first
+      try { recognitionRef.current.abort(); } catch { }
+
+      setTranscript("");
+      setFeedback("");
+      setShowResult(false);
+      setTimer(30);
+
+      recognitionRef.current.start();
+      console.log("🎤 Recognition start called");
+    } catch (err) {
+      console.error("Speech recognition start error:", err);
+      if (err.name === "InvalidStateError") {
         setIsListening(true);
-
-        recognitionRef.current.start();
-      } catch (err) {
-        console.error("Speech recognition error:", err);
-        // If it's already started, just ensure our state reflects that
-        if (err.name === 'InvalidStateError') {
-          setIsListening(true);
-        }
+      } else {
+        setFeedback("Could not start speech recognition. Please reload the page.");
       }
     }
   };
 
   const stopListening = () => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { }
       setIsListening(false);
     }
   };
@@ -225,7 +313,7 @@ const Quiz = () => {
     try {
       // ✅ Call the correct endpoint with authentication
       const data = await makeAuthenticatedRequest(
-        "/api/evaluate",
+        "/api/inquizzo/evaluate",
         {
           method: "POST",
           body: JSON.stringify({
@@ -283,13 +371,20 @@ const Quiz = () => {
     }
   };
 
+  // ✅ FIXED: Use preloaded voices for TTS
   const speakQuestion = () => {
     if ("speechSynthesis" in window && currentQuestion) {
+      speechSynthesis.cancel(); // Stop any ongoing speech first
       const utterance = new SpeechSynthesisUtterance(currentQuestion);
       utterance.rate = 0.8;
+      // Use preloaded voices, fallback to live query
+      const voices = voicesRef.current.length > 0 ? voicesRef.current : speechSynthesis.getVoices();
       utterance.voice =
-        speechSynthesis.getVoices().find((voice) => voice.lang === "en-US") ||
-        speechSynthesis.getVoices()[0];
+        voices.find((v) => v.lang === "en-US" && v.name.includes("Google")) ||
+        voices.find((v) => v.lang === "en-US") ||
+        voices.find((v) => v.lang.startsWith("en")) ||
+        voices[0] || null;
+      utterance.onerror = (e) => console.error("TTS error:", e);
       speechSynthesis.speak(utterance);
     }
   };
@@ -419,7 +514,30 @@ const Quiz = () => {
   //   }
   // };
 
+  // ✅ Helper: save a question to localStorage seen list (max 80)
+  const saveSeenQuestion = (question) => {
+    if (!question) return;
+    const key = getSeenQuestionsKey();
+    const seen = seenQuestionsRef.current;
+    if (!seen.includes(question)) {
+      seen.push(question);
+      // Keep only last 80 questions
+      if (seen.length > 80) seen.splice(0, seen.length - 80);
+      seenQuestionsRef.current = seen;
+      localStorage.setItem(key, JSON.stringify(seen));
+      console.log(`📦 Saved seen question (${seen.length}/80):`, question.substring(0, 50));
+    }
+  };
+
   const getAIQuestion = async () => {
+    // ✅ Check authentication before making API call
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please login to access quiz questions.");
+      setIsAuthenticated(false);
+      return;
+    }
+
     setIsLoading(true);
     setError("");
 
@@ -435,15 +553,15 @@ const Quiz = () => {
     const randomTopic = topics[Math.floor(Math.random() * topics.length)];
 
     try {
-      // We ONLY use the authenticated request now.
       const data = await makeAuthenticatedRequest(
-        "/api/ask",
+        "/api/inquizzo/ask",
         {
           method: "POST",
           body: JSON.stringify({
-            topic: selectedTopic || "general knowledge",
+            topic: selectedTopic || randomTopic,
             subject: selectedSubject,
             category: selectedCategory,
+            seenQuestions: seenQuestionsRef.current, // ✅ Send seen questions to avoid repeats
           }),
         }
       );
@@ -451,6 +569,7 @@ const Quiz = () => {
       if (data && data.question) {
         setCurrentQuestion(data.question);
         setCorrectAnswer(data.answer);
+        saveSeenQuestion(data.question); // ✅ Save to localStorage
         console.log("✅ New Unique Question:", data.question);
       } else {
         throw new Error("Invalid data received");

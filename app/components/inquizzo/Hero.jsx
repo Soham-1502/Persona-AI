@@ -150,11 +150,11 @@ const Hero = () => {
             </Link>
 
             {/* 🔐 Changed 'to' to 'href' for Next.js Link */}
-            <Link href="/(auth)login">
+            {/* <Link href="/(auth)login">
               <button className="bg-white hover:bg-gray-200 text-black font-medium py-3 px-8 rounded-full transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105">
                 Login 🔐
               </button>
-            </Link>
+            </Link> */}
           </div>
         )}
       </div>

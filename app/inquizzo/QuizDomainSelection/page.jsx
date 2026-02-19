@@ -231,7 +231,7 @@ const QuizDomainSelection = () => {
   // Parse URL to get current selections
   const parseCurrentURL = () => {
     if (typeof window === 'undefined') return;
-    
+
     const path = window.location.pathname;
     const parts = path.split("/").filter(Boolean);
 
@@ -276,7 +276,7 @@ const QuizDomainSelection = () => {
         delay: `${Math.random() * 5}s`,
       }))
     );
-    
+
     initializeSpeechRecognition();
 
     return () => {
@@ -303,7 +303,7 @@ const QuizDomainSelection = () => {
 
   const initializeSpeechRecognition = () => {
     if (typeof window === 'undefined') return;
-    
+
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -649,15 +649,13 @@ const QuizDomainSelection = () => {
         {/* Timer */}
         <div className="flex justify-center mb-8">
           <div
-            className={`glass-card px-8 py-4 rounded-3xl border ${
-              timer <= 10 ? "border-red-400 animate-pulse" : "border-blue-400"
-            }`}
+            className={`glass-card px-8 py-4 rounded-3xl border ${timer <= 10 ? "border-red-400 animate-pulse" : "border-blue-400"
+              }`}
           >
             <div className="text-center">
               <div
-                className={`text-4xl font-bold ${
-                  timer <= 10 ? "text-red-400" : "text-blue-300"
-                }`}
+                className={`text-4xl font-bold ${timer <= 10 ? "text-red-400" : "text-blue-300"
+                  }`}
               >
                 {timer}s
               </div>
@@ -692,13 +690,11 @@ const QuizDomainSelection = () => {
             <button
               onClick={isListening ? stopListening : startListening}
               disabled={showResult || isAnswering}
-              className={`p-6 rounded-full transition-all duration-300 ${
-                isListening
-                  ? "bg-red-600 animate-glow scale-110"
-                  : "bg-blue-600/20 border border-blue-400/50 hover:bg-blue-700/20"
-              } ${
-                (showResult || isAnswering) && "opacity-50 cursor-not-allowed"
-              }`}
+              className={`p-6 rounded-full transition-all duration-300 ${isListening
+                ? "bg-red-600 animate-glow scale-110"
+                : "bg-blue-600/20 border border-blue-400/50 hover:bg-blue-700/20"
+                } ${(showResult || isAnswering) && "opacity-50 cursor-not-allowed"
+                }`}
             >
               {isListening ? (
                 <MicOff className="w-8 h-8 text-white" />
@@ -747,11 +743,10 @@ const QuizDomainSelection = () => {
 
         {showResult && feedback && (
           <div
-            className={`glass-card rounded-3xl p-6 mb-6 border-l-4 ${
-              feedback.toLowerCase().includes("correct")
-                ? "border-green-400"
-                : "border-red-400"
-            }`}
+            className={`glass-card rounded-3xl p-6 mb-6 border-l-4 ${feedback.toLowerCase().includes("correct")
+              ? "border-green-400"
+              : "border-red-400"
+              }`}
           >
             <div className="flex items-center mb-2">
               {feedback.toLowerCase().includes("correct") ? (
@@ -762,11 +757,10 @@ const QuizDomainSelection = () => {
               <h4 className="text-lg font-bold text-white">AI Feedback:</h4>
             </div>
             <p
-              className={`text-lg ${
-                feedback.toLowerCase().includes("correct")
-                  ? "text-green-300"
-                  : "text-red-300"
-              }`}
+              className={`text-lg ${feedback.toLowerCase().includes("correct")
+                ? "text-green-300"
+                : "text-red-300"
+                }`}
             >
               {feedback}
             </p>
@@ -851,11 +845,11 @@ const QuizDomainSelection = () => {
                 {[
                   selectedDomain && QUIZ_STRUCTURE[selectedDomain]?.name,
                   selectedCategory &&
-                    QUIZ_STRUCTURE[selectedDomain]?.categories[selectedCategory]
-                      ?.name,
+                  QUIZ_STRUCTURE[selectedDomain]?.categories[selectedCategory]
+                    ?.name,
                   selectedTopic &&
-                    QUIZ_STRUCTURE[selectedDomain]?.categories[selectedCategory]
-                      ?.topics[selectedTopic]?.name,
+                  QUIZ_STRUCTURE[selectedDomain]?.categories[selectedCategory]
+                    ?.topics[selectedTopic]?.name,
                 ]
                   .filter(Boolean)
                   .join(" → ")}
