@@ -12,6 +12,7 @@ export function ChatInterface({ onTalkingStateChange, sessionId, initialMessages
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
+    const ttsTimeoutRef = useRef(null);
 
     useEffect(() => {
         if (initialMessages && initialMessages.length > 0) {
@@ -38,6 +39,10 @@ export function ChatInterface({ onTalkingStateChange, sessionId, initialMessages
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
+            if (ttsTimeoutRef.current) {
+                clearTimeout(ttsTimeoutRef.current);
+            }
+            onTalkingStateChange?.(false);
         };
     }, [sessionId, initialMessages]);
 
@@ -98,8 +103,23 @@ export function ChatInterface({ onTalkingStateChange, sessionId, initialMessages
         }
     };
 
+    // Safely stop talking and clear any pending safety timeout
+    const stopTalking = () => {
+        if (ttsTimeoutRef.current) {
+            clearTimeout(ttsTimeoutRef.current);
+            ttsTimeoutRef.current = null;
+        }
+        onTalkingStateChange?.(false);
+    };
+
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
+
+        // Cancel any ongoing speech before sending a new message
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        stopTalking();
 
         const userMsg = {
             id: Date.now().toString(),
@@ -178,17 +198,32 @@ export function ChatInterface({ onTalkingStateChange, sessionId, initialMessages
             const finalMessages = [...newMessages, { id: aiMsgId, role: "ai", text: accumulatedText, timestamp: new Date() }];
             saveToDB(currentSessionId, finalMessages);
 
-            // Text-to-Speech
+            // Text-to-Speech with safety timeout fallback
             if ('speechSynthesis' in window && accumulatedText) {
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(accumulatedText);
-                utterance.onstart = () => onTalkingStateChange?.(true);
-                utterance.onend = () => onTalkingStateChange?.(false);
+
+                // Estimate speech duration: ~130 words per minute + 3s buffer
+                const wordCount = accumulatedText.split(/\s+/).length;
+                const estimatedMs = Math.ceil((wordCount / 130) * 60 * 1000) + 3000;
+
+                utterance.onstart = () => {
+                    onTalkingStateChange?.(true);
+                    // Safety net: force stop if onend never fires
+                    ttsTimeoutRef.current = setTimeout(() => {
+                        stopTalking();
+                    }, estimatedMs);
+                };
+
+                utterance.onend = () => stopTalking();
+                utterance.onerror = () => stopTalking();
+
                 window.speechSynthesis.speak(utterance);
             }
 
         } catch (error) {
             setIsLoading(false);
+            stopTalking(); // Always reset avatar on error
 
             if (error.name === 'AbortError') return;
 

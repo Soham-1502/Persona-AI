@@ -113,13 +113,23 @@ function AvatarModel({ isTalking }) {
 
     }, [fbx, eyeTextureL, eyeTextureR, headTexture, bodyTexture, hairTexture, scalpTexture, scalpOpacity, lashTexture, lashOpacity]);
 
-    // ANIMATION LOGIC - "Pause at Frame 0" Method
+    // Track current action for reliable cleanup
+    const currentActionRef = useRef(null);
+    const isTalkingRef = useRef(isTalking);
+
+    // Keep ref in sync with prop
+    useEffect(() => {
+        isTalkingRef.current = isTalking;
+    }, [isTalking]);
+
+    // ANIMATION LOGIC
     useEffect(() => {
         if (names.length === 0) return;
         const mainAnim = names[0];
         const action = actions[mainAnim];
-
         if (!action) return;
+
+        currentActionRef.current = action;
 
         if (isTalking) {
             // PLAY MODE
@@ -132,6 +142,13 @@ function AvatarModel({ isTalking }) {
             action.play();
             action.paused = true;
         }
+
+        return () => {
+            // Ensure animation pauses when isTalking turns false
+            if (!isTalkingRef.current && currentActionRef.current) {
+                currentActionRef.current.paused = true;
+            }
+        };
     }, [actions, names, isTalking]);
 
     // PROCEDURAL IDLE

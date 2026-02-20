@@ -1,17 +1,10 @@
 "use client";
 
-<<<<<<< HEAD
 import { useState, useEffect } from "react";
-import Header from '@/app/components/header/Header.jsx'; // Consistent Header from Home page
-import { ChatInterface } from "@/app/components/ChatInterface/ChatInterface.jsx";
-import { AvatarExperience } from "@/app/components/Avatar/AvatarExperience.jsx";
-import { History, X } from "lucide-react";
-=======
-import { useState } from "react";
-import Header from '@/app/components/shared/header/Header.jsx'; // Consistent Header from Home page
+import Header from '@/app/components/shared/header/Header.jsx';
 import { ChatInterface } from "@/app/components/socialmentor/ChatInterface/ChatInterface.jsx";
 import { AvatarExperience } from "@/app/components/socialmentor/Avatar/AvatarExperience.jsx";
->>>>>>> 0cbc960642e1cfe706ff778e75ca92bedbd44406
+import { History, X } from "lucide-react";
 
 export default function SocialMentorPage() {
     const [isTalking, setIsTalking] = useState(false);
@@ -26,7 +19,6 @@ export default function SocialMentorPage() {
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        console.log("Fetched sessions:", data.data);
                         setSessions(data.data || []);
                     } else {
                         console.error("Failed to fetch history:", data.error);
@@ -48,7 +40,6 @@ export default function SocialMentorPage() {
         setShowHistory(false);
     };
 
-    // Date logic consistent with the dashboard pattern
     const today = new Date().toLocaleDateString('en-GB', {
         weekday: 'short',
         day: '2-digit',
@@ -57,8 +48,8 @@ export default function SocialMentorPage() {
     });
 
     return (
-        <div className="w-full h-screen flex flex-col overflow-hidden">
-            {/* 1. Header Section - Using the pattern from Home.jsx */}
+        <div className="w-full h-screen flex flex-col overflow-hidden bg-background">
+            {/* Header Section */}
             <div className="shrink-0">
                 <Header
                     DateValue="Interactive"
@@ -68,12 +59,10 @@ export default function SocialMentorPage() {
                 />
             </div>
 
-            {/* 2. Main Content Area - Refined spacing/layout to match dashboard grid flow */}
+            {/* Main Content Area */}
             <div className="flex-1 p-2 px-3 flex gap-3 overflow-hidden">
 
                 {/* Left Panel: Chat Interface */}
-                {/* Pattern: Defined width, card-style background, and shadows */}
-<<<<<<< HEAD
                 <section className="w-[60%] flex flex-col bg-white dark:bg-card rounded-md border border-border shadow-md overflow-hidden">
                     <ChatInterface
                         onTalkingStateChange={setIsTalking}
@@ -81,19 +70,13 @@ export default function SocialMentorPage() {
                         initialMessages={activeMessages}
                         onNewChat={startNewSession}
                     />
-=======
-                <section className="w-1/3 min-w-87.5 flex flex-col bg-card rounded-md border border-border shadow-md overflow-hidden">
-                    <ChatInterface onTalkingStateChange={setIsTalking} />
->>>>>>> 0cbc960642e1cfe706ff778e75ca92bedbd44406
                 </section>
 
                 {/* Right Panel: 3D Avatar Space or History */}
-                {/* Pattern: flex-1 for growth, grid-like alignment, and background transitions */}
-                <section className="w-[40%] bg-gradient-to-br from-card to-background rounded-md border border-border relative overflow-hidden flex flex-cols">
+                <section className="w-[40%] bg-gradient-to-br from-card to-background rounded-md border border-border relative overflow-hidden flex flex-col">
 
                     {/* Status Badge & History Toggle */}
                     <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
-
                         <button
                             onClick={() => setShowHistory(!showHistory)}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded shadow-lg border border-primary/20 text-[10px] font-bold uppercase tracking-wider transition-all"
@@ -109,11 +92,13 @@ export default function SocialMentorPage() {
                                 <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2 transition-colors">
                                     <History className="w-5 h-5 text-primary" /> Session History
                                 </h2>
-
                             </div>
+
                             <div className="space-y-3">
                                 {sessions.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-10 italic">No past sessions found. Start a new chat!</p>
+                                    <p className="text-sm text-muted-foreground text-center py-10 italic">
+                                        No past sessions found. Start a new chat!
+                                    </p>
                                 ) : (
                                     sessions.map(session => (
                                         <div
@@ -123,9 +108,9 @@ export default function SocialMentorPage() {
                                         >
                                             <div className="flex justify-between items-start mb-1">
                                                 <p className="text-sm text-black dark:text-white font-semibold group-hover:text-primary transition-colors truncate pr-2 max-w-[70%]" title={session.title}>
-                                                    {session.title}
+                                                    {session.title || "Untitled Session"}
                                                 </p>
-                                                <span className="text-[10px] text-muted-foreground bg-gray-200 dark:bg-black/20 px-2 py-0.5 rounded whitespace-nowrap transition-colors">
+                                                <span className="text-[10px] text-muted-foreground bg-gray-200 dark:bg-black/20 px-2 py-0.5 rounded whitespace-nowrap">
                                                     {new Date(session.updatedAt).toLocaleDateString()}
                                                 </span>
                                             </div>
@@ -143,10 +128,11 @@ export default function SocialMentorPage() {
                             </div>
                         </div>
                     ) : (
-                        <AvatarExperience isTalking={isTalking} />
+                        <div className="flex-1 w-full h-full">
+                            <AvatarExperience isTalking={isTalking} />
+                        </div>
                     )}
                 </section>
-
             </div>
         </div>
     );

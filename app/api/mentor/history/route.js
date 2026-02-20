@@ -1,6 +1,6 @@
 // app/api/mentor/history/route.js
-import connectDB from '@/backend/config/db';
-import ChatSession from '@/backend/models/chatSession.model';
+import connectDB from '@/lib/db';
+import ChatSession from '@/models/chatSession.model';
 import { NextResponse } from 'next/server';
 
 // Get all chat history sessions
