@@ -20,17 +20,23 @@
 import mongoose from "mongoose";
 
 const userAttemptSchema = new mongoose.Schema({
+  // Module identifier (e.g. "inQuizzo")
+  moduleId: {
+    type: String,
+    default: 'inQuizzo'
+  },
+
   // Link to User
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  username: { 
-    type: String, 
-    required: true 
+  username: {
+    type: String,
+    required: true
   },
-  
+
   // Game Session Info
   sessionId: {
     type: String,
@@ -41,7 +47,7 @@ const userAttemptSchema = new mongoose.Schema({
     enum: ['quiz', 'mcq', 'voice'],
     default: 'quiz'
   },
-  
+
   // Question Details
   questionId: String,
   question: {
@@ -58,7 +64,7 @@ const userAttemptSchema = new mongoose.Schema({
     enum: ['easy', 'medium', 'hard'],
     default: 'medium'
   },
-  
+
   // Answer Details
   userAnswer: {
     type: String,
@@ -72,7 +78,7 @@ const userAttemptSchema = new mongoose.Schema({
     type: Boolean,
     required: true
   },
-  
+
   // AI Analysis
   similarity: {
     type: Number,
@@ -84,7 +90,7 @@ const userAttemptSchema = new mongoose.Schema({
     confidence: Number,
     suggestions: [String]
   },
-  
+
   // Scoring
   score: {
     type: Number,
@@ -98,7 +104,7 @@ const userAttemptSchema = new mongoose.Schema({
     type: Number, // in seconds
     default: 0
   },
-  
+
   // Voice Specific (if applicable)
   voiceData: {
     audioUrl: String,
@@ -106,7 +112,7 @@ const userAttemptSchema = new mongoose.Schema({
     confidence: Number,
     language: String
   },
-  
+
   // Metadata
   ipAddress: String,
   userAgent: String,
@@ -124,13 +130,13 @@ userAttemptSchema.index({ sessionId: 1 });
 userAttemptSchema.index({ username: 1, gameType: 1 });
 
 // Virtual for score percentage
-userAttemptSchema.virtual('scorePercentage').get(function() {
+userAttemptSchema.virtual('scorePercentage').get(function () {
   if (this.maxPossibleScore === 0) return 0;
   return Math.round((this.score / this.maxPossibleScore) * 100);
 });
 
 // Static method to get user's game history
-userAttemptSchema.statics.getUserHistory = function(userId, limit = 10) {
+userAttemptSchema.statics.getUserHistory = function (userId, limit = 10) {
   return this.find({ userId })
     .sort({ timestamp: -1 })
     .limit(limit)
@@ -138,7 +144,7 @@ userAttemptSchema.statics.getUserHistory = function(userId, limit = 10) {
 };
 
 // Static method to get session attempts
-userAttemptSchema.statics.getSessionAttempts = function(sessionId) {
+userAttemptSchema.statics.getSessionAttempts = function (sessionId) {
   return this.find({ sessionId })
     .sort({ timestamp: 1 });
 };

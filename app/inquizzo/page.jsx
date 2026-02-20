@@ -1,5 +1,5 @@
-import Hero from "../components/inquizzo/Hero";
+import ShowcaseSection from "./Home/page";
 
 export default function Page() {
-  return <Hero />;
+  return <ShowcaseSection />;
 }

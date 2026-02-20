@@ -37,6 +37,20 @@ const Quiz = () => {
   const [username, setUsername] = useState("");
   const [particles, setParticles] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [timerActive, setTimerActive] = useState(false);
+  const [lastGainedScore, setLastGainedScore] = useState(0);
+  const [isBrowserSupported, setIsBrowserSupported] = useState(true);
+
+  // Difficulty
+  const [selectedDifficulty, setSelectedDifficulty] = useState("medium");
+
+  // Session tracking (10 questions per session)
+  const SESSION_LENGTH = 10;
+  const sessionIdRef = useRef(null);
+  const [sessionQCount, setSessionQCount] = useState(0);
+  const [sessionScore, setSessionScore] = useState(0);
+  const [showSessionEnd, setShowSessionEnd] = useState(false);
+  const questionStartTimeRef = useRef(Date.now());
 
 
   useEffect(() => {
@@ -66,6 +80,18 @@ const Quiz = () => {
         delay: `${Math.random() * 10}s`,
       }))
     );
+
+    // Initial check for browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setIsBrowserSupported(false);
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
   }, []);
 
   const [selectedSubject, setSelectedSubject] = useState(null);
@@ -78,6 +104,7 @@ const Quiz = () => {
   const currentQuestionRef = useRef({ question: "", answer: "" });
   const seenQuestionsRef = useRef([]);
   const voicesRef = useRef([]);
+  const transcriptRef = useRef("");
 
   // ✅ Helper: get localStorage key for this user's seen questions
   const getSeenQuestionsKey = () => {
@@ -168,113 +195,165 @@ const Quiz = () => {
       question: currentQuestion,
       answer: correctAnswer,
     };
-  }, [currentQuestion, correctAnswer]);
 
-  // ✅ FIXED: SpeechRecognition setup
-  useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      console.warn("⚠️ Speech recognition not supported in this browser");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false; // ✅ FIXED: single result mode
-    recognition.interimResults = false;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      console.log("🎤 Speech recognition started");
-      setIsListening(true);
-    };
-
-    recognition.onend = () => {
-      console.log("🎤 Speech recognition ended");
-      setIsListening(false);
-    };
-
-    recognition.onresult = (event) => {
-      let finalTranscript = "";
-      for (let i = 0; i < event.results.length; i++) {
-        finalTranscript += event.results[i][0].transcript;
-      }
-      console.log("🎤 Transcript:", finalTranscript);
-      setTranscript(finalTranscript);
-      setIsAnswering(true);
-      setTimeout(() => {
-        checkAnswer(finalTranscript);
-        setIsAnswering(false);
+    // ✅ Auto-speak question when it changes
+    if (currentQuestion && !isLoading && !showResult) {
+      const t = setTimeout(() => {
+        speakQuestion();
       }, 500);
-    };
+      return () => clearTimeout(t);
+    }
+  }, [currentQuestion, correctAnswer, isLoading, showResult]);
 
-    recognition.onerror = (event) => {
-      console.error("🎤 Speech error:", event.error);
-      setIsListening(false);
-      if (event.error === "not-allowed" || event.error === "permission-denied") {
-        setFeedback("Microphone permission denied. Please allow mic access in browser settings.");
-      } else if (event.error === "no-speech") {
-        setFeedback("No speech detected. Please try again and speak clearly.");
-      } else if (event.error === "network") {
-        setFeedback("Network error with speech recognition. Please check your connection.");
-      } else {
-        setFeedback("Speech error: " + event.error);
+  // ✅ Voice Preloading for TTS
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        voicesRef.current = voices;
       }
     };
 
-    recognitionRef.current = recognition;
-
-    return () => {
-      try { if (recognitionRef.current) recognitionRef.current.abort(); } catch { }
-    };
+    loadVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
   }, []);
 
-  // ✅ FIXED: Request mic permission first, then start recognition
-  const startListening = async () => {
+  // Speech Recognition is now handled inside startListening for better reliability
+  const startListening = () => {
+    if (typeof window === 'undefined') return;
     if (!currentQuestion) return;
 
-    // Request mic permission explicitly
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop()); // release immediately
-    } catch (err) {
-      console.error("Mic permission error:", err);
-      setFeedback("Microphone access denied. Please allow mic access and try again.");
+    // Check for browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setFeedback("Speech Recognition not supported in this browser. Please use Chrome.");
+      setIsBrowserSupported(false);
       return;
     }
 
-    if (!recognitionRef.current) {
-      setFeedback("Speech recognition not available in this browser.");
-      return;
-    }
-
-    try {
-      // Abort any existing session first
-      try { recognitionRef.current.abort(); } catch { }
-
-      setTranscript("");
-      setFeedback("");
-      setShowResult(false);
-      setTimer(30);
-
-      recognitionRef.current.start();
-      console.log("🎤 Recognition start called");
-    } catch (err) {
-      console.error("Speech recognition start error:", err);
-      if (err.name === "InvalidStateError") {
-        setIsListening(true);
-      } else {
-        setFeedback("Could not start speech recognition. Please reload the page.");
+    if (!isListening) {
+      // Abort previous instance if it exists
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch { }
       }
+      setTranscript("");
+      transcriptRef.current = "";
+      setFeedback("");
+      setTimer(30);
+      setTimerActive(true);
+
+      // Track whether the stop is intentional (user clicked stop or silence timer)
+      let intentionalStop = false;
+      let silenceTimer;
+
+      const startSilenceTimer = () => {
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          console.log("🎤 Silence timeout reached after speech, stopping.");
+          intentionalStop = true;
+          recognition.stop();
+        }, 25000);
+      };
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        console.log("🎤 Speech recognition started");
+        setIsListening(true);
+        // Do NOT start silence timer here — only after actual speech is detected
+      };
+
+      recognition.onresult = (event) => {
+        // Only start/reset silence timer once the user has actually spoken
+        startSilenceTimer();
+
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          const newTranscript = (transcriptRef.current + " " + finalTranscript).trim();
+          transcriptRef.current = newTranscript;
+          setTranscript(newTranscript);
+        } else if (interimTranscript) {
+          setTranscript((transcriptRef.current + " " + interimTranscript).trim());
+        }
+      };
+
+      recognition.onend = () => {
+        console.log("🎤 Speech recognition ended. Final:", transcriptRef.current);
+        clearTimeout(silenceTimer);
+
+        if (intentionalStop || transcriptRef.current.trim()) {
+          // User stopped intentionally OR we have speech — finalize
+          setIsListening(false);
+          recognitionRef.current = null;
+          if (transcriptRef.current.trim()) {
+            checkAnswer(transcriptRef.current);
+          }
+        } else {
+          // no-speech ended without any transcript — restart silently
+          console.log("🔄 Restarting recognition (no speech detected)...");
+          try {
+            recognition.start();
+          } catch {
+            setIsListening(false);
+            recognitionRef.current = null;
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn("⚠️ Speech error:", event.error);
+        clearTimeout(silenceTimer);
+
+        if (event.error === "no-speech") {
+          // Browser timed out waiting for speech — onend will restart for us
+          console.log("🔁 no-speech — auto-restarting via onend");
+          return;
+        }
+
+        if (event.error === "aborted") {
+          // Intentional abort — do nothing
+          return;
+        }
+
+        // Any real error (audio-capture, network) — stop and notify
+        intentionalStop = true;
+        setIsListening(false);
+        recognitionRef.current = null;
+        setFeedback(`Mic Error: ${event.error}. Try refreshing the page.`);
+      };
+
+      // Expose intentional-stop setter so stopListening() can flag it
+      recognition._setIntentionalStop = () => { intentionalStop = true; };
+
+      recognitionRef.current = recognition;
+      recognition.start();
     }
   };
 
   const stopListening = () => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { }
-      setIsListening(false);
+    if (recognitionRef.current && isListening) {
+      setTimerActive(false);
+      // Signal intentional stop BEFORE calling stop() so onend doesn't restart
+      if (recognitionRef.current._setIntentionalStop) {
+        recognitionRef.current._setIntentionalStop();
+      }
+      recognitionRef.current.stop();
     }
   };
 
@@ -288,6 +367,7 @@ const Quiz = () => {
       return;
     }
 
+    const timeTaken = Math.round((Date.now() - questionStartTimeRef.current) / 1000);
     const userAnswer = spokenText.trim().toLowerCase();
     const skipPhrases = ["i don't know", "no idea", "skip", "pass", "not sure"];
     const isSkip = skipPhrases.some((phrase) => userAnswer.includes(phrase));
@@ -298,20 +378,28 @@ const Quiz = () => {
         question,
         correctAnswer: answer,
         userAnswer: spokenText,
-        isCorrect: null,
+        isCorrect: false,
         feedback: feedbackMsg,
         score: 0,
       };
 
       setFeedback(feedbackMsg);
       setChatHistory((prev) => [...prev, resultData]);
+      const newCount = sessionQCount + 1;
+      setSessionQCount(newCount);
       setQuestionsAnswered((prev) => prev + 1);
       setShowResult(true);
+
+      // Save skip attempt
+      await saveAttempt({ question, userAnswer: spokenText, correctAnswer: answer, isCorrect: false, score: 0, timeTaken });
+
+      if (newCount >= SESSION_LENGTH) {
+        setShowSessionEnd(true);
+      }
       return;
     }
 
     try {
-      // ✅ Call the correct endpoint with authentication
       const data = await makeAuthenticatedRequest(
         "/api/inquizzo/evaluate",
         {
@@ -319,13 +407,11 @@ const Quiz = () => {
           body: JSON.stringify({
             userAnswer: spokenText,
             question,
-            sessionId: Date.now().toString(), // Simple session ID
-            timeTaken: 30 - timer, // Calculate time taken
+            timeTaken,
           }),
         }
       );
 
-      // ✅ Extract data from the new response format
       const { result, userStats } = data;
       const {
         isCorrect,
@@ -346,20 +432,38 @@ const Quiz = () => {
         score: gainedScore,
       };
 
-      // ✅ Update local score if points were gained
       if (gainedScore > 0) {
         setScore((prev) => prev + gainedScore);
+        setSessionScore((prev) => prev + gainedScore);
       }
 
-      // ✅ Update correct answer for display
       if (correctAns) {
         setCorrectAnswer(correctAns);
       }
 
-      setFeedback(evalFeedback);
+      setFeedback(evalFeedback || result.explanation);
+      setLastGainedScore(gainedScore || 0);
       setChatHistory((prev) => [...prev, resultData]);
+
+      const newCount = sessionQCount + 1;
+      setSessionQCount(newCount);
       setQuestionsAnswered((prev) => prev + 1);
       setShowResult(true);
+
+      // ✅ Save attempt to DB
+      await saveAttempt({
+        question,
+        userAnswer: spokenText,
+        correctAnswer: correctAns || answer,
+        isCorrect: isCorrect || false,
+        score: gainedScore || 0,
+        timeTaken,
+      });
+
+      // ✅ End session after 10 questions
+      if (newCount >= SESSION_LENGTH) {
+        setShowSessionEnd(true);
+      }
 
       console.log("✅ Updated user stats:", userStats);
     } catch (error) {
@@ -368,24 +472,35 @@ const Quiz = () => {
         "Something went wrong while analyzing your answer. Please check your authentication."
       );
       setShowResult(true);
+    } finally {
+      setIsAnswering(false);
     }
   };
 
   // ✅ FIXED: Use preloaded voices for TTS
   const speakQuestion = () => {
     if ("speechSynthesis" in window && currentQuestion) {
-      speechSynthesis.cancel(); // Stop any ongoing speech first
+      window.speechSynthesis.cancel(); // ✅ Stop any current speech
       const utterance = new SpeechSynthesisUtterance(currentQuestion);
-      utterance.rate = 0.8;
-      // Use preloaded voices, fallback to live query
-      const voices = voicesRef.current.length > 0 ? voicesRef.current : speechSynthesis.getVoices();
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+
+      // ✅ Proper voice selection with fallback logic
+      const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
       utterance.voice =
         voices.find((v) => v.lang === "en-US" && v.name.includes("Google")) ||
         voices.find((v) => v.lang === "en-US") ||
         voices.find((v) => v.lang.startsWith("en")) ||
         voices[0] || null;
-      utterance.onerror = (e) => console.error("TTS error:", e);
-      speechSynthesis.speak(utterance);
+
+      utterance.onerror = (event) => {
+        // Only log serious errors, ignore 'interrupted' or 'canceled' which are common during reset/cancel
+        if (event.error !== 'interrupted' && event.error !== 'canceled') {
+          console.error("🔊 TTS Error:", event.error, event);
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -398,15 +513,27 @@ const Quiz = () => {
     setIsAnswering(false);
     setTimer(30);
     setError("");
+    questionStartTimeRef.current = Date.now();
     getAIQuestion();
   };
 
+  const startNewSession = () => {
+    sessionIdRef.current = crypto.randomUUID();
+    setSessionQCount(0);
+    setSessionScore(0);
+    setShowSessionEnd(false);
+    setScore(0);
+    setChatHistory([]);
+    setQuestionsAnswered(0);
+    resetQuiz();
+  };
+
   useEffect(() => {
-    if (timer > 0 && isListening) {
+    if (timer > 0 && timerActive && !showResult) {
       const countdown = setInterval(() => setTimer((t) => t - 1), 1000);
       return () => clearInterval(countdown);
-    } else if (timer === 0 && isListening) {
-      stopListening();
+    } else if (timer === 0 && timerActive) {
+      setTimerActive(false);
       if (transcript) {
         checkAnswer(transcript);
       } else {
@@ -415,7 +542,7 @@ const Quiz = () => {
         setQuestionsAnswered((prev) => prev + 1);
       }
     }
-  }, [timer, isListening]);
+  }, [timer, timerActive, showResult]);
 
   // ✅ UPDATED: getAIQuestion function with proper authentication
   // const getAIQuestion = async () => {
@@ -529,6 +656,32 @@ const Quiz = () => {
     }
   };
 
+  // ✅ Save one attempt to the DB
+  const saveAttempt = async ({ question, userAnswer, correctAnswer, isCorrect, score, timeTaken }) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token || !sessionIdRef.current) return;
+      await fetch("/api/inquizzo/attempt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          moduleId: "inQuizzo",
+          gameType: "voice",
+          sessionId: sessionIdRef.current,
+          question,
+          userAnswer,
+          correctAnswer,
+          isCorrect,
+          score,
+          difficulty: selectedDifficulty,
+          timeTaken,
+        }),
+      });
+    } catch (e) {
+      console.warn("⚠️ Could not save attempt:", e.message);
+    }
+  };
+
   const getAIQuestion = async () => {
     // ✅ Check authentication before making API call
     const token = localStorage.getItem("token");
@@ -561,7 +714,8 @@ const Quiz = () => {
             topic: selectedTopic || randomTopic,
             subject: selectedSubject,
             category: selectedCategory,
-            seenQuestions: seenQuestionsRef.current, // ✅ Send seen questions to avoid repeats
+            seenQuestions: seenQuestionsRef.current,
+            difficulty: selectedDifficulty,
           }),
         }
       );
@@ -569,8 +723,17 @@ const Quiz = () => {
       if (data && data.question) {
         setCurrentQuestion(data.question);
         setCorrectAnswer(data.answer);
-        saveSeenQuestion(data.question); // ✅ Save to localStorage
+        saveSeenQuestion(data.question);
         console.log("✅ New Unique Question:", data.question);
+
+        // Reset state for new question
+        setTimer(30);
+        setTimerActive(false);
+        setTranscript("");
+        setFeedback("");
+        setShowResult(false);
+        setIsAnswering(false);
+        questionStartTimeRef.current = Date.now();
       } else {
         throw new Error("Invalid data received");
       }
@@ -587,6 +750,8 @@ const Quiz = () => {
 
 
   useEffect(() => {
+    // Generate a session ID for this play session
+    sessionIdRef.current = crypto.randomUUID();
     getAIQuestion();
   }, []);
 
@@ -755,7 +920,7 @@ const Quiz = () => {
                 <div className="flex flex-col items-center">
                   <button
                     onClick={isListening ? stopListening : startListening}
-                    disabled={!recognitionRef.current || isAnswering}
+                    disabled={isAnswering}
                     className={`relative overflow-visible w-36 h-36 rounded-full flex items-center justify-center transition-all 
                 ${isListening
                         ? "bg-gradient-to-tr from-red-600 via-red-500 to-purple-700 animate-micPulse scale-110 shadow-lg"
@@ -763,13 +928,9 @@ const Quiz = () => {
                           ? "bg-gradient-to-br from-yellow-500 to-orange-600 animate-bounce"
                           : "bg-gradient-to-br from-blue-600 to-blue-800 hover:scale-105"
                       }
-                ${!recognitionRef.current
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer"
-                      }
+                ${isAnswering ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}
               `}
                   >
-                    {/* Gradient ring glow */}
                     <span
                       className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full rounded-full border-4
                 ${isListening
@@ -781,7 +942,6 @@ const Quiz = () => {
               `}
                     ></span>
                     <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full bg-white/5"></span>
-                    {/* Icon logic */}
                     {isAnswering ? (
                       <div className="w-8 h-8 border-4 border-white/70 border-t-transparent rounded-full animate-spin"></div>
                     ) : isListening ? (
@@ -793,8 +953,12 @@ const Quiz = () => {
                   <p className="mt-5 text-lg text-blue-200 font-medium">
                     {isListening
                       ? `Listening... Speak clearly! Time: ${timer}s`
-                      : "Click the button and speak your answer"}
+                      : "Click the mic and speak your answer"}
                   </p>
+                  {/* Interim transcript while listening */}
+                  {isListening && transcript && (
+                    <p className="mt-2 text-sm text-blue-300 italic max-w-xs text-center">"{transcript}"</p>
+                  )}
                 </div>
               )}
             </div>
@@ -840,52 +1004,41 @@ const Quiz = () => {
                   <div
                     className={`
             relative glass-card rounded-3xl p-8 border-l-4 shadow-2xl
-            ${feedback.toLowerCase().includes("correct") ||
-                        feedback.toLowerCase().includes("perfect") ||
-                        feedback.toLowerCase().includes("that's correct")
+            ${feedback.toLowerCase().includes("correct") || feedback.includes("✅")
                         ? "border-green-400 bg-green-900/20"
                         : "border-red-400 bg-red-900/20"
                       }
             transition-colors duration-300
           `}
                   >
-                    <div className="flex items-center space-x-4 mb-6">
-                      <div
-                        className={`
-                w-10 h-10 rounded-full flex items-center justify-center
-                ${feedback.toLowerCase().includes("correct") ||
-                            feedback.toLowerCase().includes("perfect") ||
-                            feedback.toLowerCase().includes("that's correct")
-                            ? "bg-green-500"
-                            : "bg-red-500"
-                          }
-                shadow-md
-              `}
-                      >
-                        {feedback.toLowerCase().includes("correct") ||
-                          feedback.toLowerCase().includes("perfect") ||
-                          feedback.toLowerCase().includes("that's correct") ? (
-                          <CheckCircle className="w-6 h-6 text-white" />
-                        ) : (
-                          <XCircle className="w-6 h-6 text-white" />
-                        )}
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center space-x-4">
+                        <div
+                          className={`
+                  w-10 h-10 rounded-full flex items-center justify-center
+                  ${feedback.toLowerCase().includes("correct") || feedback.includes("✅")
+                              ? "bg-green-500"
+                              : "bg-red-500"
+                            }
+                  shadow-md
+                `}
+                        >
+                          {feedback.toLowerCase().includes("correct") || feedback.includes("✅") ? (
+                            <CheckCircle className="w-6 h-6 text-white" />
+                          ) : (
+                            <XCircle className="w-6 h-6 text-white" />
+                          )}
+                        </div>
+                        <h4 className="text-2xl font-bold text-white select-none">
+                          AI Analysis
+                        </h4>
                       </div>
-                      <h4 className="text-2xl font-bold text-white select-none">
-                        AI Analysis
-                      </h4>
+                      <div className="glass-card px-3 py-1 rounded-xl border border-yellow-400/30 text-yellow-300 font-bold">
+                        +{lastGainedScore} Points
+                      </div>
                     </div>
 
-                    <p
-                      className={`
-              text-3xl font-bold leading-relaxed pl-14 tracking-wide whitespace-pre-wrap break-words
-              ${feedback.toLowerCase().includes("correct") ||
-                          feedback.toLowerCase().includes("perfect") ||
-                          feedback.toLowerCase().includes("that's correct")
-                          ? "text-green-300"
-                          : "text-red-300"
-                        }
-            `}
-                    >
+                    <p className="text-white text-lg leading-relaxed pl-14 tracking-wide whitespace-pre-wrap break-words">
                       {feedback}
                     </p>
                   </div>
@@ -930,16 +1083,29 @@ const Quiz = () => {
                 </div>
               )}
 
-              {/* Download CSV Button */}
-              {showResult && questionsAnswered >= 10 && (
-                <div className="flex justify-center mt-6">
-                  <button
-                    onClick={downloadCSV}
-                    className="glass-card hover:bg-blue-800 px-8 py-3 rounded-xl text-black font-semibold bg-slate-950 transition-colors duration-300 shadow-md"
-                    type="button"
-                  >
-                    📥 Download Results (CSV)
-                  </button>
+              {/* Session End Screen */}
+              {showSessionEnd && (
+                <div className="glass-card rounded-3xl p-10 border border-yellow-400/40 shadow-2xl text-center mt-8 bg-gradient-to-br from-yellow-900/30 to-purple-900/30">
+                  <div className="text-5xl mb-4">🏆</div>
+                  <h3 className="text-3xl font-bold text-yellow-300 mb-2">Session Complete!</h3>
+                  <p className="text-xl text-white/80 mb-1">{SESSION_LENGTH} questions answered</p>
+                  <p className="text-4xl font-extrabold text-white mb-6">Session Score: {sessionScore}</p>
+                  <div className="flex gap-4 justify-center flex-wrap">
+                    <button
+                      onClick={downloadCSV}
+                      className="glass-card hover:bg-blue-800 px-8 py-3 rounded-xl text-white font-semibold border border-blue-400/40 transition-colors duration-300 shadow-md"
+                      type="button"
+                    >
+                      📥 Download History
+                    </button>
+                    <button
+                      onClick={startNewSession}
+                      className="glass-card hover:bg-purple-800 px-8 py-4 rounded-xl text-white font-bold border border-purple-400/40 transition-colors duration-300 shadow-md"
+                      type="button"
+                    >
+                      🔄 New Session
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -980,11 +1146,11 @@ const Quiz = () => {
               )}
 
               {/* Browser Support Warning */}
-              {!recognitionRef.current && (
+              {!isBrowserSupported && (
                 <div className="text-center mt-12">
                   <div className="glass-card p-6 rounded-2xl border border-yellow-500/30 bg-yellow-900/10 max-w-md mx-auto">
                     <p className="text-yellow-300 text-lg select-none">
-                      Speech Recognition requires Chrome, Edge, or Safari
+                      ⚠️ Speech Recognition requires Chrome, Edge, or Safari
                     </p>
                   </div>
                 </div>
@@ -993,6 +1159,31 @@ const Quiz = () => {
           )}
         </section>
       </main>
+
+      {/* ── Difficulty Selector (floating bottom-right) ── */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 items-end">
+        <p className="text-white/60 text-xs font-semibold mb-1 uppercase tracking-widest">Difficulty</p>
+        {["easy", "medium", "hard"].map((level) => (
+          <button
+            key={level}
+            onClick={() => {
+              setSelectedDifficulty(level);
+              if (!showResult && !isListening) resetQuiz();
+            }}
+            className={`px-5 py-2 rounded-full text-sm font-bold uppercase transition-all duration-200 border shadow-lg
+              ${selectedDifficulty === level
+                ? level === "easy"
+                  ? "bg-green-500 border-green-300 text-white scale-105"
+                  : level === "medium"
+                    ? "bg-yellow-500 border-yellow-300 text-white scale-105"
+                    : "bg-red-500 border-red-300 text-white scale-105"
+                : "bg-white/10 border-white/20 text-white/70 hover:bg-white/20"
+              }`}
+          >
+            {level === "easy" ? "🟢" : level === "medium" ? "🟡" : "🔴"} {level}
+          </button>
+        ))}
+      </div>
 
       {/* --- Animations CSS --- */}
       <style>
