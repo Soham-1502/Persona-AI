@@ -1,10 +1,17 @@
 "use client";
 
+<<<<<<< HEAD
 import { useState, useEffect } from "react";
 import Header from '@/app/components/header/Header.jsx'; // Consistent Header from Home page
 import { ChatInterface } from "@/app/components/ChatInterface/ChatInterface.jsx";
 import { AvatarExperience } from "@/app/components/Avatar/AvatarExperience.jsx";
 import { History, X } from "lucide-react";
+=======
+import { useState } from "react";
+import Header from '@/app/components/shared/header/Header.jsx'; // Consistent Header from Home page
+import { ChatInterface } from "@/app/components/socialmentor/ChatInterface/ChatInterface.jsx";
+import { AvatarExperience } from "@/app/components/socialmentor/Avatar/AvatarExperience.jsx";
+>>>>>>> 0cbc960642e1cfe706ff778e75ca92bedbd44406
 
 export default function SocialMentorPage() {
     const [isTalking, setIsTalking] = useState(false);
@@ -66,6 +73,7 @@ export default function SocialMentorPage() {
 
                 {/* Left Panel: Chat Interface */}
                 {/* Pattern: Defined width, card-style background, and shadows */}
+<<<<<<< HEAD
                 <section className="w-[60%] flex flex-col bg-white dark:bg-card rounded-md border border-border shadow-md overflow-hidden">
                     <ChatInterface
                         onTalkingStateChange={setIsTalking}
@@ -73,6 +81,10 @@ export default function SocialMentorPage() {
                         initialMessages={activeMessages}
                         onNewChat={startNewSession}
                     />
+=======
+                <section className="w-1/3 min-w-87.5 flex flex-col bg-card rounded-md border border-border shadow-md overflow-hidden">
+                    <ChatInterface onTalkingStateChange={setIsTalking} />
+>>>>>>> 0cbc960642e1cfe706ff778e75ca92bedbd44406
                 </section>
 
                 {/* Right Panel: 3D Avatar Space or History */}

@@ -1,4 +1,6 @@
-// utils/mockData.js
+// app/mockData.js
+
+import { MODULE_ROUTES, MODULE_LABELS } from "@/lib/moduleConfig";
 
 const generateDynamicMockData = () => {
   const sessions = [];

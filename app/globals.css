@@ -103,9 +103,8 @@
   --sidebar-ring: oklch(0.565 0.145 285); /* #9067C6 - Focus ring */
 
   /* ScrollBar Colour */
---scrollbar-colour: oklch(0.82 0.012 285); /* visible but subtle */
---scrollbar-hover: oklch(0.565 0.145 285); /* purple hover */
-
+  --scrollbar-colour: oklch(0.82 0.012 285); /* visible but subtle */
+  --scrollbar-hover: oklch(0.565 0.145 285); /* purple hover */
 }
 
 .dark {
@@ -177,6 +176,33 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ========================================
+   RADIX UI SCROLL LOCK FIX
+   Prevents Radix portals (Select, DropdownMenu) from
+   injecting padding-right onto <body>, which shifts
+   sticky/fixed headers horizontally.
+   ======================================== */
+body[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* ========================================
+   NOTIFICATION DROPDOWN — MOBILE POSITIONING
+   Appears just below the sticky header (5rem = h-20)
+   and centered horizontally. Desktop is untouched.
+   ======================================== */
+@media (max-width: 640px) {
+  [data-radix-popper-content-wrapper]:has(.notification-dropdown) {
+    position: fixed !important;
+    top: 5rem !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: calc(100vw - 2rem) !important;
+  }
+}
+
 
 /* ========================================
    PERSONAAI CUSTOM UTILITY CLASSES
@@ -339,5 +365,59 @@
   .custom-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-colour) transparent;
+  }
+
+  /* Add to your globals.css */
+
+  /* Page transition animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInFromRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInFromLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Apply to auth pages */
+  .auth-page-enter {
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  .auth-form-slide-right {
+    animation: slideInFromRight 0.5s ease-out;
+  }
+
+  .auth-form-slide-left {
+    animation: slideInFromLeft 0.5s ease-out;
+  }
+
+  /* Smooth transitions for all auth elements */
+  .auth-container * {
+    transition: all 0.3s ease-in-out;
   }
 }

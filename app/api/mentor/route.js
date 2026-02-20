@@ -1,8 +1,21 @@
 // app/api/mentor/route.js
 import { Groq } from 'groq-sdk';
+import jwt from "jsonwebtoken";
+import connectDB from "@/lib/db";
+import UserAttempt from "@/models/UserAttempt";
+import User from "@/models/User";
 
-// Initialize Groq client dynamically inside the function
-
+// ── Auth helper ───────────────────────────────────────────────────────────────
+function getUserFromToken(req) {
+    try {
+        const authHeader = req.headers.get("authorization") || "";
+        const token = authHeader.replace("Bearer ", "").trim();
+        if (!token) return null;
+        return jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+        return null;
+    }
+}
 
 export async function POST(req) {
     try {
@@ -48,20 +61,28 @@ Make your entire response feel like a single, cohesive piece of advice from a re
         // Create streaming chat completion
         const chatCompletion = await groq.chat.completions.create({
             messages: groqMessages,
-            model: "llama-3.3-70b-versatile", // Llama 3.3 70B is excellent for conversational mentoring
-            temperature: 0.7, // Slightly lowered for more focused and practical advice
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.7,
             max_completion_tokens: 1024,
             top_p: 1,
             stream: true,
             stop: null
         });
 
+        // Save session to DB (best-effort, non-blocking)
+        const decoded = getUserFromToken(req);
+        if (decoded?.userId && messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            saveSessionAsync(decoded, lastMessage).catch((err) =>
+                console.error("[mentor] Failed to save UserAttempt:", err)
+            );
+        }
+
         // Create streaming response
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             async start(controller) {
                 try {
-                    // Stream chunks - EXACT pattern from your code
                     for await (const chunk of chatCompletion) {
                         const content = chunk.choices[0]?.delta?.content || '';
                         if (content) {
@@ -95,4 +116,31 @@ Make your entire response feel like a single, cohesive piece of advice from a re
             { status: 500 }
         );
     }
+}
+
+// ── Async session saver (fire-and-forget) ─────────────────────────────────────
+async function saveSessionAsync(decoded, lastMessage) {
+    await connectDB();
+
+    const user = await User.findById(decoded.userId).select("username mentorStats");
+    if (!user) return;
+
+    await UserAttempt.create({
+        userId: user._id,
+        username: user.username,
+        moduleId: "socialMentor",
+        sessionId: `mentor_${Date.now()}`,
+        gameType: "chat",
+        question: lastMessage.text,
+        userAnswer: lastMessage.text,
+        correctAnswer: "",
+        isCorrect: true,
+        score: 5,
+        maxPossibleScore: 10,
+        timeTaken: 0,
+    });
+
+    user.mentorStats.sessionsAttended += 1;
+    user.mentorStats.lastSessionDate = new Date();
+    await user.save();
 }
