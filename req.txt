@@ -1,0 +1,6 @@
+youtube dataframe api = AIzaSyDwZfWOzAzREbRBd81_utIpsC7M_wzCnwU
+
+channel id: UC9K9Wnz6t4cLnCdTzAVrXqQ
+
+upload id: UU9K9Wnz6t4cLnCdTzAVrXqQ
+url: https://youtube.googleapis.com/youtube/v3/channels?part=snippet&id=UC9K9Wnz6t4cLnCdTzAVrXqQ&id=UU9K9Wnz6t4cLnCdTzAVrXqQ&maxResults=10&key=AIzaSyDwZfWOzAzREbRBd81_utIpsC7M_wzCnwU HTTP/1.1

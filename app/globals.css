@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Reset & Global Full-Screen Rules */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  /* Standard non-italic font */
+  font-family: var(--font-geist-sans), sans-serif; 
+  background: radial-gradient(circle at top, #0f2027, #000);
+  background-attachment: fixed;
+  color: white;
+  overflow-x: hidden; /* Stops horizontal scrolling on all pages */
+}
+/* Universal Page Wrapper */
+.container {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  /* Remove align-items: center to let children expand */
+  padding: 100px 5% 40px 5%;
+  background-color: #000; /* Assuming your theme is dark */
+}
+
+/* Name Styling (Responsive) */
+.name {
+  font-size: clamp(3rem, 8vw, 5rem); 
+  font-weight: 700;
+  letter-spacing: 4px;
+  background: linear-gradient(90deg, #00f5ff, #00ff88);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
+}
+
+.tagline {
+  margin-top: 10px;
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  opacity: 0.8;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: scale(0.8); }
+  20% { opacity: 1; transform: scale(1.1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+/* Neural UI Animations */
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(30px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulseBorder {
+  0% { border-color: #262626; box-shadow: 0 0 0px transparent; }
+  50% { border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
+  100% { border-color: #262626; box-shadow: 0 0 0px transparent; }
+}
+
+.neural-card-entry {
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.recording-active {
+  animation: pulseBorder 2s infinite ease-in-out;
+}
