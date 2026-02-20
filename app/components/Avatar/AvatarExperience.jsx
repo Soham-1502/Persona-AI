@@ -25,9 +25,14 @@ function AvatarModel({ isTalking }) {
     const eyeTextureR = textureLoader.load("/businessman/textures/Std_Eye_R_Diffuse.png");
     const headTexture = textureLoader.load("/businessman/textures/Std_Skin_Head_Diffuse.png");
     const bodyTexture = textureLoader.load("/businessman/textures/Std_Skin_Body_Diffuse.png");
+    const hairTexture = textureLoader.load("/businessman/textures/Classic_Taper_Diffuse.jpeg");
+    const scalpTexture = textureLoader.load("/businessman/textures/Classic_Taper_Scalp_Diffuse.jpeg");
+    const scalpOpacity = textureLoader.load("/businessman/textures/Classic_Taper_Scalp_Opacity.jpeg");
+    const lashTexture = textureLoader.load("/businessman/textures/Std_Eyelash_Diffuse.jpeg");
+    const lashOpacity = textureLoader.load("/businessman/textures/Std_Eyelash_Opacity.png");
 
     // Fix Texture Encoding
-    [eyeTextureL, eyeTextureR, headTexture, bodyTexture].forEach(t => {
+    [eyeTextureL, eyeTextureR, headTexture, bodyTexture, hairTexture, scalpTexture, lashTexture].forEach(t => {
         t.colorSpace = THREE.SRGBColorSpace;
     });
 
@@ -78,18 +83,35 @@ function AvatarModel({ isTalking }) {
                             m.needsUpdate = true;
                         }
 
-                        // HAIR/LASHES
-                        if (name.includes("hair") || name.includes("lash")) {
+                        // HAIR FIX
+                        if (name.includes("taper") || name.includes("hair")) {
                             m.transparent = true;
-                            m.alphaTest = 0.5; // Cutout
+                            m.alphaTest = 0.5;
                             m.side = THREE.DoubleSide;
+                            if (name.includes("scalp")) {
+                                m.map = scalpTexture;
+                                m.alphaMap = scalpOpacity;
+                            } else {
+                                m.map = hairTexture;
+                            }
+                            m.needsUpdate = true;
+                        }
+
+                        // EYELASH FIX
+                        if (name.includes("lash")) {
+                            m.transparent = true;
+                            m.map = lashTexture;
+                            m.alphaMap = lashOpacity;
+                            m.alphaTest = 0.5;
+                            m.side = THREE.DoubleSide;
+                            m.needsUpdate = true;
                         }
                     });
                 }
             }
         });
 
-    }, [fbx, eyeTextureL, eyeTextureR, headTexture, bodyTexture]);
+    }, [fbx, eyeTextureL, eyeTextureR, headTexture, bodyTexture, hairTexture, scalpTexture, scalpOpacity, lashTexture, lashOpacity]);
 
     // ANIMATION LOGIC - "Pause at Frame 0" Method
     useEffect(() => {
@@ -115,29 +137,21 @@ function AvatarModel({ isTalking }) {
     // PROCEDURAL IDLE
     useFrame((state) => {
         if (!isTalking && group.current) {
-            group.current.position.y = -2.0 + Math.sin(state.clock.elapsedTime * 1.5) * 0.005;
+            group.current.position.y = -2.5 + Math.sin(state.clock.elapsedTime * 1.5) * 0.005;
+        } else if (isTalking && group.current) {
+            group.current.position.y = -2.5; // Keep position consistent when talking
         }
     });
 
     return (
-        <group ref={group} rotation={[-Math.PI / 2, 0, 0]}>
+        <group ref={group} rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]}>
             <primitive
                 object={fbx}
                 scale={0.022}
-                position={[0, -2.0, 0]}
+                position={[0, 0, 0]} // Reset local translation to fix strange pivot issues
             />
 
-            <Html fullscreen style={{ pointerEvents: 'none', zIndex: 100 }}>
-                <div className="absolute top-4 right-4 flex flex-col gap-1 p-3 bg-black/70 backdrop-blur-md rounded-xl w-40 max-h-64 overflow-y-auto border border-white/10 shadow-xl pointer-events-auto">
-                    <p className="text-xs text-secondary-foreground font-bold mb-2 uppercase tracking-wider text-center border-b border-white/10 pb-1">Gestures</p>
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[9px] text-white/50">Status:</span>
-                        <span className={`text-[9px] px-1 rounded ${isTalking ? 'bg-green-500 text-white' : 'bg-white/10 text-white/50'}`}>
-                            {isTalking ? "Talking" : "Idle"}
-                        </span>
-                    </div>
-                </div>
-            </Html>
+
         </group>
     );
 }
@@ -180,20 +194,17 @@ class ErrorBoundary extends Component {
 
 export function AvatarExperience({ isTalking }) {
     return (
-        <div className="w-full h-full relative group bg-linear-to-b from-[#1a1d24] to-[#0f1115]">
-            <div className="absolute top-6 left-6 z-10 bg-black/30 backdrop-blur-md p-4 rounded-2xl border border-white/10 shadow-lg">
-                <h3 className="text-lg font-bold text-white">Interactive Session</h3>
-                <p className="text-sm text-white/60">Practice mode: Active</p>
-            </div>
+        <div className="w-full h-full relative group bg-white dark:bg-linear-to-b dark:from-[#1a1d24] dark:to-[#0f1115] transition-colors">
+
 
             <ErrorBoundary>
                 {/* Camera Position: [X (Left/Right), Y (Up/Down), Z (Zoom)] */}
-                <Canvas camera={{ position: [0, 2, 4.2], fov: 40 }} className="w-full h-full">
+                <Canvas camera={{ position: [0, 0, 6.5], fov: 40 }} className="w-full h-full">
                     <ambientLight intensity={1.5} />
                     <spotLight position={[5, 10, 7]} angle={0.5} penumbra={1} intensity={2} castShadow />
                     <pointLight position={[-5, -5, -5]} intensity={1} />
 
-                    <gridHelper position={[0, -2, 0]} args={[10, 10]} />
+
 
                     <Suspense fallback={<Html center><Loader2 className="w-10 h-10 text-primary animate-spin" /></Html>}>
                         <AvatarModel isTalking={isTalking} />
@@ -202,13 +213,13 @@ export function AvatarExperience({ isTalking }) {
 
                     <OrbitControls
                         enablePan={true}
-                        target={[0, 0.8, 0]}
-                        minPolarAngle={Math.PI / 3}
-                        maxPolarAngle={Math.PI / 1.8}
+                        target={[0, -0.5, 0]}
+                        minPolarAngle={Math.PI / 4}
+                        maxPolarAngle={Math.PI / 1.5}
                     />
                 </Canvas>
             </ErrorBoundary>
-            <div className="absolute bottom-6 right-6 z-10 text-xs text-white/20 select-none">Powered by Three.js</div>
+
         </div>
     );
 }

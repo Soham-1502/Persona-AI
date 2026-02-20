@@ -1,64 +1,98 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { NextResponse } from "next/server";
+// app/api/mentor/route.js
+import { Groq } from 'groq-sdk';
 
-const apiKey = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(apiKey || "");
+// Initialize Groq client dynamically inside the function
 
-const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    systemInstruction: "You are a highly empathetic and knowledgeable Social Mentor AI. Your goal is to help users improve their social skills, confidence, and communication. You should provide constructive feedback, roleplay scenarios (responding as a specific persona if asked), and offer practical tips. Keep responses concise and conversational (under 3 sentences usually) unless a detailed explanation is requested. Maintain a supportive and encouraging tone.",
-});
 
 export async function POST(req) {
-    let messages = [];
     try {
-        const body = await req.json();
-        messages = body.messages || [];
+        const groq = new Groq({
+            apiKey: process.env.GROQ_API_KEY
+        });
 
-        // 1. Check Key
-        if (!apiKey) {
-            throw new Error("Missing API Key");
+        // Parse request body
+        const { messages } = await req.json();
+
+        if (!messages || !Array.isArray(messages)) {
+            return Response.json({ error: 'Invalid messages format' }, { status: 400 });
         }
 
-        const lastMessage = messages[messages.length - 1];
+        // Convert messages to Groq format
+        const groqMessages = [
+            {
+                role: "system",
+                content: `You are a warm, supportive, and highly experienced Social Mentor. Your goal is to help users navigate tricky social situations with ease and confidence.
 
-        // 2. Real AI Request
-        // Map history to the format Gemini expects
-        const history = messages.slice(0, -1).map((msg) => ({
-            role: msg.role === "user" ? "user" : "model",
-            parts: [{ text: msg.text }],
-        }));
+CRITICAL FORMATTING RULES:
+- DO NOT use bullet points or asterisks (*). 
+- DO NOT use excessive bolding.
+- Write in natural, flowing paragraphs as if you are sending a thoughtful message to a friend.
+- Use a warm, human, and encouraging tone. Avoid sounding like a structured AI assistant.
 
-        const chat = model.startChat({ history: history });
-        const result = await chat.sendMessage(lastMessage.text);
-        const response = await result.response;
-        const text = response.text();
+When a user presents a scenario:
+1. Briefly acknowledge their situation with empathy.
+2. Provide 3 distinct phrases they can use, woven naturally into your advice. Label them simply as "Option 1", "Option 2", etc., or just describe the vibe (e.g., "If you want to be more direct, try saying...").
+3. For each phrase, explain in a sentence why it's effective.
+4. End with one friendly, practical tip on their presence or delivery (like pacing or eye contact).
 
-        return NextResponse.json({ text });
+Make your entire response feel like a single, cohesive piece of advice from a real person who cares about their success.`
+            },
+            ...messages
+                .filter(msg => msg.text && msg.text.trim())
+                .map(msg => ({
+                    role: msg.role === 'ai' ? 'assistant' : msg.role,
+                    content: msg.text
+                }))
+        ];
+
+        // Create streaming chat completion
+        const chatCompletion = await groq.chat.completions.create({
+            messages: groqMessages,
+            model: "llama-3.3-70b-versatile", // Llama 3.3 70B is excellent for conversational mentoring
+            temperature: 0.7, // Slightly lowered for more focused and practical advice
+            max_completion_tokens: 1024,
+            top_p: 1,
+            stream: true,
+            stop: null
+        });
+
+        // Create streaming response
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+            async start(controller) {
+                try {
+                    // Stream chunks - EXACT pattern from your code
+                    for await (const chunk of chatCompletion) {
+                        const content = chunk.choices[0]?.delta?.content || '';
+                        if (content) {
+                            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+                        }
+                    }
+                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    controller.close();
+                } catch (error) {
+                    console.error('Stream error:', error);
+                    controller.error(error);
+                }
+            }
+        });
+
+        return new Response(stream, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+            },
+        });
 
     } catch (error) {
-        console.error("Gemini API Failed, switching to Mock:", error);
-
-        // 3. Fallback Mock Logic (Offline Mode)
-        // This ensures the demo ALWAYS works, even without internet or keys.
-        let mockResponse = "I'm having a little trouble connecting to the cloud, but I'm here. Could you tell me more about that?";
-
-        // Basic keyword detection for the mock fallback
-        // (Note: In JS, we use standard variables instead of typed objects)
-        const lastText = (messages && messages.length > 0) 
-            ? messages[messages.length - 1].text.toLowerCase() 
-            : "";
-
-        if (lastText.includes("rude") || lastText.includes("mean") || lastText.includes("hurt")) {
-            mockResponse = "It's tough when people are dismissive. Try taking a deep breath and saying: 'I feel uncomfortable when you speak to me like that.'";
-        } else if (lastText.includes("nervous") || lastText.includes("scared")) {
-            mockResponse = "It's completely normal to feel nervous. Try grounding yourself by focusing on your breathing for a moment.";
-        } else if (lastText.includes("hello") || lastText.includes("hi") || lastText.includes("hey")) {
-            mockResponse = "Hello there! I'm your Social Mentor. I can help you practice difficult conversations. What's on your mind?";
-        } else if (lastText.length > 0) {
-            mockResponse = "That's an interesting point. Let's practice maintaining confident body language while you explain that further.";
-        }
-
-        return NextResponse.json({ text: mockResponse });
+        console.error('API Error:', error);
+        return Response.json(
+            {
+                error: error.message || 'Internal server error',
+                details: error.toString()
+            },
+            { status: 500 }
+        );
     }
 }
