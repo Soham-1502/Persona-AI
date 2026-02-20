@@ -73,20 +73,23 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
             {`Showing total sessions from the last 7 days`}
           </CardDescription>
         </div>
-        <div className="flex">
+        <div className="flex overflow-x-auto flex-nowrap">
           {["confidenceCoach", "socialMentor", "microLearning", "inQuizzo"].map((key) => {
             const chart = key;
             return (
               <button
                 key={chart}
                 data-active={activeChart === chart}
-                className={cn("data-[active=true]:bg-muted/50 relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-center font-medium even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6 cursor-pointer hover:bg-muted/30", { "data-[active=true]:rounded-tr-lg": activeChart === "inQuizzo" })}
+                className={cn(
+                  "data-[active=true]:bg-muted/50 relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-3 py-3 text-center font-medium even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6 cursor-pointer hover:bg-muted/30 min-w-[5rem] sm:min-w-0",
+                  { "data-[active=true]:rounded-tr-lg": activeChart === "inQuizzo" }
+                )}
                 onClick={() => setActiveChart(chart)}
               >
-                <span className="text-muted-foreground text-xs">
+                <span className="text-muted-foreground text-[10px] sm:text-xs truncate">
                   {chartConfig[chart].label}
                 </span>
-                <span className="text-lg leading-none font-bold sm:text-3xl">
+                <span className="text-base leading-none font-bold sm:text-3xl">
                   {total[chart].toLocaleString()}
                 </span>
               </button>
@@ -158,5 +161,5 @@ export function getActivityChartData(sessions = []) {
     dailyMap[date][session.module] += 1;
   });
 
-  return Object.values(dailyMap);
+  return Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
 }

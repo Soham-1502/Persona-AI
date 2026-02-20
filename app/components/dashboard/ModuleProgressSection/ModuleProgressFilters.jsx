@@ -25,9 +25,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-export function ProgressStatusFilter({value, onValueChange}) {
+export function ProgressStatusFilter({ value, onValueChange }) {
   return (
-    <ToggleGroup type="single" variant="outline" spacing={2} value={value} onValueChange={onValueChange}>
+    <ToggleGroup type="single" variant="outline" spacing={2} value={value} onValueChange={onValueChange} className="flex-wrap">
       <ToggleGroupItem
         value="all"
         aria-label="Toggle All"
@@ -60,12 +60,11 @@ export function ProgressStatusFilter({value, onValueChange}) {
         <Clock />
         Pending
       </ToggleGroupItem>
-
     </ToggleGroup>
   )
 }
 
-export function CategoryFilter({value, onValueChange}) {
+export function CategoryFilter({ value, onValueChange }) {
   const labels = {
     all: "All",
     confidencecoach: "Confidence Coach",
@@ -76,9 +75,9 @@ export function CategoryFilter({value, onValueChange}) {
 
   return (
     <DropdownMenu value={value} onValueChange={onValueChange}>
-      <DropdownMenuTrigger asChild className="px-3 py-1 cursor-pointer border-muted border-2 hover:border-ring transition-all duration-200 ease-in-out hover:bg-transparent">
-        <button className="flex items-center gap-1 rounded-lg border text-sm bg-transparent hover:bg-muted transition">
-          {labels[value]} <ChevronDown />
+      <DropdownMenuTrigger asChild className="cursor-pointer border-muted border-2 hover:border-ring transition-all duration-200 ease-in-out hover:bg-transparent w-full md:w-auto">
+        <button className="flex items-center gap-1 px-3 py-1 rounded-lg border text-sm bg-transparent hover:bg-muted transition w-full md:w-auto min-w-0 overflow-hidden">
+          <span className="truncate">{labels[value]}</span> <ChevronDown className="shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={10}>
@@ -94,10 +93,10 @@ export function CategoryFilter({value, onValueChange}) {
   )
 }
 
-export function SortSelect({value, onValueChange}) {
+export function SortSelect({ value, onValueChange }) {
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger 
+      <SelectTrigger
         className="
           flex items-center gap-1
           px-3 py-1
@@ -108,6 +107,8 @@ export function SortSelect({value, onValueChange}) {
           hover:border-ring hover:bg-transparent
           transition-all duration-200 ease-in-out
           cursor-pointer
+          w-full md:w-auto min-w-0
+          [&>span]:truncate
         "
       >
         <SelectValue placeholder="Sort by" />

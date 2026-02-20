@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local test scripts
+test-groq-api*.js
+test-local-api.js
+build_output*.txt

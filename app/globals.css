@@ -178,6 +178,33 @@
 }
 
 /* ========================================
+   RADIX UI SCROLL LOCK FIX
+   Prevents Radix portals (Select, DropdownMenu) from
+   injecting padding-right onto <body>, which shifts
+   sticky/fixed headers horizontally.
+   ======================================== */
+body[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* ========================================
+   NOTIFICATION DROPDOWN — MOBILE POSITIONING
+   Appears just below the sticky header (5rem = h-20)
+   and centered horizontally. Desktop is untouched.
+   ======================================== */
+@media (max-width: 640px) {
+  [data-radix-popper-content-wrapper]:has(.notification-dropdown) {
+    position: fixed !important;
+    top: 5rem !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: calc(100vw - 2rem) !important;
+  }
+}
+
+
+/* ========================================
    PERSONAAI CUSTOM UTILITY CLASSES
    ======================================== */
 
