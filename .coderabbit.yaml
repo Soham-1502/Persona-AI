@@ -1,0 +1,10 @@
+# .coderabbit.yaml
+auto_review: true
+incremental_review: true
+review_profile: chill
+language: en
+tone_instructions: "Please provide constructive, precise feedback. Focus on logic, security, and GSD methodology adherence."
+# Ignore specific auto-generated or config files
+path_filters:
+  - "!*.md"
+  - "!.*/**"
