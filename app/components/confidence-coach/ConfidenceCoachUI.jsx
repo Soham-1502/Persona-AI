@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Mic, Video, Square, Play, CheckCircle, Loader2 } from "lucide-react";
+import { usePorcupine } from '@picovoice/porcupine-react';
 import { startMediaPipeStream } from "./MediaPipeAnalyzer";
 import { AudioAnalyzer } from "./AudioAnalyzer";
 import { getAuthToken } from "@/lib/auth-client";
@@ -63,6 +64,52 @@ export function ConfidenceCoachUI() {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionStatus]);
+
+    // Porcupine Wake Word Engine
+    const { keywordDetection, isLoaded: isPorcupineLoaded, isListening: isPorcupineListening, init: initPorcupine, start: startPorcupine } = usePorcupine();
+
+    useEffect(() => {
+        const setupPorcupine = async () => {
+            const accessKey = process.env.NEXT_PUBLIC_PICOVOICE_ACCESS_KEY;
+            if (!accessKey || isPorcupineLoaded) return;
+            try {
+                // Initialize using BuiltIn keywords. Note: requires standard model parameters to be served in public/.
+                // Falls back gracefully if access key is invalid or model not copied.
+                await initPorcupine(
+                    accessKey,
+                    { publicPath: "/porcupine_params.pv", forceWrite: true },
+                    [
+                        { builtin: "Porcupine", sensitivity: 0.7 },
+                        { builtin: "Bumblebee", sensitivity: 0.7 }
+                    ]
+                );
+            } catch (err) {
+                console.warn("Porcupine could not bind. Ensure NEXT_PUBLIC_PICOVOICE_ACCESS_KEY is set and model is hosted. Falling back to buttons/WebSpeech.", err);
+            }
+        };
+        setupPorcupine();
+    }, [isPorcupineLoaded, initPorcupine]);
+
+    useEffect(() => {
+        if (isPorcupineLoaded && !isPorcupineListening) {
+            startPorcupine().catch(e => console.warn(e));
+        }
+    }, [isPorcupineLoaded, isPorcupineListening, startPorcupine]);
+
+    // Command Parser (Offline Wake Word overrides WebSpeech command parsing)
+    useEffect(() => {
+        if (keywordDetection !== null) {
+            console.log("Porcupine Wake Word detected:", keywordDetection.label);
+            const label = keywordDetection.label.toLowerCase();
+
+            if (label === "porcupine" && sessionStatus === "idle") {
+                startSession();
+            } else if (label === "bumblebee" && sessionStatus === "analyzing") {
+                endSession();
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [keywordDetection, sessionStatus]);
 
     useEffect(() => {
         // Initialize Web Speech API
@@ -339,8 +386,8 @@ export function ConfidenceCoachUI() {
                                     <Mic size={18} className="text-primary" /> Voice Commands
                                 </h3>
                                 <ul className="text-sm space-y-2 text-muted-foreground">
-                                    <li>Say <strong className="text-foreground">&quot;Start&quot;</strong> to begin analysis.</li>
-                                    <li>Say <strong className="text-foreground">&quot;END This Speech&quot;</strong> to finish.</li>
+                                    <li>Say <strong className="text-foreground">&quot;Start&quot;</strong> or <strong className="text-foreground">&quot;Porcupine&quot;</strong> (if configured) to begin analysis.</li>
+                                    <li>Say <strong className="text-foreground">&quot;END This Speech&quot;</strong> or <strong className="text-foreground">&quot;Bumblebee&quot;</strong> to finish.</li>
                                 </ul>
                             </div>
                         </div>
