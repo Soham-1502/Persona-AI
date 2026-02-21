@@ -356,15 +356,14 @@ export function ConfidenceCoachUI() {
 
         setFinalDataPayload(payload);
 
-        // Fire-and-forget asynchronous save (Plan 1.4 requirement)
+        // Fire-and-forget asynchronous save to NextAuth-protected backend (Plan 4.3)
         fetch('/api/confidence-coach/session', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${getAuthToken()}`,
             },
             body: JSON.stringify(payload),
-        }).catch(err => console.error("Failed to save confidence coach session:", err));
+        }).catch(err => console.error("Failed to persist confidence coach analytics to MongoDB:", err));
     };
 
     return (
