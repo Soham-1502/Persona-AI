@@ -95,6 +95,34 @@ function determinePosture(poseLandmarks) {
     return "sitting"; // Default assumption if hips are seen but knees aren't, or knees are leveled
 }
 
+// ARKit Blendshape heuristical Emotion mapping
+function evaluateEmotion(faceBlendshapes) {
+    if (!faceBlendshapes || faceBlendshapes.length === 0) return "neutral";
+
+    // Blendshapes is an array of categories with {categoryName, score}
+    const getScore = (name) => {
+        const shape = faceBlendshapes.find(b => b.categoryName === name);
+        return shape ? shape.score : 0;
+    };
+
+    const smileLeft = getScore("mouthSmileLeft");
+    const smileRight = getScore("mouthSmileRight");
+    const browDownLeft = getScore("browDownLeft");
+    const browDownRight = getScore("browDownRight");
+
+    // Positive
+    if (smileLeft > 0.4 && smileRight > 0.4) {
+        return "positive";
+    }
+
+    // Tense / Frowning
+    if (browDownLeft > 0.4 && browDownRight > 0.4) {
+        return "tense";
+    }
+
+    return "neutral";
+}
+
 // Helper to continuously run tracking
 export function startMediaPipeStream(videoElement, onResults) {
     let active = true;
@@ -114,9 +142,13 @@ export function startMediaPipeStream(videoElement, onResults) {
             let faceResult = null;
             let poseResult = null;
             let posture = "unknown";
+            let emotion = "neutral";
 
             if (faceLandmarker) {
                 faceResult = faceLandmarker.detectForVideo(videoElement, currentTimeMs);
+                if (faceResult && faceResult.faceBlendshapes && faceResult.faceBlendshapes.length > 0) {
+                    emotion = evaluateEmotion(faceResult.faceBlendshapes[0]);
+                }
             }
             if (poseLandmarker) {
                 poseResult = poseLandmarker.detectForVideo(videoElement, currentTimeMs);
@@ -129,7 +161,8 @@ export function startMediaPipeStream(videoElement, onResults) {
             onResults({
                 face: faceResult,
                 pose: poseResult,
-                posture
+                posture,
+                emotion
             });
         }
 
