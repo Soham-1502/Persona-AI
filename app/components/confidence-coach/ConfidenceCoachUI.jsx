@@ -22,6 +22,7 @@ export function ConfidenceCoachUI() {
 
     // Transcript state
     const [userAnswer, setUserAnswer] = useState("");
+    const [interimAnswer, setInterimAnswer] = useState("");
     const recognitionRef = useRef(null);
 
     // ML Analyzers
@@ -99,12 +100,11 @@ export function ConfidenceCoachUI() {
     // Command Parser (Offline Wake Word overrides WebSpeech command parsing)
     useEffect(() => {
         if (keywordDetection !== null) {
-            console.log("Porcupine Wake Word detected:", keywordDetection.label);
-            const label = keywordDetection.label.toLowerCase();
+            console.log("Porcupine Wake Word detected:", keywordDetection.label, "Index:", keywordDetection.index);
 
-            if (label === "porcupine" && sessionStatus === "idle") {
+            if (keywordDetection.index === 0 && sessionStatus === "idle") {
                 startSession();
-            } else if (label === "bumblebee" && sessionStatus === "analyzing") {
+            } else if (keywordDetection.index === 1 && sessionStatus === "analyzing") {
                 endSession();
             }
         }
@@ -114,51 +114,59 @@ export function ConfidenceCoachUI() {
     useEffect(() => {
         // Initialize Web Speech API
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition && !recognitionRef.current) {
-            const recognition = new SpeechRecognition();
+        if (!SpeechRecognition) return;
+
+        let recognition = recognitionRef.current;
+        if (!recognition) {
+            recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-
-            recognition.onresult = (event) => {
-                let currentTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    currentTranscript += event.results[i][0].transcript;
-                }
-
-                const lowerTranscript = currentTranscript.toLowerCase();
-
-                // Command keyword detection
-                if (sessionStatus === "idle" && lowerTranscript.includes("start")) {
-                    startSession();
-                } else if (sessionStatus === "analyzing") {
-                    if (lowerTranscript.includes("end this speech")) {
-                        endSession();
-                    } else if (event.results[event.results.length - 1].isFinal) {
-                        // Accumulate final results to avoid capturing the command keyword ideally
-                        setUserAnswer(prev => prev + " " + event.results[event.results.length - 1][0].transcript);
-                    }
-                }
-            };
-
-            recognition.onerror = (event) => {
-                console.error("Speech recognition error", event.error);
-            };
-
             recognitionRef.current = recognition;
+        }
 
-            try {
-                recognition.start();
-            } catch (e) {
-                console.log("Recognition already running or failed to start", e);
+        recognition.onresult = (event) => {
+            let finalPiece = '';
+            let interimPiece = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalPiece += event.results[i][0].transcript;
+                } else {
+                    interimPiece += event.results[i][0].transcript;
+                }
             }
+
+            const combined = (finalPiece + interimPiece).toLowerCase();
+
+            // Command keyword detection
+            if (sessionStatus === "idle" && combined.includes("start")) {
+                startSession();
+            } else if (sessionStatus === "analyzing") {
+                if (combined.includes("end this speech")) {
+                    endSession();
+                } else {
+                    if (finalPiece) {
+                        setUserAnswer(prev => prev + (prev && finalPiece ? " " : "") + finalPiece);
+                    }
+                    setInterimAnswer(interimPiece);
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Speech recognition error", event.error);
+        };
+
+        try {
+            recognition.start();
+        } catch (e) {
+            // Already started
         }
 
         return () => {
-            if (recognitionRef.current) {
-                try {
-                    recognitionRef.current.stop();
-                } catch (e) { }
-            }
+            try {
+                recognition.stop();
+            } catch (e) { }
         };
     }, [sessionStatus]);
 
@@ -413,7 +421,9 @@ export function ConfidenceCoachUI() {
 
                             <div className="bg-secondary/30 rounded-lg p-4 mb-4 border border-border h-[160px] overflow-y-auto">
                                 <h3 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Live Transcript</h3>
-                                <p className="text-sm">{userAnswer}</p>
+                                <p className="text-sm">
+                                    {userAnswer} <span className="text-muted-foreground italic">{interimAnswer}</span>
+                                </p>
                             </div>
 
                             <div className="flex gap-2">
