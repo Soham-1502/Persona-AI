@@ -17,6 +17,7 @@ export function ConfidenceCoachUI() {
     const [scenarioCategory, setScenarioCategory] = useState("Job Interview"); // default scenario category
     const [difficulty, setDifficulty] = useState("Beginner"); // Beginner, Intermediate, Expert
     const [question, setQuestion] = useState(""); // generated question string
+    const [previousQuestions, setPreviousQuestions] = useState([]); // history of questions asked this session
     const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
     const [sessionId, setSessionId] = useState(null);
     const [startTime, setStartTime] = useState(null);
@@ -36,7 +37,7 @@ export function ConfidenceCoachUI() {
     const [finalScore, setFinalScore] = useState(null);
     const [finalDataPayload, setFinalDataPayload] = useState(null);
 
-    const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation"];
+    const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
 
     useEffect(() => {
         // Initialize camera
@@ -201,12 +202,13 @@ export function ConfidenceCoachUI() {
                 const res = await fetch('/api/confidence-coach/generate-questions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scenarioType: scenarioCategory, difficulty: difficulty })
+                    body: JSON.stringify({ scenarioType: scenarioCategory, difficulty: difficulty, previousQuestions: previousQuestions })
                 });
                 const data = await res.json();
                 if (active) {
                     if (data.success && data.question) {
                         setQuestion(data.question);
+                        setPreviousQuestions(prev => [...prev, data.question]);
                     } else {
                         setQuestion(`Please provide your best response for a typical ${scenarioCategory} scenario.`);
                     }
