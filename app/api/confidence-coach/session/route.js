@@ -1,85 +1,79 @@
-import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
-import { authenticate } from '@/lib/auth';
-import UserAttempt from '@/models/UserAttempt';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { connectDB } from "@/lib/mongodb";
+import { User } from "@/models/User";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function POST(req) {
     try {
-        await connectDB();
+        const session = await getServerSession(authOptions);
 
-        // Authenticate the user
-        const user = await authenticate(req);
-        if (!user) {
-            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        if (!session) {
+            return NextResponse.json(
+                { success: false, error: "Unauthorized access" },
+                { status: 401 }
+            );
         }
 
-        // Parse payload
         const body = await req.json();
-        const {
-            moduleId,
-            gameType,
-            sessionId,
-            question,
-            userAnswer,
-            correctAnswer,
-            isCorrect,
-            score,
-            timeTaken
-        } = body;
+        const { score, timeTaken } = body;
 
-        // Create the individual attempt record
-        const attempt = await UserAttempt.create({
-            moduleId: moduleId || 'confidenceCoach',
-            userId: user._id,
-            username: user.username,
-            sessionId: sessionId || crypto.randomUUID(),
-            gameType: gameType || 'voice',
-            question: question || 'General Practice',
-            userAnswer: userAnswer || '(No transcript)',
-            correctAnswer: correctAnswer || 'completed',
-            isCorrect: isCorrect !== undefined ? isCorrect : true,
-            score: Number(score) || 0,
-            maxPossibleScore: 10,
-            timeTaken: Number(timeTaken) || 0,
-            timestamp: new Date()
-        });
+        if (score === undefined || score === null || timeTaken === undefined || timeTaken === null) {
+            return NextResponse.json(
+                { success: false, error: "Missing required session parameters (score, timeTaken)" },
+                { status: 400 }
+            );
+        }
 
-        // Update the User's aggregate statistics safely
-        const stats = user.confidenceCoachStats || {
-            sessionsCompleted: 0,
-            voiceTrainingMinutes: 0,
-            averageScore: 0,
-            lastSessionDate: null
-        };
+        await connectDB();
 
-        const newSessionsCompleted = (stats.sessionsCompleted || 0) + 1;
-        const previousTotalMins = stats.voiceTrainingMinutes || 0;
-        const newVoiceMins = previousTotalMins + (Number(timeTaken) / 60);
+        // 1. Fetch User Record
+        const user = await User.findOne({ email: session.user.email });
 
-        // Calculate moving average for score
-        const currentAvg = stats.averageScore || 0;
-        const newScore = Number(score) || 0;
-        const newAvgScore = ((currentAvg * (newSessionsCompleted - 1)) + newScore) / newSessionsCompleted;
+        if (!user) {
+            return NextResponse.json(
+                { success: false, error: "User not found" },
+                { status: 404 }
+            );
+        }
 
-        user.confidenceCoachStats = {
-            sessionsCompleted: newSessionsCompleted,
-            voiceTrainingMinutes: newVoiceMins,
-            averageScore: newAvgScore,
-            lastSessionDate: new Date()
-        };
+        // 2. Initialize stats block if missing
+        if (!user.confidenceCoachStats) {
+            user.confidenceCoachStats = {
+                sessionsCompleted: 0,
+                voiceTrainingMinutes: 0,
+                lastSessionDate: null,
+                averageScore: 0
+            };
+        }
+
+        const stats = user.confidenceCoachStats;
+
+        // 3. Rolling Average calculation 
+        // new avg = ((old avg * old count) + new score) / (old count + 1)
+        const oldAvg = stats.averageScore || 0;
+        const oldCount = stats.sessionsCompleted || 0;
+
+        let newAvg = ((oldAvg * oldCount) + score) / (oldCount + 1);
+        newAvg = Math.round(newAvg * 10) / 10; // round to 1 decimal point
+
+        // 4. Update MongoDB Document
+        stats.averageScore = newAvg;
+        stats.sessionsCompleted = oldCount + 1;
+        stats.voiceTrainingMinutes += (timeTaken / 60); // Math expects total minutes floated
+        stats.lastSessionDate = new Date();
 
         await user.save();
 
         return NextResponse.json({
             success: true,
-            sessionSaved: true,
-            attemptId: attempt._id
+            stats: user.confidenceCoachStats
         });
 
     } catch (error) {
-        console.error('Error saving confidence coach session:', error);
+        console.error("Confidence Coach Session Persistence Error:", error);
         return NextResponse.json(
-            { success: false, error: error.message || 'Internal server error' },
+            { success: false, error: "Internal Server Error" },
             { status: 500 }
         );
     }
