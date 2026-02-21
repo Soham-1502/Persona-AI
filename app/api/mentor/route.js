@@ -1,9 +1,10 @@
 // app/api/mentor/route.js
-import { Groq } from 'groq-sdk';
-import jwt from "jsonwebtoken";
+import { authenticate } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import UserAttempt from "@/models/UserAttempt";
 import User from "@/models/User";
+import jwt from "jsonwebtoken";
+import { runGroqAction } from "@/lib/ai-handler";
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 function getUserFromToken(req) {
@@ -19,9 +20,7 @@ function getUserFromToken(req) {
 
 export async function POST(req) {
     try {
-        const groq = new Groq({
-            apiKey: process.env.GROQ_API_KEY
-        });
+        await connectDB();
 
         // Parse request body
         const { messages } = await req.json();
@@ -58,16 +57,18 @@ Make your entire response feel like a single, cohesive piece of advice from a re
                 }))
         ];
 
-        // Create streaming chat completion
-        const chatCompletion = await groq.chat.completions.create({
-            messages: groqMessages,
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.7,
-            max_completion_tokens: 1024,
-            top_p: 1,
-            stream: true,
-            stop: null
-        });
+        // Create streaming chat completion using Multi-Key Chain
+        const chatCompletion = await runGroqAction((groq, model) =>
+            groq.chat.completions.create({
+                messages: groqMessages,
+                model: model,
+                temperature: 0.7,
+                max_completion_tokens: 1024,
+                top_p: 1,
+                stream: true,
+                stop: null
+            })
+        );
 
         // Save session to DB (best-effort, non-blocking)
         const decoded = getUserFromToken(req);

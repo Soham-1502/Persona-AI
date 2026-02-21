@@ -215,6 +215,49 @@ const QUIZ_STRUCTURE = {
       },
     },
   },
+  history: {
+    name: "History",
+    icon: "📜",
+    description: "Ancient, Medieval, and Modern World History",
+    gradient: "from-amber-600 to-orange-700",
+    categories: {
+      periods: {
+        name: "Historical Periods",
+        icon: "🏛️",
+        description: "Explore different eras of human history",
+        subCategories: {
+          ancient: {
+            name: "Ancient Civilizations",
+            topics: {
+              "indus-valley": { name: "Indus Valley Civilization" },
+              "egyptian-civ": { name: "Ancient Egypt" },
+              "mesopotamia": { name: "Mesopotamia" },
+              "greek-roman": { name: "Greek & Roman Empire" },
+            },
+          },
+          medieval: {
+            name: "Medieval Period",
+            topics: {
+              "crusades": { name: "The Crusades" },
+              "feudalism": { name: "Feudalism in Europe" },
+              "silk-road": { name: "The Silk Road" },
+              "mughal-empire": { name: "The Mughal Empire" },
+            },
+          },
+          modern: {
+            name: "Modern History",
+            topics: {
+              "renaissance": { name: "The Renaissance" },
+              "industrial-rev": { name: "Industrial Revolution" },
+              "world-war-1": { name: "World War I" },
+              "world-war-2": { name: "World War II" },
+              "cold-war": { name: "The Cold War" },
+            },
+          },
+        },
+      },
+    },
+  },
   humanities: {
     name: "Humanities",
     icon: "📚",
@@ -602,7 +645,16 @@ const QuizDomainSelection = () => {
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMsg = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            errorMsg = errorData.message;
+          }
+        } catch (e) {
+          // Fallback to status code
+        }
+        throw new Error(errorMsg);
       }
 
       return await response.json();
@@ -713,16 +765,6 @@ const QuizDomainSelection = () => {
     }
   }, [currentView, timerActive, timer, showResult]);
 
-  // ✅ Auto-speak question when it changes
-  useEffect(() => {
-    if (currentView === "quiz" && currentQuestion && !isLoading && !showResult) {
-      // Delay slightly to ensure user is ready
-      const t = setTimeout(() => {
-        speakQuestion();
-      }, 500);
-      return () => clearTimeout(t);
-    }
-  }, [currentQuestion, currentView, isLoading, showResult]);
 
   // ✅ Voice Preloading for TTS
   useEffect(() => {
@@ -799,9 +841,15 @@ const QuizDomainSelection = () => {
     );
   };
 
-  const fetchQuestion = async (domain, category, subCategory, topic) => {
+  const fetchQuestion = async (domain, category, subCategory, topic, diffOverride = null) => {
     setIsLoading(true);
     setError("");
+
+    // Ensure diffOverride is not an Event object (common when bound directly to onClick)
+    const validLevels = ["easy", "medium", "hard"];
+    const actualDifficulty = (typeof diffOverride === "string" && validLevels.includes(diffOverride))
+      ? diffOverride
+      : selectedDifficulty;
 
     // Generate session ID at the start of a topic quiz
     if (!sessionIdRef.current) {
@@ -819,7 +867,7 @@ const QuizDomainSelection = () => {
             category: category,
             subCategory: subCategory,
             seenQuestions: seenQuestionsRef.current,
-            difficulty: selectedDifficulty,
+            difficulty: actualDifficulty,
           }),
         }
       );
@@ -827,12 +875,14 @@ const QuizDomainSelection = () => {
       console.log("✅ Question fetched:", data);
 
       if (data.question && data.answer) {
+
         setCurrentQuestion(data.question);
+
         setCorrectAnswer(data.answer);
         currentQuestionRef.current = { question: data.question, answer: data.answer };
 
         if (!seenQuestionsRef.current.includes(data.question)) {
-          seenQuestionsRef.current = [...seenQuestionsRef.current, data.question].slice(-50);
+          seenQuestionsRef.current = [...seenQuestionsRef.current, data.question].slice(-500);
         }
 
         setTimer(30);
@@ -884,8 +934,10 @@ const QuizDomainSelection = () => {
           console.log("🎤 Silence timeout reached after speech, stopping.");
           intentionalStop = true;
           recognition.stop();
-        }, 25000);
+        }, 6000);
       };
+
+
 
       const startRecognition = () => {
         recognitionRef.current = recognition;
@@ -1097,13 +1149,18 @@ const QuizDomainSelection = () => {
     await submitAnswer("Time's up!");
   };
 
-  const nextQuestion = () => {
+  const nextQuestion = (diffOverride = null) => {
+    const validLevels = ["easy", "medium", "hard"];
+    const actualOverride = typeof diffOverride === "string" && validLevels.includes(diffOverride)
+      ? diffOverride
+      : null;
+
     setTimer(30);
     setTimerActive(false);
     setTranscript("");
     setFeedback("");
     setShowResult(false);
-    fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic);
+    fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic, actualOverride);
   };
 
   const startNewSession = () => {
@@ -1118,48 +1175,140 @@ const QuizDomainSelection = () => {
   };
 
   const downloadHistory = () => {
-    const date = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true });
-    let content = `InQuizzo Session History\nDate: ${date}\nSession Score: ${sessionScore}\n\n`;
+    const date = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour12: true,
+    });
+
+    let content = `Username: ${localStorage.getItem("username") || "Unknown"}\n`;
+    content += `Score: ${score}\n`;
+    content += `Time: ${date}\n\n`;
+
     chatHistory.forEach((entry, index) => {
-      content += `Q${index + 1}: ${entry.question}\n`;
+      content += `Q${index + 1}:\n`;
+      content += `Question: ${entry.question}\n`;
       content += `Your Answer: ${entry.userAnswer}\n`;
       content += `Correct Answer: ${entry.correctAnswer}\n`;
-      content += `Result: ${entry.isCorrect ? "✅ Correct" : "❌ Incorrect"}\n`;
-      content += `Score: +${entry.score}\n\n`;
+
+      if (entry.isCorrect === true) {
+        content += `Result: ✅ Correct\n`;
+      } else if (entry.isCorrect === false) {
+        content += `Result: ❌ Incorrect\n`;
+        content += `Explanation: ${entry.feedback}\n`;
+      } else {
+        content += `Result: ⚠️ Skipped\n`;
+        content += `Note: ${entry.feedback}\n`;
+      }
+
+      content += `\n`;
     });
+
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `inquizzo_session_${new Date().toISOString().slice(0, 10)}.txt`;
+    link.download = `quiz_results_${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
   };
 
-  const speakQuestion = () => {
-    if ("speechSynthesis" in window && currentQuestion) {
-      window.speechSynthesis.cancel(); // Stop any current speech
-      const utterance = new SpeechSynthesisUtterance(currentQuestion);
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    const date = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour12: true,
+    });
+    const username = localStorage.getItem("username") || "Unknown";
 
-      // ✅ Proper voice selection with fallback logic
-      const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
-      utterance.voice =
-        voices.find((v) => v.lang === "en-US" && v.name.includes("Google")) ||
-        voices.find((v) => v.lang === "en-US") ||
-        voices.find((v) => v.lang.startsWith("en")) ||
-        voices[0] || null;
+    doc.setFontSize(22);
+    doc.setTextColor(41, 128, 185);
+    doc.text("Inquizzo Quiz Results", 105, 20, { align: "center" });
 
-      utterance.onerror = (event) => {
-        // Only log serious errors, ignore 'interrupted' or 'canceled' which are common during reset/cancel
-        if (event.error !== 'interrupted' && event.error !== 'canceled') {
-          console.error("🔊 TTS Error:", event.error, event);
-        }
-      };
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text(`Student: ${username}`, 20, 35);
+    doc.text(`Score: ${score}`, 20, 42);
+    doc.text(`Date: ${date}`, 20, 49);
 
-      window.speechSynthesis.speak(utterance);
+    doc.setLineWidth(0.5);
+    doc.line(20, 55, 190, 55);
+
+    let yPos = 65;
+
+    chatHistory.forEach((entry, index) => {
+      if (yPos > 260) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Q${index + 1}: ${entry.question.substring(0, 80)}${entry.question.length > 80 ? "..." : ""}`, 20, yPos);
+      yPos += 7;
+
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(entry.isCorrect ? [40, 167, 69] : [220, 53, 69]);
+      doc.text(`Your Answer: ${entry.userAnswer || "No Answer"}`, 25, yPos);
+      yPos += 7;
+
+      doc.setTextColor(0);
+      doc.text(`Correct Answer: ${entry.correctAnswer}`, 25, yPos);
+      yPos += 7;
+
+      if (!entry.isCorrect && entry.feedback) {
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        const splitFeedback = doc.splitTextToSize(`Explanation: ${entry.feedback}`, 160);
+        doc.text(splitFeedback, 25, yPos);
+        yPos += (splitFeedback.length * 5);
+      }
+
+      yPos += 10;
+    });
+
+    doc.save(`${username}_results.pdf`);
+  };
+
+  // ✅ Enhanced FREE Neural TTS using Microsoft Edge Proxy
+  const speakQuestion = async () => {
+    if (!currentQuestion) return;
+
+    try {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      console.log("🔊 Fetching high-quality voice for:", currentQuestion.substring(0, 30));
+
+      const response = await fetch("/api/inquizzo/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: currentQuestion }),
+      });
+
+      if (!response.ok) throw new Error("TTS proxy failed");
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.play().catch(e => console.error("🔇 Audio play failed:", e));
+
+      console.log("✅ Playing humanized voice (Microsoft Edge Neural)");
+    } catch (error) {
+      console.warn("⚠️ High-quality TTS failed, falling back to system voice:", error.message);
+
+      if ("speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(currentQuestion);
+        utterance.rate = 0.95;
+        const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
+        utterance.voice = voices.find((v) => v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Neural"))) || voices[0];
+        window.speechSynthesis.speak(utterance);
+      }
     }
   };
 
@@ -1509,11 +1658,18 @@ const QuizDomainSelection = () => {
             <p className="text-4xl font-extrabold text-white mb-6">Session Score: {sessionScore}</p>
             <div className="flex gap-4 justify-center flex-wrap">
               <button
+                onClick={downloadPDF}
+                className="px-8 py-3 rounded-xl text-white font-semibold border border-red-400/40 bg-red-600/20 hover:bg-red-700/30 transition-colors shadow-md"
+                type="button"
+              >
+                📄 Download PDF
+              </button>
+              <button
                 onClick={downloadHistory}
                 className="px-8 py-3 rounded-xl text-white font-semibold border border-blue-400/40 bg-blue-600/20 hover:bg-blue-700/30 transition-colors shadow-md"
                 type="button"
               >
-                📥 Download History
+                📥 Download Text
               </button>
               <button
                 onClick={startNewSession}
@@ -1636,7 +1792,12 @@ const QuizDomainSelection = () => {
             <button
               key={level}
               onClick={() => {
+                const prev = selectedDifficulty;
                 setSelectedDifficulty(level);
+                // If the user changes it mid-quiz, refresh immediately to show a question at the new level
+                if (currentView === "quiz" && !isLoading && prev !== level) {
+                  nextQuestion(level);
+                }
               }}
               className={`px-5 py-2 rounded-full text-sm font-bold uppercase transition-all duration-200 border shadow-lg
                 ${selectedDifficulty === level

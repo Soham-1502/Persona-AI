@@ -1,183 +1,194 @@
-// import { NextResponse } from "next/server";
-// import Groq from "groq-sdk";
-// import { authenticate } from "@/lib/auth";
-// import connectDB from "@/lib/db";
-
-// const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
-// // Helper to extract JSON from potentially markdown-wrapped responses
-// function extractJSON(text) {
-//   // Try direct parse first
-//   try {
-//     return JSON.parse(text);
-//   } catch {
-//     // Extract from markdown code blocks like ```json {...} ```
-//     const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-//     if (match) {
-//       return JSON.parse(match[1].trim());
-//     }
-//     // Try to find JSON object pattern in the text
-//     const jsonMatch = text.match(/\{[\s\S]*"question"[\s\S]*"answer"[\s\S]*\}/);
-//     if (jsonMatch) {
-//       return JSON.parse(jsonMatch[0]);
-//     }
-//     throw new Error("Could not extract JSON from response");
-//   }
-// }
-
-// export async function POST(req) {
-//   try {
-//     await connectDB();
-//     const user = await authenticate(req);
-//     console.log("✅ User authenticated:", user.email);
-
-//     const { topic, subject, category, subCategory, seenQuestions = [] } = await req.json();
-//     console.log("📋 Topic:", topic, "| SubCategory:", subCategory, "| Seen questions count:", seenQuestions.length);
-
-//     const contextParts = [subject, category, subCategory, topic].filter(Boolean);
-//     const selectedTopic = contextParts.length > 0 ? contextParts.join(" > ") : (topic || "general knowledge");
-
-//     // Include last 50 seen questions in prompt to avoid repeats
-//     const recentSeen = seenQuestions.slice(-50);
-//     let avoidClause = "";
-//     if (recentSeen.length > 0) {
-//       avoidClause = `\n\nCRITICAL: DO NOT generate any of the following questions as they were already asked:\n${recentSeen.map((q, i) => `- ${q}`).join("\n")}\n\nYour task is to provide a COMPLETELY NEW and UNIQUE question from a different angle or sub-topic within ${selectedTopic}.`;
-//     }
-
-//     const prompt = `You are an expert educational mentor. Task: Generate ONE unique, high-quality quiz question for a learner.
-// Context: ${selectedTopic}
-// Difficulty: Intermediate
-
-// Requirements:
-// 1. The question must be different from any previously asked questions.
-// 2. The language should be clear, engaging, and professional.
-// 3. Provide the output strictly in the following JSON format:
-//    {"question": "...", "answer": "..."}
-
-// ${avoidClause}`;
-
-//     const completion = await groq.chat.completions.create({
-//       messages: [{ role: "user", content: prompt }],
-//       model: "llama-3.3-70b-versatile",
-//       temperature: 1.0, // High variety
-//     });
-
-//     const content = completion.choices[0]?.message?.content || "{}";
-//     console.log("🤖 Groq raw response:", content);
-
-//     const parsed = extractJSON(content);
-
-//     return NextResponse.json({
-//       question: parsed.question || "What is 2+2?",
-//       answer: parsed.answer || "4",
-//       user: {
-//         username: user.username,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("❌ Generate question error:", error.message);
-
-//     if (error.message.includes("Authentication") || error.message.includes("token")) {
-//       return NextResponse.json(
-//         { message: "Authentication failed. Please login again." },
-//         { status: 401 }
-//       );
-//     }
-
-//     return NextResponse.json(
-//       { message: `Failed to generate question: ${error.message}` },
-//       { status: 500 }
-//     );
-//   }
-// }
-
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { authenticate } from "@/lib/auth";
 import connectDB from "@/lib/db";
+import { runGroqAction } from "@/lib/ai-handler";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Initialize OpenAI and Gemini
+console.log("🛠️ Initializing secondary AI clients...");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 // Helper to extract JSON from potentially markdown-wrapped responses
 function extractJSON(text) {
-  // Try direct parse first
   try {
     return JSON.parse(text);
   } catch {
-    // Extract from markdown code blocks like ```json {...} ```
     const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (match) {
-      return JSON.parse(match[1].trim());
+      try {
+        return JSON.parse(match[1].trim());
+      } catch (e) {
+        console.warn("⚠️ Failed to parse markdown block JSON, trying regex...");
+      }
     }
-    // Try to find JSON object pattern in the text
     const jsonMatch = text.match(/\{[\s\S]*"question"[\s\S]*"answer"[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        throw new Error("Could not parse extracted JSON object pattern");
+      }
     }
-    throw new Error("Could not extract JSON from response");
+    throw new Error("Could not extract JSON from AI response: " + text.substring(0, 100));
   }
 }
 
 export async function POST(req) {
   try {
+    console.log("📥 Received request for quiz question...");
     await connectDB();
     const user = await authenticate(req);
     console.log("✅ User authenticated:", user.email);
 
-    const { topic, subject, category, seenQuestions = [], difficulty = "medium" } = await req.json();
-    console.log("📋 Topic:", topic, "| Difficulty:", difficulty, "| Seen questions count:", seenQuestions.length);
+    const body = await req.json();
+    const {
+      topic = "general knowledge",
+      subject = null,
+      category = null,
+      subCategory = null,
+      seenQuestions = []
+    } = body;
 
-    const selectedTopic = topic || subject || category || "general knowledge";
+    // Bulletproof difficulty
+    const difficultyLevel = (typeof body.difficulty === "string" ? body.difficulty : "medium").toUpperCase();
 
-    // Difficulty descriptions for the AI
+    const contextParts = [subject, category, subCategory, topic].filter(Boolean);
+    const selectedTopic = contextParts.length > 0 ? contextParts.join(" > ") : (topic || "general knowledge");
+
     const difficultyDescriptions = {
-      easy: "simple, beginner-friendly, basic factual",
-      medium: "intermediate, requires some subject knowledge",
-      hard: "advanced, challenging, requires deep understanding",
+      easy: "simple, basic factual, one-line answers",
+      medium: "intermediate, concepts, categories, comparisons",
+      hard: "advanced, deep dives, real-world challenges, complex problem solving",
     };
-    const difficultyLabel = difficultyDescriptions[difficulty] || difficultyDescriptions.medium;
+    const difficultyLabel = difficultyDescriptions[difficultyLevel.toLowerCase()] || difficultyDescriptions.medium;
 
-    // Include last 30 seen questions in prompt to avoid repeats
-    const recentSeen = seenQuestions.slice(-30);
+    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-50) : [];
     let avoidClause = "";
     if (recentSeen.length > 0) {
-      avoidClause = `\n\nDO NOT generate any of these previously asked questions:\n${recentSeen.map((q, i) => `${i + 1}. ${q}`).join("\n")}\n\nGenerate a COMPLETELY DIFFERENT question that is NOT similar to any of the above.`;
+      avoidClause = `\n\nDO NOT repeat these questions:\n${recentSeen.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
     }
 
-    const prompt = `Generate ONE unique ${selectedTopic} quiz question at ${difficultyLabel} difficulty level, with its answer in JSON format ONLY. No markdown, no extra text.
-Format: {"question": "What is...?", "answer": "The answer"}${avoidClause}`;
+    const prompt = `You are a professional quiz examiner. Generate ONE unique quiz question for the topic: "${selectedTopic}".
+Difficulty Level: ${difficultyLevel} (${difficultyLabel}).
 
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.9,
-    });
+Strict Guidelines:
+1. Return ONLY a valid JSON object.
+2. Format: {"question": "...", "answer": "..."}
+3. Do NOT include any intro or outro text.
+${avoidClause}`;
 
-    const content = completion.choices[0]?.message?.content || "{}";
-    console.log("🤖 Groq raw response:", content);
+    let content = null;
+    let fallbackUsed = null;
+    let errorChain = [];
+
+    // LAYER 1: GROQ (Multi-Key Chain)
+    try {
+      console.log("🚀 Layer 1: Attempting Groq Multi-Key Chain...");
+      const completion = await runGroqAction((groq, model) =>
+        groq.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: model,
+          temperature: 0.7,
+        })
+      );
+      content = completion.choices[0]?.message?.content;
+      if (content) console.log("✅ Success: Groq Chain (llama-3.3-70b-versatile)");
+    } catch (groqChainError) {
+      errorChain.push(`Groq Chain failed: ${groqChainError.message}`);
+
+      // LAYER 2: OPENAI
+      try {
+        console.log("🚀 Layer 2: Attempting OpenAI (gpt-4o)...");
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: "gpt-4o",
+          temperature: 0.7,
+          response_format: { type: "json_object" },
+        });
+        content = completion.choices[0]?.message?.content;
+        fallbackUsed = "OpenAI (gpt-4o)";
+        if (content) console.log("✅ Success: OpenAI (gpt-4o)");
+      } catch (openaiError) {
+        errorChain.push(`OpenAI(gpt-4o) failed: ${openaiError.message}`);
+
+        try {
+          console.log("🚀 Layer 2b: Attempting OpenAI (gpt-3.5-turbo)...");
+          const completion = await openai.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "gpt-3.5-turbo",
+            temperature: 0.7,
+          });
+          content = completion.choices[0]?.message?.content;
+          fallbackUsed = "OpenAI (gpt-3.5-turbo)";
+          if (content) console.log("✅ Success: OpenAI (gpt-3.5-turbo)");
+        } catch (openaiError2) {
+          errorChain.push(`OpenAI(gpt-3.5-turbo) failed: ${openaiError2.message}`);
+
+          console.log("⏩ OpenAI exhausted. Falling back to Gemini...");
+
+          // LAYER 3: GEMINI (Last Resort)
+          const geminiModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"];
+          for (const modelId of geminiModels) {
+            try {
+              console.log(`🚀 Layer 3: Attempting Gemini (${modelId})...`);
+              const model = genAI.getGenerativeModel({ model: modelId });
+              const result = await model.generateContent(prompt);
+              content = result.response.text();
+              fallbackUsed = `Gemini (${modelId})`;
+              if (content) {
+                console.log(`✅ Success: ${fallbackUsed}`);
+                break;
+              }
+            } catch (gemError) {
+              errorChain.push(`Gemini(${modelId}) failed: ${gemError.message}`);
+            }
+          }
+        }
+      }
+    }
+
+    if (!content) {
+      console.warn("🔻 EMERGENCY: All AI services failed. Using static fallback pool.");
+      const staticPool = [
+        { question: "What is the capital of France?", answer: "Paris" },
+        { question: "Who developed the theory of relativity?", answer: "Albert Einstein" },
+        { question: "What is the largest planet in our solar system?", answer: "Jupiter" },
+        { question: "Which element has the chemical symbol 'O'?", answer: "Oxygen" },
+        { question: "What is the power house of the cell?", answer: "Mitochondria" }
+      ];
+      const randomQ = staticPool[Math.floor(Math.random() * staticPool.length)];
+      return NextResponse.json({
+        ...randomQ,
+        user: { username: user.username },
+        source: "Emergency Static Pool",
+        version: "V8_MULTI_KEY_GROQ"
+      });
+    }
 
     const parsed = extractJSON(content);
 
+    console.log("-----------------------------------------");
+    console.log(`📝 GENERATED QUIZ [${fallbackUsed || "Groq"}]:`);
+    console.log(`❓ Q: ${parsed.question}`);
+    console.log(`💡 A: ${parsed.answer}`);
+    console.log("-----------------------------------------");
+
     return NextResponse.json({
-      question: parsed.question || "What is 2+2?",
-      answer: parsed.answer || "4",
-      user: {
-        username: user.username,
-      },
+      question: parsed.question || "Fallback: What is the capital of India?",
+      answer: parsed.answer || "New Delhi",
+      user: { username: user.username },
+      source: fallbackUsed || "Groq",
+      version: "V8_MULTI_KEY_GROQ"
     });
+
   } catch (error) {
-    console.error("❌ Generate question error:", error.message);
-
-    if (error.message.includes("Authentication") || error.message.includes("token")) {
-      return NextResponse.json(
-        { message: "Authentication failed. Please login again." },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      { message: `Failed to generate question: ${error.message}` },
-      { status: 500 }
-    );
+    console.error("❌ FINAL API ERROR:", error.message);
+    return NextResponse.json({
+      message: error.message,
+      version: "V8_MULTI_KEY_GROQ",
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined
+    }, { status: 503 });
   }
 }

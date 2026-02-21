@@ -3,12 +3,14 @@ import { authenticate } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import UserAttempt from "@/models/UserAttempt";
 
+
 export async function POST(req) {
     try {
         await connectDB();
         const user = await authenticate(req);
 
         const {
+
             moduleId = "inQuizzo",
             gameType = "voice",
             sessionId,

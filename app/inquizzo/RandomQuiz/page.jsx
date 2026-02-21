@@ -106,6 +106,8 @@ const Quiz = () => {
   const voicesRef = useRef([]);
   const transcriptRef = useRef("");
 
+
+
   // ✅ Helper: get localStorage key for this user's seen questions
   const getSeenQuestionsKey = () => {
     const userStr = localStorage.getItem("user");
@@ -180,7 +182,16 @@ const Quiz = () => {
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMsg = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            errorMsg = errorData.message;
+          }
+        } catch (e) {
+          // Fallback to status code if JSON parsing fails
+        }
+        throw new Error(errorMsg);
       }
 
       return await response.json();
@@ -195,14 +206,6 @@ const Quiz = () => {
       question: currentQuestion,
       answer: correctAnswer,
     };
-
-    // ✅ Auto-speak question when it changes
-    if (currentQuestion && !isLoading && !showResult) {
-      const t = setTimeout(() => {
-        speakQuestion();
-      }, 500);
-      return () => clearTimeout(t);
-    }
   }, [currentQuestion, correctAnswer, isLoading, showResult]);
 
   // ✅ Voice Preloading for TTS
@@ -254,8 +257,9 @@ const Quiz = () => {
           console.log("🎤 Silence timeout reached after speech, stopping.");
           intentionalStop = true;
           recognition.stop();
-        }, 25000);
+        }, 6000);
       };
+
 
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -477,36 +481,57 @@ const Quiz = () => {
     }
   };
 
-  // ✅ FIXED: Use preloaded voices for TTS
-  const speakQuestion = () => {
-    if ("speechSynthesis" in window && currentQuestion) {
-      window.speechSynthesis.cancel(); // ✅ Stop any current speech
-      const utterance = new SpeechSynthesisUtterance(currentQuestion);
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
+  // ✅ Enhanced FREE Neural TTS using Microsoft Edge Proxy
+  const speakQuestion = async () => {
+    if (!currentQuestion) return;
 
-      // ✅ Proper voice selection with fallback logic
-      const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
-      utterance.voice =
-        voices.find((v) => v.lang === "en-US" && v.name.includes("Google")) ||
-        voices.find((v) => v.lang === "en-US") ||
-        voices.find((v) => v.lang.startsWith("en")) ||
-        voices[0] || null;
+    try {
+      // 1. Cancel any current speech (browser-side)
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
 
-      utterance.onerror = (event) => {
-        // Only log serious errors, ignore 'interrupted' or 'canceled' which are common during reset/cancel
-        if (event.error !== 'interrupted' && event.error !== 'canceled') {
-          console.error("🔊 TTS Error:", event.error, event);
-        }
-      };
+      console.log("🔊 Fetching high-quality voice for:", currentQuestion.substring(0, 30));
 
-      window.speechSynthesis.speak(utterance);
+      const response = await fetch("/api/inquizzo/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: currentQuestion }),
+      });
+
+      if (!response.ok) throw new Error("TTS proxy failed");
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.play().catch(e => console.error("🔇 Audio play failed:", e));
+
+      console.log("✅ Playing humanized voice (Microsoft Edge Neural)");
+    } catch (error) {
+      console.warn("⚠️ High-quality TTS failed, falling back to system voice:", error.message);
+
+      // Fallback to local browser TTS if proxy fails
+      if ("speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(currentQuestion);
+        utterance.rate = 0.95;
+        const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
+        utterance.voice = voices.find((v) => v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Neural"))) || voices[0];
+        window.speechSynthesis.speak(utterance);
+      }
     }
   };
 
-  const resetQuiz = () => {
-    setCurrentQuestion("");
-    setCorrectAnswer("");
+  const resetQuiz = (diffOverride = null) => {
+    // If called by an event handler, diffOverride will be an event object.
+    // We only want to pass it if it's a valid difficulty string.
+    const validLevels = ["easy", "medium", "hard"];
+    const actualOverride = typeof diffOverride === "string" && validLevels.includes(diffOverride)
+      ? diffOverride
+      : null;
+
+    setIsListening(false);
     setTranscript("");
     setFeedback("");
     setShowResult(false);
@@ -514,7 +539,7 @@ const Quiz = () => {
     setTimer(30);
     setError("");
     questionStartTimeRef.current = Date.now();
-    getAIQuestion();
+    getAIQuestion(actualOverride);
   };
 
   const startNewSession = () => {
@@ -641,18 +666,18 @@ const Quiz = () => {
   //   }
   // };
 
-  // ✅ Helper: save a question to localStorage seen list (max 80)
+  // ✅ Helper: save a question to localStorage seen list (increased to 500)
   const saveSeenQuestion = (question) => {
     if (!question) return;
     const key = getSeenQuestionsKey();
     const seen = seenQuestionsRef.current;
     if (!seen.includes(question)) {
       seen.push(question);
-      // Keep only last 80 questions
-      if (seen.length > 80) seen.splice(0, seen.length - 80);
+      // Keep only last 500 questions
+      if (seen.length > 500) seen.splice(0, seen.length - 500);
       seenQuestionsRef.current = seen;
       localStorage.setItem(key, JSON.stringify(seen));
-      console.log(`📦 Saved seen question (${seen.length}/80):`, question.substring(0, 50));
+      console.log(`📦 Saved seen question (${seen.length}/500):`, question.substring(0, 50));
     }
   };
 
@@ -682,21 +707,30 @@ const Quiz = () => {
     }
   };
 
-  const getAIQuestion = async () => {
+  const getAIQuestion = async (diffOverride = null) => {
     // ✅ Check authentication before making API call
-    const token = localStorage.getItem("token");
+    const token = getAuthToken();
     if (!token) {
       setError("Please login to access quiz questions.");
       setIsAuthenticated(false);
       return;
     }
 
+
     setIsLoading(true);
     setError("");
 
+    // Ensure diffOverride is not an Event object (common when bound directly to onClick)
+    const validLevels = ["easy", "medium", "hard"];
+    const actualDifficulty = (typeof diffOverride === "string" && validLevels.includes(diffOverride))
+      ? diffOverride
+      : (selectedDifficulty || "medium");
+
+    // Use specific topics for Random Quiz
     const topics = [
+      "general knowledge",
       "science",
-      "indian history",
+      "history",
       "geography",
       "technology",
       "sports",
@@ -715,7 +749,7 @@ const Quiz = () => {
             subject: selectedSubject,
             category: selectedCategory,
             seenQuestions: seenQuestionsRef.current,
-            difficulty: selectedDifficulty,
+            difficulty: actualDifficulty,
           }),
         }
       );
@@ -804,6 +838,65 @@ const Quiz = () => {
 
     // Release the object URL
     URL.revokeObjectURL(link.href);
+  };
+
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    const date = new Date().toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour12: true,
+    });
+
+    // Title and Header
+    doc.setFontSize(22);
+    doc.setTextColor(41, 128, 185);
+    doc.text("Inquizzo Quiz Results", 105, 20, { align: "center" });
+
+    doc.setFontSize(12);
+    doc.setTextColor(100);
+    doc.text(`Student: ${username || "Unknown"}`, 20, 35);
+    doc.text(`Score: ${score}`, 20, 42);
+    doc.text(`Date: ${date}`, 20, 49);
+
+    doc.setLineWidth(0.5);
+    doc.line(20, 55, 190, 55);
+
+    let yPos = 65;
+
+    chatHistory.forEach((entry, index) => {
+      if (yPos > 260) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(14);
+      doc.setTextColor(0);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Q${index + 1}: ${entry.question.substring(0, 80)}${entry.question.length > 80 ? "..." : ""}`, 20, yPos);
+      yPos += 7;
+
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(entry.isCorrect ? [40, 167, 69] : [220, 53, 69]);
+      doc.text(`Your Answer: ${entry.userAnswer || "No Answer"}`, 25, yPos);
+      yPos += 7;
+
+      doc.setTextColor(0);
+      doc.text(`Correct Answer: ${entry.correctAnswer}`, 25, yPos);
+      yPos += 7;
+
+      if (!entry.isCorrect && entry.feedback) {
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        const splitFeedback = doc.splitTextToSize(`Explanation: ${entry.feedback}`, 160);
+        doc.text(splitFeedback, 25, yPos);
+        yPos += (splitFeedback.length * 5);
+      }
+
+      yPos += 10;
+    });
+
+    doc.save(`${username || "quiz"}_results.pdf`);
   };
 
   const handleUsernameChange = (e) => {
@@ -1092,11 +1185,18 @@ const Quiz = () => {
                   <p className="text-4xl font-extrabold text-white mb-6">Session Score: {sessionScore}</p>
                   <div className="flex gap-4 justify-center flex-wrap">
                     <button
+                      onClick={downloadPDF}
+                      className="glass-card hover:bg-red-800 px-8 py-3 rounded-xl text-white font-semibold border border-red-400/40 transition-colors duration-300 shadow-md"
+                      type="button"
+                    >
+                      📄 Download PDF
+                    </button>
+                    <button
                       onClick={downloadCSV}
                       className="glass-card hover:bg-blue-800 px-8 py-3 rounded-xl text-white font-semibold border border-blue-400/40 transition-colors duration-300 shadow-md"
                       type="button"
                     >
-                      📥 Download History
+                      📥 Download Text
                     </button>
                     <button
                       onClick={startNewSession}
@@ -1168,7 +1268,7 @@ const Quiz = () => {
             key={level}
             onClick={() => {
               setSelectedDifficulty(level);
-              if (!showResult && !isListening) resetQuiz();
+              if (!showResult && !isListening) resetQuiz(level);
             }}
             className={`px-5 py-2 rounded-full text-sm font-bold uppercase transition-all duration-200 border shadow-lg
               ${selectedDifficulty === level
