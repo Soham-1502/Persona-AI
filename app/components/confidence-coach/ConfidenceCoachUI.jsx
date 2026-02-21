@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Mic, Video, Square, Play, CheckCircle } from "lucide-react";
+import { Mic, Video, Square, Play, CheckCircle, Loader2 } from "lucide-react";
+import { startMediaPipeStream } from "./MediaPipeAnalyzer";
+import { AudioAnalyzer } from "./AudioAnalyzer";
 
 export function ConfidenceCoachUI() {
     // Video state
@@ -17,6 +19,15 @@ export function ConfidenceCoachUI() {
     // Transcript state
     const [userAnswer, setUserAnswer] = useState("");
     const recognitionRef = useRef(null);
+
+    // ML Analyzers
+    const audioAnalyzerRef = useRef(null);
+    const mediaPipeCleanupRef = useRef(null);
+    const [mlStats, setMlStats] = useState({ faceFrames: 0, visibleFaceFrames: 0, postures: [] });
+
+    // Final Payload
+    const [finalScore, setFinalScore] = useState(null);
+    const [finalDataPayload, setFinalDataPayload] = useState(null);
 
     const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation"];
 
@@ -115,18 +126,97 @@ export function ConfidenceCoachUI() {
         return () => clearInterval(interval);
     }, [sessionStatus, startTime]);
 
-    const startSession = () => {
+    const startSession = async () => {
         if (sessionStatus !== "idle") return;
         setSessionId(crypto.randomUUID());
         setStartTime(Date.now());
         setUserAnswer("");
+        setFinalScore(null);
+        setFinalDataPayload(null);
+        setMlStats({ faceFrames: 0, visibleFaceFrames: 0, postures: [] });
         setSessionStatus("analyzing");
+
+        // Start Web Audio
+        const audioAnalyzer = new AudioAnalyzer();
+        audioAnalyzerRef.current = audioAnalyzer;
+        try {
+            await audioAnalyzer.start();
+        } catch (e) {
+            console.error("Audio analyzer failed to start", e);
+        }
+
+        // Start MediaPipe
+        if (videoRef.current) {
+            mediaPipeCleanupRef.current = startMediaPipeStream(videoRef.current, (results) => {
+                setMlStats(prev => {
+                    const isFaceVisible = results.face && results.face.faceBlendshapes && results.face.faceBlendshapes.length > 0;
+                    return {
+                        faceFrames: prev.faceFrames + 1,
+                        visibleFaceFrames: prev.visibleFaceFrames + (isFaceVisible ? 1 : 0),
+                        postures: [...prev.postures, results.posture]
+                    };
+                });
+            });
+        }
     };
 
     const endSession = () => {
         if (sessionStatus !== "analyzing") return;
         setSessionStatus("ended");
-        // We will process timeTaken and scores in Plan 1.3
+
+        // Stop Analyzers
+        if (mediaPipeCleanupRef.current) {
+            mediaPipeCleanupRef.current();
+            mediaPipeCleanupRef.current = null;
+        }
+
+        let audioMetrics = { avgVolume: 0, volumeVariance: 0 };
+        if (audioAnalyzerRef.current) {
+            audioMetrics = audioAnalyzerRef.current.stop();
+            audioAnalyzerRef.current = null;
+        }
+
+        // Calculate Time
+        const endTimeStamp = Date.now();
+        const timeTaken = Math.floor((endTimeStamp - startTime) / 1000);
+
+        // Aggregate Score (0.0 to 10.0)
+        let score = 5.0; // Base score
+
+        // 1. Face Visibility Contribution (+ up to 2.5)
+        const faceVisRatio = mlStats.faceFrames > 0 ? (mlStats.visibleFaceFrames / mlStats.faceFrames) : 0;
+        score += (faceVisRatio * 2.5);
+
+        // 2. Posture Contribution (+ up to 1.5)
+        const validPostures = mlStats.postures.filter(p => p !== "unknown");
+        const standingCount = validPostures.filter(p => p === "standing").length;
+        const standingRatio = validPostures.length > 0 ? (standingCount / validPostures.length) : 0;
+        // Reward standing or active sitting posture
+        score += (standingRatio * 1.5);
+
+        // 3. Audio Volume Stability (+ up to 1.0)
+        // If volume variance is extremely high, they are shouting/whispering. If smooth, they are stable.
+        const volStability = audioMetrics.volumeVariance > 0 ? Math.min(1.0, 100 / (audioMetrics.volumeVariance + 1)) : 0.5;
+        score += volStability;
+
+        // Cap score at 10.0 and format to 1 decimal
+        const finalCalculatedScore = Math.min(10.0, Math.max(0.0, Math.round(score * 10) / 10));
+        setFinalScore(finalCalculatedScore);
+
+        // Assemble Final Payload Contract (Plan 1.3 requirement)
+        const payload = {
+            moduleId: "confidenceCoach",
+            gameType: "voice",
+            sessionId: sessionId || crypto.randomUUID(),
+            question: question,
+            userAnswer: userAnswer.trim() || "(No transcript captured)",
+            correctAnswer: "completed",
+            isCorrect: true,
+            score: finalCalculatedScore,
+            timeTaken: timeTaken
+        };
+
+        setFinalDataPayload(payload);
     };
 
     return (
@@ -182,8 +272,8 @@ export function ConfidenceCoachUI() {
                                     <Mic size={18} className="text-primary" /> Voice Commands
                                 </h3>
                                 <ul className="text-sm space-y-2 text-muted-foreground">
-                                    <li>Say <strong className="text-foreground">"Start"</strong> to begin analysis.</li>
-                                    <li>Say <strong className="text-foreground">"END This Speech"</strong> to finish.</li>
+                                    <li>Say <strong className="text-foreground">&quot;Start&quot;</strong> to begin analysis.</li>
+                                    <li>Say <strong className="text-foreground">&quot;END This Speech&quot;</strong> to finish.</li>
                                 </ul>
                             </div>
                         </div>
@@ -231,20 +321,34 @@ export function ConfidenceCoachUI() {
 
                 {sessionStatus === "ended" && (
                     <div className="flex flex-col h-full justify-center items-center text-center space-y-4">
-                        <CheckCircle size={64} className="text-green-500 mb-2" />
-                        <h2 className="text-2xl font-bold">Session Complete!</h2>
-                        <p className="text-muted-foreground">
-                            Processing your holistic confidence score...
-                        </p>
-                        <button
-                            onClick={() => {
-                                setSessionStatus("idle");
-                                setUserAnswer("");
-                            }}
-                            className="mt-6 px-6 py-2 border border-border rounded-lg hover:bg-secondary transition-colors"
-                        >
-                            Start New Session
-                        </button>
+                        {finalScore === null ? (
+                            <>
+                                <Loader2 size={48} className="text-primary animate-spin mb-4" />
+                                <h2 className="text-2xl font-bold">Processing Analysis...</h2>
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle size={64} className="text-green-500 mb-2" />
+                                <h2 className="text-2xl font-bold">Session Complete!</h2>
+
+                                <div className="bg-secondary/30 rounded-xl p-6 w-full max-w-sm mt-4 border border-border">
+                                    <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Holistic Confidence Score</div>
+                                    <div className="text-6xl font-black text-primary mb-2">{finalScore}<span className="text-2xl text-muted-foreground">/10</span></div>
+                                    <div className="text-sm text-muted-foreground">Time: {finalDataPayload?.timeTaken}s</div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setSessionStatus("idle");
+                                        setUserAnswer("");
+                                        setFinalScore(null);
+                                    }}
+                                    className="mt-6 px-6 py-2 border border-border rounded-lg hover:bg-secondary transition-colors"
+                                >
+                                    Start New Session
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
