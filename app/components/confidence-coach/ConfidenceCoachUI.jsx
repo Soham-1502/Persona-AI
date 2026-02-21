@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Mic, Video, Square, Play, CheckCircle, Loader2 } from "lucide-react";
 import { startMediaPipeStream } from "./MediaPipeAnalyzer";
 import { AudioAnalyzer } from "./AudioAnalyzer";
+import { getAuthToken } from "@/lib/auth-client";
 
 export function ConfidenceCoachUI() {
     // Video state
@@ -217,6 +218,16 @@ export function ConfidenceCoachUI() {
         };
 
         setFinalDataPayload(payload);
+
+        // Fire-and-forget asynchronous save (Plan 1.4 requirement)
+        fetch('/api/confidence-coach/session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify(payload),
+        }).catch(err => console.error("Failed to save confidence coach session:", err));
     };
 
     return (
