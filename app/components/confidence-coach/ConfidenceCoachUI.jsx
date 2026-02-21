@@ -30,6 +30,7 @@ export function ConfidenceCoachUI() {
     const audioAnalyzerRef = useRef(null);
     const mediaPipeCleanupRef = useRef(null);
     const [mlStats, setMlStats] = useState({ faceFrames: 0, visibleFaceFrames: 0, postures: [], positiveFrames: 0, tenseFrames: 0, emotionMeasuredFrames: 0 });
+    const [audioStats, setAudioStats] = useState(null);
 
     // Final Payload
     const [finalScore, setFinalScore] = useState(null);
@@ -246,6 +247,7 @@ export function ConfidenceCoachUI() {
         setInterimAnswer(""); // wipe interim state
         setFinalScore(null);
         setFinalDataPayload(null);
+        setAudioStats(null);
         setMlStats({ faceFrames: 0, visibleFaceFrames: 0, postures: [], positiveFrames: 0, tenseFrames: 0, emotionMeasuredFrames: 0 });
 
         // Flush any lingering pre-session transcripts from WebSpeech by aborting and triggering auto-restart
@@ -299,6 +301,7 @@ export function ConfidenceCoachUI() {
             audioMetrics = audioAnalyzerRef.current.stop();
             audioAnalyzerRef.current = null;
         }
+        setAudioStats(audioMetrics);
 
         // Calculate Time
         const endTimeStamp = Date.now();
@@ -506,12 +509,63 @@ export function ConfidenceCoachUI() {
                         ) : (
                             <>
                                 <CheckCircle size={64} className="text-green-500 mb-2" />
-                                <h2 className="text-2xl font-bold">Session Complete!</h2>
+                                <h2 className="text-3xl font-bold">Analysis Complete</h2>
+                                <p className="text-muted-foreground">Here is the detailed breakdown of your performance.</p>
 
-                                <div className="bg-secondary/30 rounded-xl p-6 w-full max-w-sm mt-4 border border-border">
-                                    <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Holistic Confidence Score</div>
-                                    <div className="text-6xl font-black text-primary mb-2">{finalScore}<span className="text-2xl text-muted-foreground">/10</span></div>
-                                    <div className="text-sm text-muted-foreground">Time: {finalDataPayload?.timeTaken}s</div>
+                                <div className="w-full max-w-4xl mt-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                        {/* Eye Contact Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Eye Contact</span>
+                                            <span className="text-2xl font-black text-primary">{mlStats.faceFrames > 0 ? Math.round((mlStats.visibleFaceFrames / mlStats.faceFrames) * 100) : 0}%</span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Time looking at camera</span>
+                                        </div>
+
+                                        {/* Emotion Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Expression</span>
+                                            <span className="text-2xl font-black text-primary">{mlStats.positiveFrames > mlStats.tenseFrames ? "Positive" : (mlStats.tenseFrames > 0 ? "Tense" : "Neutral")}</span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Dominant facial emotion</span>
+                                        </div>
+
+                                        {/* Pacing Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Vocal Pacing</span>
+                                            <span className="text-2xl font-black text-primary">{audioStats?.volumeVariance < 20 ? "Steady" : "Dynamic"}</span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Volume stability over time</span>
+                                        </div>
+
+                                        {/* Posture Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Posture</span>
+                                            <span className="text-2xl font-black text-primary">
+                                                {(() => {
+                                                    const valid = mlStats.postures.filter(p => p !== "unknown");
+                                                    if (valid.length === 0) return "Unknown";
+                                                    const standing = valid.filter(p => p === "standing").length;
+                                                    return standing > valid.length / 2 ? "Standing" : "Sitting";
+                                                })()}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Dominant physical stance</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Big Score Card */}
+                                    <div className="bg-primary/10 rounded-2xl p-8 border border-primary/20 flex flex-col items-center shadow-lg relative overflow-hidden">
+                                        <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+                                        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+
+                                        <div className="text-sm font-bold text-primary uppercase tracking-widest mb-2 z-10">Holistic Confidence Score</div>
+                                        <div className="flex items-baseline gap-1 z-10">
+                                            <span className="text-7xl font-black text-primary drop-shadow-sm">{finalScore}</span>
+                                            <span className="text-3xl text-primary/50 font-bold">/10</span>
+                                        </div>
+                                        <div className="text-sm text-primary/80 mt-4 font-medium flex items-center gap-2 z-10">
+                                            <span>Difficulty: <strong className="text-primary">{difficulty}</strong></span>
+                                            <span className="opacity-50">•</span>
+                                            <span>Duration: <strong className="text-primary">{finalDataPayload?.timeTaken}s</strong></span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <button
