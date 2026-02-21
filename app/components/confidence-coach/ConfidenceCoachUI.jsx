@@ -112,6 +112,8 @@ export function ConfidenceCoachUI() {
     }, [keywordDetection, sessionStatus]);
 
     useEffect(() => {
+        let active = true;
+
         // Initialize Web Speech API
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) return;
@@ -121,6 +123,7 @@ export function ConfidenceCoachUI() {
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
+            recognition.lang = "en-US";
             recognitionRef.current = recognition;
         }
 
@@ -154,7 +157,19 @@ export function ConfidenceCoachUI() {
         };
 
         recognition.onerror = (event) => {
-            console.error("Speech recognition error", event.error);
+            if (event.error !== "no-speech") {
+                console.error("Speech recognition error", event.error);
+            }
+        };
+
+        recognition.onend = () => {
+            if (active) {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    // Ignore already started errors
+                }
+            }
         };
 
         try {
@@ -164,10 +179,12 @@ export function ConfidenceCoachUI() {
         }
 
         return () => {
+            active = false;
             try {
                 recognition.stop();
             } catch (e) { }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionStatus]);
 
     // AI Question Generation Effect
