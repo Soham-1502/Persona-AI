@@ -4,6 +4,25 @@ let faceLandmarker = null;
 let poseLandmarker = null;
 let isInitializing = false;
 
+// Subdue MediaPipe WASM informational logs
+if (typeof window !== 'undefined') {
+    const originalConsoleError = console.error;
+    console.error = (...args) => {
+        if (typeof args[0] === 'string' && args[0].includes('TensorFlow Lite XNNPACK delegate')) {
+            return;
+        }
+        originalConsoleError(...args);
+    };
+
+    const originalConsoleWarn = console.warn;
+    console.warn = (...args) => {
+        if (typeof args[0] === 'string' && (args[0].includes('XNNPACK') || args[0].includes('WASM'))) {
+            return;
+        }
+        originalConsoleWarn(...args);
+    };
+}
+
 // Load models singleton
 export async function initMediaPipeModels() {
     if (faceLandmarker && poseLandmarker) return;
