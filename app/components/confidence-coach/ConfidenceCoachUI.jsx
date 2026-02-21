@@ -13,7 +13,9 @@ export function ConfidenceCoachUI() {
 
     // Session state
     const [sessionStatus, setSessionStatus] = useState("idle"); // idle, analyzing, ended
-    const [question, setQuestion] = useState("Job Interview"); // default scenario
+    const [scenarioCategory, setScenarioCategory] = useState("Job Interview"); // default scenario category
+    const [question, setQuestion] = useState(""); // generated question string
+    const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
     const [sessionId, setSessionId] = useState(null);
     const [startTime, setStartTime] = useState(null);
 
@@ -112,6 +114,40 @@ export function ConfidenceCoachUI() {
             }
         };
     }, [sessionStatus]);
+
+    // AI Question Generation Effect
+    useEffect(() => {
+        let active = true;
+        const fetchQuestion = async () => {
+            if (sessionStatus !== "idle") return; // don't refetch if already running
+            setIsGeneratingQuestion(true);
+            try {
+                const res = await fetch('/api/confidence-coach/generate-questions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scenarioType: scenarioCategory })
+                });
+                const data = await res.json();
+                if (active) {
+                    if (data.success && data.question) {
+                        setQuestion(data.question);
+                    } else {
+                        setQuestion(`Please provide your best response for a typical ${scenarioCategory} scenario.`);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch generated question:", err);
+                if (active) {
+                    setQuestion(`Please provide your best response for a typical ${scenarioCategory} scenario.`);
+                }
+            } finally {
+                if (active) setIsGeneratingQuestion(false);
+            }
+        };
+
+        fetchQuestion();
+        return () => { active = false; };
+    }, [scenarioCategory, sessionStatus]);
 
     // Live Timer
     const [timeElapsed, setTimeElapsed] = useState(0);
@@ -269,14 +305,26 @@ export function ConfidenceCoachUI() {
 
                             <label className="block text-sm font-medium mb-2">Scenario Type</label>
                             <select
-                                value={question}
-                                onChange={(e) => setQuestion(e.target.value)}
-                                className="w-full p-3 rounded-lg border border-input bg-background mb-8"
+                                value={scenarioCategory}
+                                onChange={(e) => setScenarioCategory(e.target.value)}
+                                className="w-full p-3 rounded-lg border border-input bg-background mb-4"
+                                disabled={isGeneratingQuestion}
                             >
                                 {scenarios.map(s => (
                                     <option key={s} value={s}>{s}</option>
                                 ))}
                             </select>
+
+                            {isGeneratingQuestion ? (
+                                <div className="text-sm text-muted-foreground animate-pulse mb-8 flex items-center gap-2">
+                                    <Loader2 size={16} className="animate-spin" /> Generating specific practice question...
+                                </div>
+                            ) : (
+                                <div className="text-sm border border-border bg-secondary/10 p-4 rounded-lg mb-8 shadow-inner">
+                                    <strong className="block mb-1 text-xs uppercase text-muted-foreground">Practice Question:</strong>
+                                    <p className="text-foreground">{question}</p>
+                                </div>
+                            )}
 
                             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
                                 <h3 className="font-semibold flex items-center gap-2 mb-2">
@@ -303,10 +351,13 @@ export function ConfidenceCoachUI() {
                     <div className="flex flex-col h-full">
                         <div className="flex-1">
                             <h2 className="text-2xl font-bold mb-2 text-primary">Analysis in Progress...</h2>
-                            <p className="text-muted-foreground mb-4">Scenario: <strong>{question}</strong></p>
+                            <div className="mb-4">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scenario:</span> <strong className="text-sm">{scenarioCategory}</strong>
+                                <p className="text-sm mt-1 bg-secondary/20 p-3 rounded-md border border-border font-medium italic">&quot;{question}&quot;</p>
+                            </div>
 
-                            <div className="bg-secondary/30 rounded-lg p-4 mb-4 border border-border h-[200px] overflow-y-auto">
-                                <h3 className="text-sm font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Live Transcript</h3>
+                            <div className="bg-secondary/30 rounded-lg p-4 mb-4 border border-border h-[160px] overflow-y-auto">
+                                <h3 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Live Transcript</h3>
                                 <p className="text-sm">{userAnswer}</p>
                             </div>
 
