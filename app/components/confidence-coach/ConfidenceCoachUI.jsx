@@ -242,9 +242,18 @@ export function ConfidenceCoachUI() {
         setSessionId(crypto.randomUUID());
         setStartTime(Date.now());
         setUserAnswer("");
+        setInterimAnswer(""); // wipe interim state
         setFinalScore(null);
         setFinalDataPayload(null);
         setMlStats({ faceFrames: 0, visibleFaceFrames: 0, postures: [] });
+
+        // Flush any lingering pre-session transcripts from WebSpeech by aborting and triggering auto-restart
+        if (recognitionRef.current) {
+            try {
+                recognitionRef.current.abort();
+            } catch (e) { }
+        }
+
         setSessionStatus("analyzing");
 
         // Start Web Audio
