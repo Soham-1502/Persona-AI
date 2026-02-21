@@ -1,18 +1,18 @@
 # ROADMAP.md
 
-> **Current Phase**: Not started
+> **Current Phase**: Phase 2 (Planning)
 > **Milestone**: v1.0 (Confidence Coach Module)
 
 ## Must-Haves (from SPEC)
 - [ ] Real-time browser-based multi-modal analysis (face, voice, body)
-- [ ] Hands-free voice commands ("Start", "END This Speech")
-- [ ] Backend integration for persisting session stats
+- [x] Hands-free voice commands ("Start", "END This Speech")
+- [x] Backend integration for persisting session stats
 - [ ] Dashboard integration for displaying progress
 
 ## Phases
 
 ### Phase 1: MVP - Core Multi-modal Analysis & Voice Commands
-**Status**: ⬜ Not Started
+**Status**: ✅ Complete
 **Objective**: Basic facial/voice analysis, simple voice commands ("Start", "End"), baseline confidence scoring, and pre-written scenario questions.
 **Requirements**: REQ-01, REQ-02
 
