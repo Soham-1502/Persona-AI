@@ -28,7 +28,7 @@ export function ConfidenceCoachUI() {
     // ML Analyzers
     const audioAnalyzerRef = useRef(null);
     const mediaPipeCleanupRef = useRef(null);
-    const [mlStats, setMlStats] = useState({ faceFrames: 0, visibleFaceFrames: 0, postures: [], openFrames: 0, opennessMeasuredFrames: 0 });
+    const [mlStats, setMlStats] = useState({ faceFrames: 0, visibleFaceFrames: 0, postures: [] });
 
     // Final Payload
     const [finalScore, setFinalScore] = useState(null);
@@ -244,7 +244,7 @@ export function ConfidenceCoachUI() {
         setUserAnswer("");
         setFinalScore(null);
         setFinalDataPayload(null);
-        setMlStats({ faceFrames: 0, visibleFaceFrames: 0, postures: [], openFrames: 0, opennessMeasuredFrames: 0 });
+        setMlStats({ faceFrames: 0, visibleFaceFrames: 0, postures: [] });
         setSessionStatus("analyzing");
 
         // Start Web Audio
@@ -264,9 +264,7 @@ export function ConfidenceCoachUI() {
                     return {
                         faceFrames: prev.faceFrames + 1,
                         visibleFaceFrames: prev.visibleFaceFrames + (isFaceVisible ? 1 : 0),
-                        postures: [...prev.postures, results.posture],
-                        openFrames: prev.openFrames + (results.openness === "open" ? 1 : 0),
-                        opennessMeasuredFrames: prev.opennessMeasuredFrames + (results.openness !== "unknown" ? 1 : 0)
+                        postures: [...prev.postures, results.posture]
                     };
                 });
             });
@@ -294,11 +292,11 @@ export function ConfidenceCoachUI() {
         const timeTaken = Math.floor((endTimeStamp - startTime) / 1000);
 
         // Aggregate Score (0.0 to 10.0)
-        let score = 4.0; // Base score (lowered slightly to allow openness points)
+        let score = 5.0; // Base score
 
-        // 1. Face Visibility Contribution (+ up to 2.5)
+        // 1. Face Visibility Contribution (+ up to 3.0)
         const faceVisRatio = mlStats.faceFrames > 0 ? (mlStats.visibleFaceFrames / mlStats.faceFrames) : 0;
-        score += (faceVisRatio * 2.5);
+        score += (faceVisRatio * 3.0);
 
         // 2. Posture Contribution (+ up to 1.0)
         const validPostures = mlStats.postures.filter(p => p !== "unknown");
@@ -306,14 +304,7 @@ export function ConfidenceCoachUI() {
         const standingRatio = validPostures.length > 0 ? (standingCount / validPostures.length) : 0;
         score += (standingRatio * 1.0);
 
-        // 3. Openness Contribution (+ up to 1.5)
-        let opennessRatio = 0.5; // neutral fallback
-        if (mlStats.opennessMeasuredFrames > 0) {
-            opennessRatio = mlStats.openFrames / mlStats.opennessMeasuredFrames;
-        }
-        score += (opennessRatio * 1.5);
-
-        // 4. Audio Volume Stability (+ up to 1.0)
+        // 3. Audio Volume Stability (+ up to 1.0)
         // If volume variance is extremely high, they are shouting/whispering. If smooth, they are stable.
         const volStability = audioMetrics.volumeVariance > 0 ? Math.min(1.0, 100 / (audioMetrics.volumeVariance + 1)) : 0.5;
         score += volStability;
