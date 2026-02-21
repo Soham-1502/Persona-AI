@@ -163,7 +163,7 @@ export function ConfidenceCoachUI() {
         };
 
         recognition.onend = () => {
-            if (active) {
+            if (active && sessionStatus !== "ended") {
                 try {
                     recognition.start();
                 } catch (e) {
@@ -172,10 +172,12 @@ export function ConfidenceCoachUI() {
             }
         };
 
-        try {
-            recognition.start();
-        } catch (e) {
-            // Already started
+        if (sessionStatus !== "ended") {
+            try {
+                recognition.start();
+            } catch (e) {
+                // Already started
+            }
         }
 
         return () => {
