@@ -1,5 +1,6 @@
 import { DateFilter, Notifications, Theme } from './HeaderComponents';
 import { useEffect, useState } from 'react';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export default function Header({ DateValue, onDateChange, tempDate, showDateFilter = true }) {
     const [userName, setUserName] = useState('User');
@@ -17,21 +18,49 @@ export default function Header({ DateValue, onDateChange, tempDate, showDateFilt
     }, []);
 
     return (
-        <header className='h-20 w-full bg-background text-foreground p-2 px-4 flex justify-between items-center'>
-            <div>
-                <p className='text-xl font-bold'>Welcome <span className='text-primary'>{userName}</span></p>
-                <span className='text-sm'>Start you <span className='font-medium'>Persona</span><span className='text-primary font-bold'>AI</span> Journey</span>
+        <header className='w-full bg-background text-foreground px-4 z-50 sticky top-0'>
+
+            {/* Main row: hamburger | welcome | [date desktop] | buttons */}
+            <div className="h-16 flex flex-row items-center justify-between gap-2">
+                {/* Left: hamburger (mobile) + welcome text */}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <SidebarTrigger className="md:hidden shrink-0" />
+                    <div className="text-left min-w-0">
+                        <p className='text-base md:text-xl font-bold truncate'>
+                            Welcome <span className='text-primary'>{userName}</span>
+                        </p>
+                        <span className='text-sm truncate block'>
+                            Start your <span className='font-medium'>Persona</span><span className='text-primary font-bold'>AI</span> Journey
+                        </span>
+                    </div>
+                </div>
+
+                {/* Center: date label (desktop only) */}
+                <div className="hidden md:block shrink-0">
+                    <p className='text-sm font-bold'>Date Set : {tempDate}</p>
+                </div>
+
+                {/* Right: DateFilter (sm+) + Notifications + Theme */}
+                <div className='h-full flex items-center gap-2 shrink-0'>
+                    {showDateFilter && (
+                        <div className="hidden sm:block">
+                            <DateFilter value={DateValue} onValueChange={onDateChange} />
+                        </div>
+                    )}
+                    <Notifications />
+                    <Theme />
+                </div>
             </div>
-            <div>
-                <p className='text-sm font-bold'>
-                    Date Set : {tempDate}
-                </p>
-            </div>
-            <div className='w-fit h-20 flex items-center gap-2'>
-                {showDateFilter && <DateFilter value={DateValue} onValueChange={onDateChange} />}
-                <Notifications />
-                <Theme />
-            </div>
+
+            {/* Second row — mobile only: DateFilter aligned with welcome text */}
+            {showDateFilter && (
+                <div className="sm:hidden pb-3 flex items-center">
+                    {/* Spacer matches SidebarTrigger width (h-7 w-7 button = ~28px) + gap-2 (8px) */}
+                    <div className="w-[calc(1.75rem+0.5rem)] shrink-0" />
+                    <DateFilter value={DateValue} onValueChange={onDateChange} />
+                </div>
+            )}
+
         </header>
     )
 }
