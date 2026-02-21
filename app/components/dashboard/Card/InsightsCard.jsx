@@ -1,4 +1,6 @@
 // components/dashboard/InsightsCard.jsx
+'use client'
+
 import React from "react";
 import {
     Card,
@@ -10,6 +12,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function Chip({ text }) {
     return (
@@ -19,7 +22,42 @@ function Chip({ text }) {
     );
 }
 
-export default function InsightsCard() {
+/**
+ * InsightsCard
+ *
+ * Props:
+ *   insights  – { pattern, snapshot, suggestion, suggestionModule }
+ *   streak    – { current, longest }
+ *   isLoading – boolean
+ */
+export default function InsightsCard({ insights, streak, isLoading }) {
+    if (isLoading) {
+        return (
+            <Card className="h-full flex flex-col justify-between border border-border bg-card/95">
+                <CardHeader className="px-5 pt-0 pb-0">
+                    <CardTitle className="text-sm font-semibold text-foreground">
+                        PersonaAI Insights
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground">
+                        Loading your insights…
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col items-start gap-4 px-5">
+                    <Skeleton className="h-12 w-full rounded-md" />
+                    <Skeleton className="h-6 w-3/4 rounded-full" />
+                    <Skeleton className="h-10 w-full rounded-md" />
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // Fallback values when no data is available
+    const pattern = insights?.pattern ?? "Start your first session to see your activity pattern!";
+    const snapshot = insights?.snapshot ?? [];
+    const suggestion = insights?.suggestion ?? "Keep up the great work! Try a new module today.";
+    const suggestionModule = insights?.suggestionModule ?? null;
+    const currentStreak = streak?.current ?? 0;
+
     return (
         <Card className="h-full flex flex-col justify-between border border-border bg-card/95">
             {/* header matches ActivityChart */}
@@ -39,52 +77,67 @@ export default function InsightsCard() {
                         This week&apos;s pattern
                     </p>
                     <p className="text-sm text-foreground/90">
-                        You&apos;re most active in{" "}
-                        <span className="font-semibold">Micro‑Learning</span> while{" "}
-                        <span className="font-semibold">Confidence Coach</span> has fewer
-                        sessions this week.
+                        {pattern}
                     </p>
                 </div>
 
                 <Separator className="bg-border/60" />
 
-                {/* Snapshot chips – visually like compact stats */}
+                {/* Snapshot chips */}
                 <div className="w-full flex flex-col gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Snapshot
                     </p>
-                    <div className="flex flex-wrap gap-1">
-                        <Chip text="Top module • Micro‑Learning" />
-                        <Chip text="Streak • 7 days" />
-                        <Chip text="Peak day • Wed" />
-                    </div>
+                    {snapshot.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                            {snapshot.map((chip, i) => (
+                                <Chip key={i} text={chip} />
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground">No activity yet — complete a session to see your snapshot.</p>
+                    )}
                 </div>
 
                 <Separator className="bg-border/60" />
 
-                {/* AI Suggests area – similar weight to chart filters row */}
+                {/* AI Suggests area */}
                 <div className="w-full flex flex-col gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         AI suggests
                     </p>
                     <div className="flex items-center justify-between gap-3">
                         <p className="text-sm text-foreground/90">
-                            Start a 10‑min{" "}
-                            <span className="font-semibold">Confidence Coach</span> session to
-                            balance your practice.
+                            {suggestionModule ? (
+                                <>
+                                    {suggestion.split(suggestionModule)[0]}
+                                    <span className="font-semibold">{suggestionModule}</span>
+                                    {suggestion.split(suggestionModule)[1]}
+                                </>
+                            ) : (
+                                suggestion
+                            )}
                         </p>
-                        <CardAction>
-                            <button className="px-4 py-1.5 text-xs font-medium rounded-full bg-persona-purple text-white hover:bg-persona-purple/90">
-                                Start
-                            </button>
-                        </CardAction>
+                        {suggestionModule && (
+                            <CardAction>
+                                <button onClick={() => {
+                                    if (insights?.suggestionRoute) {
+                                        window.location.href = insights.suggestionRoute;
+                                    }
+                                }} className="px-4 py-1.5 text-xs font-medium rounded-full bg-persona-purple text-white hover:bg-persona-purple/90 whitespace-nowrap">
+                                    Start
+                                </button>
+                            </CardAction>
+                        )}
                     </div>
                 </div>
             </CardContent>
 
             <CardFooter className="px-5 pb-4 pt-0">
                 <p className="text-[11px] text-muted-foreground">
-                    Updated from your last 7 days of activity.
+                    {currentStreak > 0
+                        ? `🔥 ${currentStreak}-day streak • Updated from your last 7 days of activity.`
+                        : "Updated from your last 7 days of activity."}
                 </p>
             </CardFooter>
         </Card>
