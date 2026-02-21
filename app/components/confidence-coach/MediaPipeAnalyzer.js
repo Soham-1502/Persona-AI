@@ -95,6 +95,40 @@ function determinePosture(poseLandmarks) {
     return "sitting"; // Default assumption if hips are seen but knees aren't, or knees are leveled
 }
 
+// Openness heuristic (Wrist vs Shoulder distance)
+function evaluateOpenness(poseLandmarks) {
+    if (!poseLandmarks || poseLandmarks.length === 0) return "unknown";
+
+    const leftShoulder = poseLandmarks[11];
+    const rightShoulder = poseLandmarks[12];
+    const leftWrist = poseLandmarks[15];
+    const rightWrist = poseLandmarks[16];
+
+    // Check visibility
+    if (
+        (leftShoulder?.visibility < 0.5 && rightShoulder?.visibility < 0.5) ||
+        (leftWrist?.visibility < 0.5 && rightWrist?.visibility < 0.5)
+    ) {
+        return "unknown";
+    }
+
+    const shoulderDist = Math.abs((leftShoulder?.x || 0) - (rightShoulder?.x || 0));
+    const wristDist = Math.abs((leftWrist?.x || 0) - (rightWrist?.x || 0));
+
+    // Guard against divide by 0 or completely sideways angle
+    if (shoulderDist < 0.05) return "unknown";
+
+    const ratio = wristDist / shoulderDist;
+
+    if (ratio >= 1.2) {
+        return "open";
+    } else if (ratio < 0.5) {
+        return "closed";
+    }
+
+    return "neutral";
+}
+
 // Helper to continuously run tracking
 export function startMediaPipeStream(videoElement, onResults) {
     let active = true;
@@ -114,6 +148,7 @@ export function startMediaPipeStream(videoElement, onResults) {
             let faceResult = null;
             let poseResult = null;
             let posture = "unknown";
+            let openness = "unknown";
 
             if (faceLandmarker) {
                 faceResult = faceLandmarker.detectForVideo(videoElement, currentTimeMs);
@@ -122,6 +157,7 @@ export function startMediaPipeStream(videoElement, onResults) {
                 poseResult = poseLandmarker.detectForVideo(videoElement, currentTimeMs);
                 if (poseResult && poseResult.landmarks && poseResult.landmarks.length > 0) {
                     posture = determinePosture(poseResult.landmarks[0]);
+                    openness = evaluateOpenness(poseResult.landmarks[0]);
                 }
             }
 
@@ -129,7 +165,8 @@ export function startMediaPipeStream(videoElement, onResults) {
             onResults({
                 face: faceResult,
                 pose: poseResult,
-                posture
+                posture,
+                openness
             });
         }
 
