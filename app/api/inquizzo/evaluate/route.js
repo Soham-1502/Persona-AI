@@ -16,12 +16,13 @@ export async function POST(req) {
     const prompt = `Question: ${question}
 User Answer: ${userAnswer}
 
-Evaluate if the answer is correct. Respond ONLY in JSON:
-{"isCorrect": true/false, "correctAnswer": "...", "feedback": "..."}`;
+Evaluate if the answer is accurate. Award points based on conceptual correctness, even if the phrasing differs. 
+Respond ONLY in JSON:
+{"isCorrect": true/false, "explanation": "A brief explanation of why the answer is correct or what was missing.", "correctAnswer": "..."}`;
 
     const completion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "llama-3.3-70b-versatile", // ✅ Updated model
+      model: "llama-3.3-70b-versatile",
       temperature: 0.3,
     });
 
@@ -35,10 +36,14 @@ Evaluate if the answer is correct. Respond ONLY in JSON:
       evaluation.correctAnswer?.toLowerCase() || "",
     );
 
-    // Calculate score
+    // Calculate score: Max 15 points, proportional to similarity if isCorrect is true
+    // If AI says isCorrect but similarity is low (diverse phrasing), give at least a baseline score.
     let score = 0;
     if (evaluation.isCorrect) {
-      score = timeTaken < 10 ? 10 : timeTaken < 20 ? 7 : 5;
+      // Base score 7 + up to 8 points for similarity
+      score = Math.round(7 + (similarity * 8));
+      // Cap at 15
+      score = Math.min(score, 15);
     }
 
     // Update user stats
@@ -48,7 +53,8 @@ Evaluate if the answer is correct. Respond ONLY in JSON:
       result: {
         isCorrect: evaluation.isCorrect,
         correctAnswer: evaluation.correctAnswer,
-        feedback: evaluation.feedback,
+        explanation: evaluation.explanation,
+        feedback: evaluation.explanation, // Alias for backward compatibility if needed
         similarity: Math.round(similarity * 100),
         score,
       },

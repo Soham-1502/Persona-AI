@@ -1,7 +1,31 @@
+// import mongoose from "mongoose";
+
+// const userAttemptSchema = new mongoose.Schema({
+//   username: { type: String, required: true },
+//   question: String,
+//   userAnswer: String,
+//   correctAnswer: String,
+//   similarity: Number,
+//   score: Number,
+//   timestamp: {
+//     type: Date,
+//     default: Date.now,
+//   },
+// });
+
+// const UserAttempt = mongoose.model("UserAttempt", userAttemptSchema);
+// export default UserAttempt;
+
 // models/UserAttempt.js
 import mongoose from "mongoose";
 
 const userAttemptSchema = new mongoose.Schema({
+  // Module identifier (e.g. "inQuizzo")
+  moduleId: {
+    type: String,
+    default: 'inQuizzo'
+  },
+
   // Link to User
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -13,18 +37,6 @@ const userAttemptSchema = new mongoose.Schema({
     required: true
   },
 
-  // ── Module identifier ──────────────────────────────────────────────────────
-  // Which product/module this attempt belongs to.
-  // inQuizzo attempts are created by the existing quiz API (gameType: quiz/mcq/voice).
-  // socialMentor attempts are created by app/api/mentor/route.js.
-  // microLearning and confidenceCoach attempts are created by their respective APIs.
-  moduleId: {
-    type: String,
-    enum: ['inQuizzo', 'socialMentor', 'microLearning', 'confidenceCoach'],
-    required: true,
-    default: 'inQuizzo', // preserves backward compatibility for existing quiz attempts
-  },
-
   // Game Session Info
   sessionId: {
     type: String,
@@ -32,11 +44,11 @@ const userAttemptSchema = new mongoose.Schema({
   },
   gameType: {
     type: String,
-    enum: ['quiz', 'mcq', 'voice', 'chat', 'lesson'],
+    enum: ['quiz', 'mcq', 'voice'],
     default: 'quiz'
   },
 
-  // Question / Interaction Details
+  // Question Details
   questionId: String,
   question: {
     type: String,
@@ -44,7 +56,7 @@ const userAttemptSchema = new mongoose.Schema({
   },
   questionType: {
     type: String,
-    enum: ['text', 'voice', 'multiple-choice', 'open-ended'],
+    enum: ['text', 'voice', 'multiple-choice'],
     default: 'text'
   },
   difficulty: {
@@ -89,11 +101,11 @@ const userAttemptSchema = new mongoose.Schema({
     default: 10
   },
   timeTaken: {
-    type: Number, // seconds
+    type: Number, // in seconds
     default: 0
   },
 
-  // Voice Specific
+  // Voice Specific (if applicable)
   voiceData: {
     audioUrl: String,
     transcription: String,
@@ -112,19 +124,18 @@ const userAttemptSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// ── Indexes ────────────────────────────────────────────────────────────────────
+// Index for better query performance
 userAttemptSchema.index({ userId: 1, timestamp: -1 });
-userAttemptSchema.index({ userId: 1, moduleId: 1, timestamp: -1 }); // for per-module aggregation
 userAttemptSchema.index({ sessionId: 1 });
 userAttemptSchema.index({ username: 1, gameType: 1 });
 
-// ── Virtual ────────────────────────────────────────────────────────────────────
+// Virtual for score percentage
 userAttemptSchema.virtual('scorePercentage').get(function () {
   if (this.maxPossibleScore === 0) return 0;
   return Math.round((this.score / this.maxPossibleScore) * 100);
 });
 
-// ── Static methods ─────────────────────────────────────────────────────────────
+// Static method to get user's game history
 userAttemptSchema.statics.getUserHistory = function (userId, limit = 10) {
   return this.find({ userId })
     .sort({ timestamp: -1 })
@@ -132,13 +143,13 @@ userAttemptSchema.statics.getUserHistory = function (userId, limit = 10) {
     .populate('userId', 'username email gameStats');
 };
 
+// Static method to get session attempts
 userAttemptSchema.statics.getSessionAttempts = function (sessionId) {
-  return this.find({ sessionId }).sort({ timestamp: 1 });
+  return this.find({ sessionId })
+    .sort({ timestamp: 1 });
 };
 
 userAttemptSchema.set('toJSON', { virtuals: true });
 
-const UserAttempt = mongoose.models.UserAttempt ||
-  mongoose.model("UserAttempt", userAttemptSchema);
-
+const UserAttempt = mongoose.model("UserAttempt", userAttemptSchema);
 export default UserAttempt;
