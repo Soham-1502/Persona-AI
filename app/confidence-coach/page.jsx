@@ -1,3 +1,5 @@
+"use client";
+
 import Header from '@/app/components/shared/header/Header.jsx';
 import { ConfidenceCoachUI } from '@/app/components/confidence-coach/ConfidenceCoachUI.jsx';
 
