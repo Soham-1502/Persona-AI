@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 export async function POST(req) {
     try {
         const body = await req.json();
-        const { scenarioType } = body;
+        const { scenarioType, difficulty = "Beginner" } = body;
 
         if (!scenarioType) {
             return NextResponse.json({ success: false, error: 'scenarioType is required' }, { status: 400 });
@@ -13,7 +13,16 @@ export async function POST(req) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        const prompt = `Generate exactly one realistic practice question for a "${scenarioType}" scenario, to be spoken aloud by the user. Return ONLY the plain text string of the question. No markdown, no prefixes, no quotation marks.`;
+        let difficultyModifiers = "";
+        if (difficulty === "Beginner") {
+            difficultyModifiers = "Make it simple, common, and straightforward.";
+        } else if (difficulty === "Intermediate") {
+            difficultyModifiers = "Make it slightly challenging and require some thought.";
+        } else if (difficulty === "Expert") {
+            difficultyModifiers = "Make it highly complex, aggressive, tricky, or niche to simulate intense pressure.";
+        }
+
+        const prompt = `Generate exactly one realistic practice question for a "${scenarioType}" scenario, to be spoken aloud by the user. ${difficultyModifiers} Return ONLY the plain text string of the question. No markdown, no prefixes, no quotation marks.`;
 
         const result = await model.generateContent(prompt);
         const text = result.response.text().trim();

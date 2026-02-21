@@ -15,6 +15,7 @@ export function ConfidenceCoachUI() {
     // Session state
     const [sessionStatus, setSessionStatus] = useState("idle"); // idle, analyzing, ended
     const [scenarioCategory, setScenarioCategory] = useState("Job Interview"); // default scenario category
+    const [difficulty, setDifficulty] = useState("Beginner"); // Beginner, Intermediate, Expert
     const [question, setQuestion] = useState(""); // generated question string
     const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
     const [sessionId, setSessionId] = useState(null);
@@ -199,7 +200,7 @@ export function ConfidenceCoachUI() {
                 const res = await fetch('/api/confidence-coach/generate-questions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scenarioType: scenarioCategory })
+                    body: JSON.stringify({ scenarioType: scenarioCategory, difficulty: difficulty })
                 });
                 const data = await res.json();
                 if (active) {
@@ -221,7 +222,7 @@ export function ConfidenceCoachUI() {
 
         fetchQuestion();
         return () => { active = false; };
-    }, [scenarioCategory, sessionStatus]);
+    }, [scenarioCategory, difficulty, sessionStatus]);
 
     // Live Timer
     const [timeElapsed, setTimeElapsed] = useState(0);
@@ -304,7 +305,9 @@ export function ConfidenceCoachUI() {
         const timeTaken = Math.floor((endTimeStamp - startTime) / 1000);
 
         // Aggregate Score (0.0 to 10.0)
-        let score = 4.5; // Base score
+        let score = 5.0; // Base score for Beginner
+        if (difficulty === "Intermediate") score = 3.0;
+        if (difficulty === "Expert") score = 1.0;
 
         // 1. Face Visibility Contribution (+ up to 2.5)
         const faceVisRatio = mlStats.faceFrames > 0 ? (mlStats.visibleFaceFrames / mlStats.faceFrames) : 0;
@@ -396,17 +399,34 @@ export function ConfidenceCoachUI() {
                             <h2 className="text-2xl font-bold mb-2">Confidence Coach</h2>
                             <p className="text-muted-foreground mb-6">Select a scenario to practice your public speaking and body language.</p>
 
-                            <label className="block text-sm font-medium mb-2">Scenario Type</label>
-                            <select
-                                value={scenarioCategory}
-                                onChange={(e) => setScenarioCategory(e.target.value)}
-                                className="w-full p-3 rounded-lg border border-input bg-background mb-4"
-                                disabled={isGeneratingQuestion}
-                            >
-                                {scenarios.map(s => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                            </select>
+                            <div className="flex gap-4 mb-4">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium mb-2">Scenario Type</label>
+                                    <select
+                                        value={scenarioCategory}
+                                        onChange={(e) => setScenarioCategory(e.target.value)}
+                                        className="w-full p-3 rounded-lg border border-input bg-background"
+                                        disabled={isGeneratingQuestion}
+                                    >
+                                        {scenarios.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium mb-2">Difficulty</label>
+                                    <select
+                                        value={difficulty}
+                                        onChange={(e) => setDifficulty(e.target.value)}
+                                        className="w-full p-3 rounded-lg border border-input bg-background"
+                                        disabled={isGeneratingQuestion}
+                                    >
+                                        <option value="Beginner">Beginner</option>
+                                        <option value="Intermediate">Intermediate</option>
+                                        <option value="Expert">Expert</option>
+                                    </select>
+                                </div>
+                            </div>
 
                             {isGeneratingQuestion ? (
                                 <div className="text-sm text-muted-foreground animate-pulse mb-8 flex items-center gap-2">
