@@ -368,15 +368,15 @@ export function ConfidenceCoachUI() {
     };
 
     return (
-        <div className="w-full h-full flex gap-4">
+        <div className="w-full h-fit lg:h-full flex flex-col lg:flex-row gap-4 overflow-y-auto lg:overflow-hidden pb-4 lg:pb-0">
             {/* Left Panel: Video Feed */}
-            <div className="w-[60%] bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center">
+            <div className="w-full lg:w-[60%] min-h-[40vh] lg:min-h-0 bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center shrink-0 lg:shrink">
                 <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    className="w-full h-full object-cover transform scale-x-[-1]"
+                    className="w-full flex-1 h-full object-cover transform scale-x-[-1]"
                 />
 
                 {/* Status Overlay */}
@@ -396,7 +396,7 @@ export function ConfidenceCoachUI() {
             </div>
 
             {/* Right Panel: Controls & Instructions */}
-            <div className="w-[40%] bg-card rounded-xl border border-border p-6 flex flex-col shadow-sm">
+            <div className="w-full lg:w-[40%] bg-card rounded-xl border border-border p-5 lg:p-6 flex flex-col shadow-sm flex-1 lg:overflow-y-auto">
 
                 {sessionStatus === "idle" && (
                     <div className="flex flex-col h-full justify-between">
@@ -404,13 +404,13 @@ export function ConfidenceCoachUI() {
                             <h2 className="text-2xl font-bold mb-2">Confidence Coach</h2>
                             <p className="text-muted-foreground mb-6">Select a scenario to practice your public speaking and body language.</p>
 
-                            <div className="flex gap-4 mb-4">
-                                <div className="flex-1">
+                            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                                <div className="flex-1 min-w-0">
                                     <label className="block text-sm font-medium mb-2">Scenario Type</label>
                                     <select
                                         value={scenarioCategory}
                                         onChange={(e) => setScenarioCategory(e.target.value)}
-                                        className="w-full p-3 rounded-lg border border-input bg-background"
+                                        className="w-full p-2.5 sm:p-3 rounded-lg border border-input bg-background"
                                         disabled={isGeneratingQuestion}
                                     >
                                         {scenarios.map(s => (
@@ -418,12 +418,12 @@ export function ConfidenceCoachUI() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                     <label className="block text-sm font-medium mb-2">Difficulty</label>
                                     <select
                                         value={difficulty}
                                         onChange={(e) => setDifficulty(e.target.value)}
-                                        className="w-full p-3 rounded-lg border border-input bg-background"
+                                        className="w-full p-2.5 sm:p-3 rounded-lg border border-input bg-background"
                                         disabled={isGeneratingQuestion}
                                     >
                                         <option value="Beginner">Beginner</option>
@@ -514,8 +514,8 @@ export function ConfidenceCoachUI() {
                                 <h2 className="text-3xl font-bold">Analysis Complete</h2>
                                 <p className="text-muted-foreground">Here is the detailed breakdown of your performance.</p>
 
-                                <div className="w-full max-w-4xl mt-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                <div className="w-full mt-6">
+                                    <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
                                         {/* Eye Contact Card */}
                                         <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
                                             <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Eye Contact</span>

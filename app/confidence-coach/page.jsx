@@ -24,7 +24,7 @@ export default function ConfidenceCoachPage() {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 p-2 px-3 flex gap-3 overflow-hidden">
+            <div className="flex-1 p-2 px-3 flex gap-3 overflow-y-auto lg:overflow-hidden">
                 <ConfidenceCoachUI />
             </div>
         </div>
