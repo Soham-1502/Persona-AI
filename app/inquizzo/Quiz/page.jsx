@@ -1,304 +1,278 @@
+// location : app/inquizzo/Quiz/page.jsx
+
 'use client'
 
-import React from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useMemo } from 'react'
+import CursorGlow from '@/app/components/inquizzo/effects/CursorGlow'
+import SpotlightCard from '@/app/components/inquizzo/effects/SpotlightCard'
+import { useRouter } from 'next/navigation'
+import Header from '@/app/components/shared/header/Header.jsx'
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
 import {
-  Shuffle,
-  Target,
-  ArrowRight,
-  Mic,
-  BookOpen,
-  Volume2,
-} from "lucide-react";
+  Search,
+  SortAsc,
+  SortDesc,
+  Clock,
+  BarChart3,
+  Star,
+  CircleCheck,
+  Loader,
+  ChevronDown,
+  Brain,
+  Filter
+} from "lucide-react"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { QUIZ_STRUCTURE } from '@/lib/quizData'
+import { cn } from "@/lib/utils"
 
-const QuizOptionSelection = () => {
+export default function QuizBrowser() {
   const router = useRouter();
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [domainFilter, setDomainFilter] = useState('all');
+  const [sortOption, setSortOption] = useState('recent');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleRandomQuiz = () => {
-    router.push("/inquizzo/RandomQuiz");
-  };
+  const today = new Date().toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 
-  const handleParticularQuiz = () => {
-    router.push("/inquizzo/QuizDomainSelection");
-  };
+  // Flatten the recursive QUIZ_STRUCTURE for the list
+  const allTopics = useMemo(() => {
+    const flattened = [];
+    Object.entries(QUIZ_STRUCTURE).forEach(([domainKey, domain]) => {
+      Object.entries(domain.categories).forEach(([catKey, category]) => {
+        Object.entries(category.subCategories).forEach(([subCatKey, subCategory]) => {
+          Object.entries(subCategory.topics).forEach(([topicKey, topic]) => {
+            // Mock progress for the browser look
+            const mockProgress = Math.random() > 0.7 ? (Math.random() > 0.5 ? 100 : Math.floor(Math.random() * 90) + 10) : 0;
+            flattened.push({
+              id: topicKey,
+              name: topic.name,
+              domain: domain.name,
+              domainId: domainKey,
+              category: category.name,
+              subCategory: subCategory.name,
+              progress: mockProgress,
+              path: `/inquizzo/QuizDomainSelection?domain=${domainKey}&category=${catKey}&subCategory=${subCatKey}&topic=${topicKey}`
+            });
+          });
+        });
+      });
+    });
+    return flattened;
+  }, []);
 
-  const handleVoiceQuiz = () => {
-    router.push("/");
+  const filteredTopics = useMemo(() => {
+    let result = [...allTopics];
+
+    // Status Filter
+    if (statusFilter !== 'all') {
+      result = result.filter(t => {
+        if (statusFilter === 'completed') return t.progress === 100;
+        if (statusFilter === 'inprogress') return t.progress > 0 && t.progress < 100;
+        if (statusFilter === 'pending') return t.progress === 0;
+        return true;
+      });
+    }
+
+    // Domain Filter
+    if (domainFilter !== 'all') {
+      result = result.filter(t => t.domainId === domainFilter);
+    }
+
+    // Search
+    if (searchQuery) {
+      result = result.filter(t =>
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.category.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Sorting
+    if (sortOption === 'progress-desc') {
+      result.sort((a, b) => b.progress - a.progress);
+    } else if (sortOption === 'progress-asc') {
+      result.sort((a, b) => a.progress - b.progress);
+    } else if (sortOption === 'az') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortOption === 'za') {
+      result.sort((a, b) => b.name.localeCompare(a.name));
+    }
+
+    return result;
+  }, [allTopics, statusFilter, domainFilter, searchQuery, sortOption]);
+
+  const domainLabels = {
+    all: "All Domains",
+    ...Object.fromEntries(Object.entries(QUIZ_STRUCTURE).map(([k, v]) => [k, v.name]))
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-blue-900 via-indigo-900 to-purple-900">
-      {/* Header */}
-      <div className="flex justify-between items-center p-6">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 bg-gray-800 bg-opacity-50 rounded-full px-3 py-1">
-            <span className="text-yellow-400">⚡</span>
-            <span className="text-white font-medium">0</span>
-          </div>
-          <div className="flex items-center space-x-2 bg-gray-800 bg-opacity-50 rounded-full px-3 py-1">
-            <span className="text-white font-medium">Q: 0</span>
-          </div>
-        </div>
-        <h1 className="text-white text-2xl font-bold tracking-wider">
-          INQUIZO
-        </h1>
-      </div>
+    <div className="relative w-full flex flex-col min-h-screen bg-gradient-to-br from-[#03001E] via-[#7303C0]/[0.03] to-[#03001E] text-foreground overflow-hidden">
+      <CursorGlow />
+      <Header
+        DateValue="last7"
+        onDateChange={() => { }}
+        tempDate={today}
+        showDateFilter={false}
+      />
 
-      {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Title Section */}
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-white mb-4">
-            Choose Your Quiz Mode
-          </h2>
-          <p className="text-blue-200 text-lg max-w-2xl mx-auto">
-            Select your preferred quiz experience and start challenging yourself
-          </p>
+      <main className="relative z-10 p-6 flex-1 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-[#7303C0] to-[#EC38BC] bg-clip-text text-transparent">Quiz Browser</h2>
+          <p className="text-sm text-muted-foreground">Explore and practice from {allTopics.length} available topics</p>
         </div>
 
-        {/* Options Grid */}
-        <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-8 mb-12">
-          {/* Random Questions Option */}
-          <div
-            className="group cursor-pointer transform transition-all duration-300 hover:scale-105"
-            onClick={handleRandomQuiz}
-          >
-            <div className="bg-gray-800 bg-opacity-40 backdrop-blur-sm rounded-2xl border border-gray-600 border-opacity-30 p-8 hover:bg-opacity-60 transition-all duration-300">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-linear-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Shuffle className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-white mb-2">
-                  Random Quiz
-                </h3>
-                <p className="text-blue-200">Mixed topics for variety</p>
+        <Card className="p-4 border border-[#1a0533] bg-[#08011a]/80 backdrop-blur-sm rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#7303C0] via-[#EC38BC] to-transparent rounded-t-2xl" />
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            {/* Status Filter */}
+            <ToggleGroup type="single" variant="outline" value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)} className="flex-wrap">
+              <ToggleGroupItem value="all" className="data-[state=on]:bg-red-500/20 data-[state=on]:text-red-500 [&[data-state=on]>svg]:fill-red-500 data-[state=on]:border-red-800">
+                <Star className="w-4 h-4 mr-2" /> All
+              </ToggleGroupItem>
+              <ToggleGroupItem value="completed" className="data-[state=on]:bg-green-500/20 data-[state=on]:text-green-500 [&[data-state=on]>svg]:fill-green-500 data-[state=on]:border-green-800">
+                <CircleCheck className="w-4 h-4 mr-2" /> Completed
+              </ToggleGroupItem>
+              <ToggleGroupItem value="inprogress" className="data-[state=on]:bg-blue-500/20 data-[state=on]:text-blue-400 [&[data-state=on]>svg]:fill-blue-400 data-[state=on]:border-blue-800">
+                <Loader className="w-4 h-4 mr-2" /> In Progress
+              </ToggleGroupItem>
+              <ToggleGroupItem value="pending" className="data-[state=on]:bg-yellow-500/20 data-[state=on]:text-yellow-600 [&[data-state=on]>svg]:fill-yellow-600 data-[state=on]:border-yellow-800">
+                <Clock className="w-4 h-4 mr-2" /> Pending
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {/* Search Bar */}
+              <div className="relative flex-1 md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search topics..."
+                  className="w-full bg-muted/30 border border-muted rounded-lg pl-9 pr-3 py-1.5 text-sm outline-none focus:border-ring transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
 
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Questions from various subjects
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Perfect for general knowledge
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Quick start - no setup required
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Surprise yourself with topics
-                  </p>
-                </div>
-              </div>
+              {/* Domain Filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-[38px] border-muted hover:border-ring">
+                    <Filter className="w-4 h-4 mr-2" />
+                    <span className="max-w-[100px] truncate">{domainLabels[domainFilter]}</span>
+                    <ChevronDown className="w-4 h-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuRadioGroup value={domainFilter} onValueChange={setDomainFilter}>
+                    {Object.entries(domainLabels).map(([val, label]) => (
+                      <DropdownMenuRadioItem key={val} value={val}>{label}</DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-              <div className="flex items-center justify-between">
-                <span className="text-green-400 text-sm font-medium">
-                  Recommended for beginners
-                </span>
-                <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-green-400 group-hover:translate-x-1 transition-all" />
-              </div>
+              {/* Sort Select */}
+              <Select value={sortOption} onValueChange={setSortOption}>
+                <SelectTrigger className="h-[38px] md:w-40 border-muted hover:border-ring">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="recent"><div className="flex items-center"><Clock className="w-4 h-4 mr-2" /> Recent</div></SelectItem>
+                  <SelectItem value="progress-desc"><div className="flex items-center"><BarChart3 className="w-4 h-4 mr-2" /> Progress: High</div></SelectItem>
+                  <SelectItem value="progress-asc"><div className="flex items-center"><BarChart3 className="w-4 h-4 mr-2 rotate-180" /> Progress: Low</div></SelectItem>
+                  <SelectItem value="az"><div className="flex items-center"><SortAsc className="w-4 h-4 mr-2" /> A → Z</div></SelectItem>
+                  <SelectItem value="za"><div className="flex items-center"><SortDesc className="w-4 h-4 mr-2" /> Z → A</div></SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+        </Card>
 
-          {/* Particular Questions Option */}
-          <div
-            className="group cursor-pointer transform transition-all duration-300 hover:scale-105"
-            onClick={handleParticularQuiz}
-          >
-            <div className="bg-gray-800 bg-opacity-40 backdrop-blur-sm rounded-2xl border border-gray-600 border-opacity-30 p-8 hover:bg-opacity-60 transition-all duration-300">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-linear-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="h-8 w-8 text-white" />
+        <div className="flex flex-col gap-3 pb-8">
+          {filteredTopics.length > 0 ? (
+            filteredTopics.map((topic) => (
+              <div
+                key={`${topic.domainId}-${topic.id}`}
+                className="flex flex-col md:flex-row md:items-center justify-between rounded-xl px-4 py-4 border border-[#1a0533]/60 bg-gradient-to-r from-[#08011a] to-transparent hover:border-[#7303C0]/30 hover:shadow-md hover:shadow-[#7303C0]/10 hover:from-[#7303C0]/5 hover:to-transparent transition-all duration-200 cursor-pointer group"
+                onClick={() => router.push(topic.path)}
+              >
+                <div className="flex items-center gap-4 w-full md:w-[350px]">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#7303C0]/20 to-[#9b10a8]/10 flex items-center justify-center text-[#EC38BC] ring-1 ring-[#7303C0]/20 group-hover:ring-[#7303C0]/50 group-hover:scale-110 transition-all">
+                    <Brain className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-persona-ink text-base mb-0.5">{topic.name}</h4>
+                    <div className="flex flex-wrap gap-x-2 gap-y-1">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">{topic.domain}</span>
+                      <span className="text-[10px] text-muted-foreground/50">•</span>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">{topic.category}</span>
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-2">
-                  Subject Quiz
-                </h3>
-                <p className="text-blue-200">Focus on specific topics</p>
-              </div>
 
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Choose your subject and topic
-                  </p>
+                <div className="flex items-center w-full md:w-[250px] gap-3 mt-4 md:mt-0">
+                  <Progress value={topic.progress} className="h-2 rounded-full" />
+                  <span className="text-xs text-muted-foreground min-w-[35px] font-medium">{topic.progress}%</span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Targeted learning experience
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Customizable difficulty level
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Deep dive into specializations
-                  </p>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-purple-400 text-sm font-medium">
-                  Perfect for focused study
-                </span>
-                <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+                <div className="flex items-center justify-between md:justify-end gap-4 mt-4 md:mt-0 w-full md:w-auto">
+                  <Badge
+                    className={cn(
+                      "text-[10px] px-3 py-1 rounded-full font-semibold",
+                      topic.progress === 100 && "bg-green-500/20 text-green-500 border-green-800",
+                      topic.progress > 0 && topic.progress < 100 && "bg-blue-500/20 text-blue-400 border-blue-800",
+                      topic.progress === 0 && "bg-yellow-500/20 text-yellow-600 border-yellow-800"
+                    )}
+                  >
+                    {topic.progress === 100 ? "Completed" : topic.progress === 0 ? "Pending" : "In Progress"}
+                  </Badge>
+                  <Button variant={topic.progress === 100 ? "outline" : "default"} size="sm" className="h-9 px-4 font-medium">
+                    {topic.progress === 100 ? "Review" : topic.progress === 0 ? "Start Quiz" : "Continue"}
+                  </Button>
+                </div>
               </div>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 bg-gradient-to-br from-[#7303C0]/5 to-transparent rounded-3xl border border-dashed border-[#7303C0]/20">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#7303C0]/20 to-[#9b10a8]/10 flex items-center justify-center mb-4">
+                <Search className="w-8 h-8 text-[#EC38BC]/50" />
+              </div>
+              <p className="text-lg font-medium text-muted-foreground">No topics found matching your filters</p>
+              <Button variant="link" className="text-[#EC38BC] mt-2" onClick={() => {
+                setStatusFilter('all');
+                setDomainFilter('all');
+                setSearchQuery('');
+              }}>Clear all filters</Button>
             </div>
-          </div>
-
-          {/* Voice Quiz Option */}
-          <div
-            className="group cursor-pointer transform transition-all duration-300 hover:scale-105"
-            onClick={handleVoiceQuiz}
-          >
-            <div className="bg-gray-800 bg-opacity-40 backdrop-blur-sm rounded-2xl border border-gray-600 border-opacity-30 p-8 hover:bg-opacity-60 transition-all duration-300">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-linear-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Volume2 className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-white mb-2">
-                  Voice Quiz
-                </h3>
-                <p className="text-blue-200">Speak your way through</p>
-              </div>
-
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Voice-controlled navigation
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Speak to select domains
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">
-                    Answer questions by voice
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <p className="text-gray-300 text-sm">Hands-free experience</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-blue-400 text-sm font-medium">
-                  Interactive voice mode
-                </span>
-                <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-              </div>
-            </div>
-          </div>
+          )}
         </div>
-
-        {/* Domain Selection Method */}
-        <div className="bg-gray-800 bg-opacity-40 backdrop-blur-sm rounded-2xl border border-gray-600 border-opacity-30 p-8 mb-8">
-          <div className="text-center mb-6">
-            <h3 className="text-xl font-bold text-white mb-2">
-              Domain Selection Methods
-            </h3>
-            <p className="text-blue-200">
-              Choose how you want to select your quiz topics
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Manual Selection */}
-            <div className="flex items-center space-x-4 bg-gray-700 bg-opacity-30 rounded-lg p-4">
-              <div className="w-12 h-12 bg-linear-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                <BookOpen className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h4 className="text-white font-semibold">Manual Selection</h4>
-                <p className="text-gray-300 text-sm">
-                  Click and choose from available options
-                </p>
-              </div>
-            </div>
-
-            {/* Voice Selection */}
-            <div className="flex items-center space-x-4 bg-gray-700 bg-opacity-30 rounded-lg p-4">
-              <div className="w-12 h-12 bg-linear-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <Mic className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h4 className="text-white font-semibold">Voice Selection</h4>
-                <p className="text-gray-300 text-sm">
-                  Say the subject name to select it
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Voice Commands Help */}
-        <div className="bg-gray-800 bg-opacity-40 backdrop-blur-sm rounded-2xl border border-gray-600 border-opacity-30 p-6">
-          <div className="text-center mb-4">
-            <Mic className="h-8 w-8 text-blue-400 mx-auto mb-2" />
-            <h4 className="text-white font-semibold mb-2">Voice Commands</h4>
-            <p className="text-gray-300 text-sm mb-4">
-              Use these voice commands for navigation:
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4 text-center">
-            <div className="bg-gray-700 bg-opacity-30 rounded-lg p-3">
-              <p className="text-blue-400 font-medium">"Physics"</p>
-              <p className="text-gray-400 text-xs">Select Physics domain</p>
-            </div>
-            <div className="bg-gray-700 bg-opacity-30 rounded-lg p-3">
-              <p className="text-blue-400 font-medium">"Biology"</p>
-              <p className="text-gray-400 text-xs">Select Biology domain</p>
-            </div>
-            <div className="bg-gray-700 bg-opacity-30 rounded-lg p-3">
-              <p className="text-blue-400 font-medium">"Chemistry"</p>
-              <p className="text-gray-400 text-xs">Select Chemistry domain</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Info Section */}
-        <div className="mt-8 text-center">
-          <div className="flex items-center justify-center space-x-6 text-sm text-gray-400 flex-wrap gap-2">
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-              <span>Random: Mixed questions</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
-              <span>Subject: Focused topics</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-              <span>Voice: Hands-free mode</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      </main>
     </div>
-  );
-};
-
-export default QuizOptionSelection;
+  )
+}
