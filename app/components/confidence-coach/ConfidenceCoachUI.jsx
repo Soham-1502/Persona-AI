@@ -1,0 +1,589 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { Mic, Video, Square, Play, CheckCircle, Loader2 } from "lucide-react";
+import { usePorcupine } from '@picovoice/porcupine-react';
+import { startMediaPipeStream } from "./MediaPipeAnalyzer";
+import { AudioAnalyzer } from "./AudioAnalyzer";
+import { getAuthToken } from "@/lib/auth-client";
+
+export function ConfidenceCoachUI() {
+    // Video state
+    const videoRef = useRef(null);
+    const [stream, setStream] = useState(null);
+
+    // Session state
+    const [sessionStatus, setSessionStatus] = useState("idle"); // idle, analyzing, ended
+    const [scenarioCategory, setScenarioCategory] = useState("Job Interview"); // default scenario category
+    const [difficulty, setDifficulty] = useState("Beginner"); // Beginner, Intermediate, Expert
+    const [question, setQuestion] = useState(""); // generated question string
+    const [previousQuestions, setPreviousQuestions] = useState([]); // history of questions asked this session
+    const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
+    const [sessionId, setSessionId] = useState(null);
+    const [startTime, setStartTime] = useState(null);
+
+    // Transcript state
+    const [userAnswer, setUserAnswer] = useState("");
+    const [interimAnswer, setInterimAnswer] = useState("");
+    const recognitionRef = useRef(null);
+
+    // ML Analyzers
+    const audioAnalyzerRef = useRef(null);
+    const mediaPipeCleanupRef = useRef(null);
+    const [mlStats, setMlStats] = useState({ faceFrames: 0, visibleFaceFrames: 0, postures: [], positiveFrames: 0, tenseFrames: 0, emotionMeasuredFrames: 0 });
+    const [audioStats, setAudioStats] = useState(null);
+
+    // Final Payload
+    const [finalScore, setFinalScore] = useState(null);
+    const [finalDataPayload, setFinalDataPayload] = useState(null);
+
+    const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
+
+    useEffect(() => {
+        // Initialize camera
+        const initCamera = async () => {
+            try {
+                const mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                setStream(mediaStream);
+                if (videoRef.current) {
+                    videoRef.current.srcObject = mediaStream;
+                }
+            } catch (err) {
+                console.error("Failed to access camera/mic:", err);
+            }
+        };
+
+        if (sessionStatus === "idle") {
+            initCamera();
+        }
+
+        return () => {
+            // Clean up stream if component unmounts
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionStatus]);
+
+    // Porcupine Wake Word Engine
+    const { keywordDetection, isLoaded: isPorcupineLoaded, isListening: isPorcupineListening, init: initPorcupine, start: startPorcupine } = usePorcupine();
+
+    useEffect(() => {
+        const setupPorcupine = async () => {
+            const accessKey = process.env.NEXT_PUBLIC_PICOVOICE_ACCESS_KEY;
+            if (!accessKey || isPorcupineLoaded) return;
+            try {
+                // Initialize using BuiltIn keywords. Note: requires standard model parameters to be served in public/.
+                // Falls back gracefully if access key is invalid or model not copied.
+                await initPorcupine(
+                    accessKey,
+                    { publicPath: "/porcupine_params.pv", forceWrite: true },
+                    [
+                        { builtin: "Porcupine", sensitivity: 0.7 },
+                        { builtin: "Bumblebee", sensitivity: 0.7 }
+                    ]
+                );
+            } catch (err) {
+                console.warn("Porcupine could not bind. Ensure NEXT_PUBLIC_PICOVOICE_ACCESS_KEY is set and model is hosted. Falling back to buttons/WebSpeech.", err);
+            }
+        };
+        setupPorcupine();
+    }, [isPorcupineLoaded, initPorcupine]);
+
+    useEffect(() => {
+        if (isPorcupineLoaded && !isPorcupineListening) {
+            startPorcupine().catch(e => console.warn(e));
+        }
+    }, [isPorcupineLoaded, isPorcupineListening, startPorcupine]);
+
+    // Command Parser (Offline Wake Word overrides WebSpeech command parsing)
+    useEffect(() => {
+        if (keywordDetection !== null) {
+            console.log("Porcupine Wake Word detected:", keywordDetection.label, "Index:", keywordDetection.index);
+
+            if (keywordDetection.index === 0 && sessionStatus === "idle") {
+                startSession();
+            } else if (keywordDetection.index === 1 && sessionStatus === "analyzing") {
+                endSession();
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [keywordDetection, sessionStatus]);
+
+    useEffect(() => {
+        let active = true;
+
+        // Initialize Web Speech API
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        let recognition = recognitionRef.current;
+        if (!recognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = "en-US";
+            recognitionRef.current = recognition;
+        }
+
+        recognition.onresult = (event) => {
+            let finalPiece = '';
+            let interimPiece = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalPiece += event.results[i][0].transcript;
+                } else {
+                    interimPiece += event.results[i][0].transcript;
+                }
+            }
+
+            const combined = (finalPiece + interimPiece).toLowerCase();
+
+            // Command keyword detection
+            if (sessionStatus === "idle" && combined.includes("start")) {
+                startSession();
+            } else if (sessionStatus === "analyzing") {
+                if (combined.includes("end this speech")) {
+                    endSession();
+                } else {
+                    if (finalPiece) {
+                        setUserAnswer(prev => prev + (prev && finalPiece ? " " : "") + finalPiece);
+                    }
+                    setInterimAnswer(interimPiece);
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            if (event.error !== "no-speech") {
+                console.error("Speech recognition error", event.error);
+            }
+        };
+
+        recognition.onend = () => {
+            if (active && sessionStatus !== "ended") {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    // Ignore already started errors
+                }
+            }
+        };
+
+        if (sessionStatus !== "ended") {
+            try {
+                recognition.start();
+            } catch (e) {
+                // Already started
+            }
+        }
+
+        return () => {
+            active = false;
+            try {
+                recognition.stop();
+            } catch (e) { }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionStatus]);
+
+    // AI Question Generation Effect
+    useEffect(() => {
+        let active = true;
+        const fetchQuestion = async () => {
+            if (sessionStatus !== "idle") return; // don't refetch if already running
+            setIsGeneratingQuestion(true);
+            try {
+                const res = await fetch('/api/confidence-coach/generate-questions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scenarioType: scenarioCategory, difficulty: difficulty, previousQuestions: previousQuestions })
+                });
+                const data = await res.json();
+                if (active) {
+                    if (data.success && data.question) {
+                        setQuestion(data.question);
+                        setPreviousQuestions(prev => [...prev, data.question]);
+                    } else {
+                        setQuestion(`Please provide your best response for a typical ${scenarioCategory} scenario.`);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch generated question:", err);
+                if (active) {
+                    setQuestion(`Please provide your best response for a typical ${scenarioCategory} scenario.`);
+                }
+            } finally {
+                if (active) setIsGeneratingQuestion(false);
+            }
+        };
+
+        fetchQuestion();
+        return () => { active = false; };
+    }, [scenarioCategory, difficulty, sessionStatus]);
+
+    // Live Timer
+    const [timeElapsed, setTimeElapsed] = useState(0);
+    useEffect(() => {
+        let interval;
+        if (sessionStatus === "analyzing" && startTime) {
+            interval = setInterval(() => {
+                setTimeElapsed(Math.floor((Date.now() - startTime) / 1000));
+            }, 1000);
+        } else {
+            setTimeElapsed(0);
+        }
+        return () => clearInterval(interval);
+    }, [sessionStatus, startTime]);
+
+    const startSession = async () => {
+        if (sessionStatus !== "idle") return;
+        setSessionId(crypto.randomUUID());
+        setStartTime(Date.now());
+        setUserAnswer("");
+        setInterimAnswer(""); // wipe interim state
+        setFinalScore(null);
+        setFinalDataPayload(null);
+        setAudioStats(null);
+        setMlStats({ faceFrames: 0, visibleFaceFrames: 0, postures: [], positiveFrames: 0, tenseFrames: 0, emotionMeasuredFrames: 0 });
+
+        // Flush any lingering pre-session transcripts from WebSpeech by aborting and triggering auto-restart
+        if (recognitionRef.current) {
+            try {
+                recognitionRef.current.abort();
+            } catch (e) { }
+        }
+
+        setSessionStatus("analyzing");
+
+        // Start Web Audio
+        const audioAnalyzer = new AudioAnalyzer();
+        audioAnalyzerRef.current = audioAnalyzer;
+        try {
+            await audioAnalyzer.start();
+        } catch (e) {
+            console.error("Audio analyzer failed to start", e);
+        }
+
+        // Start MediaPipe
+        if (videoRef.current) {
+            mediaPipeCleanupRef.current = startMediaPipeStream(videoRef.current, (results) => {
+                setMlStats(prev => {
+                    const isFaceVisible = results.face && results.face.faceBlendshapes && results.face.faceBlendshapes.length > 0;
+                    return {
+                        faceFrames: prev.faceFrames + 1,
+                        visibleFaceFrames: prev.visibleFaceFrames + (isFaceVisible ? 1 : 0),
+                        postures: [...prev.postures, results.posture],
+                        positiveFrames: prev.positiveFrames + (results.emotion === "positive" ? 1 : 0),
+                        tenseFrames: prev.tenseFrames + (results.emotion === "tense" ? 1 : 0),
+                        emotionMeasuredFrames: prev.emotionMeasuredFrames + (results.emotion !== "neutral" ? 1 : 0)
+                    };
+                });
+            });
+        }
+    };
+
+    const endSession = () => {
+        if (sessionStatus !== "analyzing") return;
+        setSessionStatus("ended");
+
+        // Stop Analyzers
+        if (mediaPipeCleanupRef.current) {
+            mediaPipeCleanupRef.current();
+            mediaPipeCleanupRef.current = null;
+        }
+
+        let audioMetrics = { avgVolume: 0, volumeVariance: 0 };
+        if (audioAnalyzerRef.current) {
+            audioMetrics = audioAnalyzerRef.current.stop();
+            audioAnalyzerRef.current = null;
+        }
+        setAudioStats(audioMetrics);
+
+        // Calculate Time
+        const endTimeStamp = Date.now();
+        const timeTaken = Math.floor((endTimeStamp - startTime) / 1000);
+
+        // Aggregate Score (0.0 to 10.0)
+        let score = 5.0; // Base score for Beginner
+        if (difficulty === "Intermediate") score = 3.0;
+        if (difficulty === "Expert") score = 1.0;
+
+        // 1. Face Visibility Contribution (+ up to 2.5)
+        const faceVisRatio = mlStats.faceFrames > 0 ? (mlStats.visibleFaceFrames / mlStats.faceFrames) : 0;
+        score += (faceVisRatio * 2.5);
+
+        // 2. Posture Contribution (+ up to 1.0)
+        const validPostures = mlStats.postures.filter(p => p !== "unknown");
+        const standingCount = validPostures.filter(p => p === "standing").length;
+        const standingRatio = validPostures.length > 0 ? (standingCount / validPostures.length) : 0;
+        score += (standingRatio * 1.0);
+
+        // 3. Emotion Contribution (Up to +1.0 for positive, -1.0 for tense)
+        if (mlStats.faceFrames > 0) {
+            const positiveRatio = mlStats.positiveFrames / mlStats.faceFrames;
+            const tenseRatio = mlStats.tenseFrames / mlStats.faceFrames;
+            score += (positiveRatio * 1.0);
+            score -= (tenseRatio * 1.0);
+        }
+
+        // 4. Audio Volume Stability (+ up to 1.0)
+        // If volume variance is extremely high, they are shouting/whispering. If smooth, they are stable.
+        const volStability = audioMetrics.volumeVariance > 0 ? Math.min(1.0, 100 / (audioMetrics.volumeVariance + 1)) : 0.5;
+        score += volStability;
+
+        // Cap score at 10.0 and format to 1 decimal
+        const finalCalculatedScore = Math.min(10.0, Math.max(0.0, Math.round(score * 10) / 10));
+        setFinalScore(finalCalculatedScore);
+
+        // Assemble Final Payload Contract (Plan 1.3 requirement)
+        const payload = {
+            moduleId: "confidenceCoach",
+            gameType: "voice",
+            sessionId: sessionId || crypto.randomUUID(),
+            question: question,
+            userAnswer: userAnswer.trim() || "(No transcript captured)",
+            correctAnswer: "completed",
+            isCorrect: true,
+            score: finalCalculatedScore,
+            timeTaken: timeTaken
+        };
+
+        setFinalDataPayload(payload);
+
+        // Fire-and-forget asynchronous save to NextAuth-protected backend (Plan 4.3)
+        fetch('/api/confidence-coach/session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        }).catch(err => console.error("Failed to persist confidence coach analytics to MongoDB:", err));
+    };
+
+    return (
+        <div className="w-full h-full flex gap-4">
+            {/* Left Panel: Video Feed */}
+            <div className="w-[60%] bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center">
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform scale-x-[-1]"
+                />
+
+                {/* Status Overlay */}
+                <div className="absolute top-4 left-4 flex gap-2">
+                    <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white border border-white/10 text-sm">
+                        <Video size={16} className={stream ? "text-green-400" : "text-red-400"} />
+                        <span>{stream ? "Camera Active" : "No Camera"}</span>
+                    </div>
+                </div>
+
+                {sessionStatus === "analyzing" && (
+                    <div className="absolute top-4 right-4 bg-red-500/80 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-2 text-white text-sm animate-pulse">
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                        Recording
+                    </div>
+                )}
+            </div>
+
+            {/* Right Panel: Controls & Instructions */}
+            <div className="w-[40%] bg-card rounded-xl border border-border p-6 flex flex-col shadow-sm">
+
+                {sessionStatus === "idle" && (
+                    <div className="flex flex-col h-full justify-between">
+                        <div>
+                            <h2 className="text-2xl font-bold mb-2">Confidence Coach</h2>
+                            <p className="text-muted-foreground mb-6">Select a scenario to practice your public speaking and body language.</p>
+
+                            <div className="flex gap-4 mb-4">
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium mb-2">Scenario Type</label>
+                                    <select
+                                        value={scenarioCategory}
+                                        onChange={(e) => setScenarioCategory(e.target.value)}
+                                        className="w-full p-3 rounded-lg border border-input bg-background"
+                                        disabled={isGeneratingQuestion}
+                                    >
+                                        {scenarios.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium mb-2">Difficulty</label>
+                                    <select
+                                        value={difficulty}
+                                        onChange={(e) => setDifficulty(e.target.value)}
+                                        className="w-full p-3 rounded-lg border border-input bg-background"
+                                        disabled={isGeneratingQuestion}
+                                    >
+                                        <option value="Beginner">Beginner</option>
+                                        <option value="Intermediate">Intermediate</option>
+                                        <option value="Expert">Expert</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {isGeneratingQuestion ? (
+                                <div className="text-sm text-muted-foreground animate-pulse mb-8 flex items-center gap-2">
+                                    <Loader2 size={16} className="animate-spin" /> Generating specific practice question...
+                                </div>
+                            ) : (
+                                <div className="text-sm border border-border bg-secondary/10 p-4 rounded-lg mb-8 shadow-inner">
+                                    <strong className="block mb-1 text-xs uppercase text-muted-foreground">Practice Question:</strong>
+                                    <p className="text-foreground">{question}</p>
+                                </div>
+                            )}
+
+                            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
+                                <h3 className="font-semibold flex items-center gap-2 mb-2">
+                                    <Mic size={18} className="text-primary" /> Voice Commands
+                                </h3>
+                                <ul className="text-sm space-y-2 text-muted-foreground">
+                                    <li>Say <strong className="text-foreground">&quot;Start&quot;</strong> or <strong className="text-foreground">&quot;Porcupine&quot;</strong> (if configured) to begin analysis.</li>
+                                    <li>Say <strong className="text-foreground">&quot;END This Speech&quot;</strong> or <strong className="text-foreground">&quot;Bumblebee&quot;</strong> to finish.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={startSession}
+                            className="w-full py-4 bg-primary text-primary-foreground rounded-lg font-bold shadow-md hover:bg-primary/90 transition-colors flex justify-center items-center gap-2"
+                        >
+                            <Play fill="currentColor" size={20} />
+                            Start Manual Session
+                        </button>
+                    </div>
+                )}
+
+                {sessionStatus === "analyzing" && (
+                    <div className="flex flex-col h-full">
+                        <div className="flex-1">
+                            <h2 className="text-2xl font-bold mb-2 text-primary">Analysis in Progress...</h2>
+                            <div className="mb-4">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Scenario:</span> <strong className="text-sm">{scenarioCategory}</strong>
+                                <p className="text-sm mt-1 bg-secondary/20 p-3 rounded-md border border-border font-medium italic">&quot;{question}&quot;</p>
+                            </div>
+
+                            <div className="bg-secondary/30 rounded-lg p-4 mb-4 border border-border h-[160px] overflow-y-auto">
+                                <h3 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Live Transcript</h3>
+                                <p className="text-sm">
+                                    {userAnswer} <span className="text-muted-foreground italic">{interimAnswer}</span>
+                                </p>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <div className="bg-background border border-border rounded-lg p-3 flex-1 flex flex-col items-center">
+                                    <div className="text-xs text-muted-foreground mb-1">Time Elapsed</div>
+                                    <div className="font-mono font-bold text-lg">
+                                        {timeElapsed}s
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={endSession}
+                            className="w-full py-4 bg-destructive text-destructive-foreground rounded-lg font-bold shadow-md hover:bg-destructive/90 transition-colors flex justify-center items-center gap-2 mt-4"
+                        >
+                            <Square fill="currentColor" size={20} />
+                            End Speech
+                        </button>
+                    </div>
+                )}
+
+                {sessionStatus === "ended" && (
+                    <div className="flex flex-col h-full justify-center items-center text-center space-y-4">
+                        {finalScore === null ? (
+                            <>
+                                <Loader2 size={48} className="text-primary animate-spin mb-4" />
+                                <h2 className="text-2xl font-bold">Processing Analysis...</h2>
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle size={64} className="text-green-500 mb-2" />
+                                <h2 className="text-3xl font-bold">Analysis Complete</h2>
+                                <p className="text-muted-foreground">Here is the detailed breakdown of your performance.</p>
+
+                                <div className="w-full max-w-4xl mt-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                        {/* Eye Contact Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Eye Contact</span>
+                                            <span className="text-2xl font-black text-primary">{mlStats.faceFrames > 0 ? Math.round((mlStats.visibleFaceFrames / mlStats.faceFrames) * 100) : 0}%</span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Time looking at camera</span>
+                                        </div>
+
+                                        {/* Emotion Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Expression</span>
+                                            <span className="text-2xl font-black text-primary">{mlStats.positiveFrames > mlStats.tenseFrames ? "Positive" : (mlStats.tenseFrames > 0 ? "Tense" : "Neutral")}</span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Dominant facial emotion</span>
+                                        </div>
+
+                                        {/* Pacing Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Vocal Pacing</span>
+                                            <span className="text-2xl font-black text-primary">{audioStats?.volumeVariance < 20 ? "Steady" : "Dynamic"}</span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Volume stability over time</span>
+                                        </div>
+
+                                        {/* Posture Card */}
+                                        <div className="bg-secondary/20 p-4 rounded-xl border border-border flex flex-col items-center shadow-sm">
+                                            <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider mb-2">Posture</span>
+                                            <span className="text-2xl font-black text-primary">
+                                                {(() => {
+                                                    const valid = mlStats.postures.filter(p => p !== "unknown");
+                                                    if (valid.length === 0) return "Unknown";
+                                                    const standing = valid.filter(p => p === "standing").length;
+                                                    return standing > valid.length / 2 ? "Standing" : "Sitting";
+                                                })()}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground mt-1 text-center">Dominant physical stance</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Big Score Card */}
+                                    <div className="bg-primary/10 rounded-2xl p-8 border border-primary/20 flex flex-col items-center shadow-lg relative overflow-hidden">
+                                        <div className="absolute -right-10 -top-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+                                        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+
+                                        <div className="text-sm font-bold text-primary uppercase tracking-widest mb-2 z-10">Holistic Confidence Score</div>
+                                        <div className="flex items-baseline gap-1 z-10">
+                                            <span className="text-7xl font-black text-primary drop-shadow-sm">{finalScore}</span>
+                                            <span className="text-3xl text-primary/50 font-bold">/10</span>
+                                        </div>
+                                        <div className="text-sm text-primary/80 mt-4 font-medium flex items-center gap-2 z-10">
+                                            <span>Difficulty: <strong className="text-primary">{difficulty}</strong></span>
+                                            <span className="opacity-50">•</span>
+                                            <span>Duration: <strong className="text-primary">{finalDataPayload?.timeTaken}s</strong></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setSessionStatus("idle");
+                                        setUserAnswer("");
+                                        setFinalScore(null);
+                                    }}
+                                    className="mt-6 px-6 py-2 border border-border rounded-lg hover:bg-secondary transition-colors"
+                                >
+                                    Start New Session
+                                </button>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
