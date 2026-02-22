@@ -58,3 +58,6 @@ build_output*.txt
 GSD-STYLE.md
 PROJECT_RULES.md
 model_capabilities.yaml
+/scripts/search_repo.*
+/scripts/setup_search.*
+/scripts/validate-*
