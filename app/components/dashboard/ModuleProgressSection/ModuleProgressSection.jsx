@@ -13,7 +13,7 @@ export default function ModuleProgressSection() {
   const [sortOption, setSortOption] = useState('recent');
 
   return (
-    <Card className={cn("col-span-full md:col-span-3 h-fit p-4 w-full", "hover:shadow-md")}>
+    <Card className={cn("col-span-full lg:col-span-3 h-fit p-4 w-full", "hover:shadow-md")}>
       <div className='flex -mb-2 items-center'>
         <p className='text-xl font-medium'>Module Progress List</p>
       </div>

@@ -7,7 +7,7 @@ import { ReminderFilters } from "./ReminderFilters.jsx";
 import ReminderList from "./RemindersList.jsx";
 
 import { useState, useEffect } from "react";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NewReminderDialog } from "./NewReminderDialog.jsx";
 
@@ -52,7 +52,7 @@ export default function ReminderSection() {
                 }),
                 new Promise(resolve => setTimeout(resolve, 600)) // Min delay to show animation
             ]);
-            
+
             const result = await response.json();
 
             if (response.ok && result.success) {
@@ -119,27 +119,36 @@ export default function ReminderSection() {
     };
 
     return (
-        <Card className="max-h-122 flex flex-col justify-between border border-border bg-card/95 pr-2">
+        <Card className="col-span-full lg:col-span-1 max-h-122 flex flex-col justify-between border border-border bg-card/95 pr-2">
             <CardHeader className="flex flex-col">
-                <div className="flex items-center justify-between w-full mb-1">
-                    <p className="text-lg font-medium">Reminders</p>
-                    {/* Add Reminder Button */}
+                <div className="flex items-center justify-between w-full mb-2">
+                    <div className="flex items-center gap-1">
+                        <p className="text-lg font-medium">Reminders</p>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        </Button>
+                    </div>
                     <NewReminderDialog onReminderCreated={handleReminderCreated}>
-                        <Button className="cursor-pointer">
-                            <Plus size={20} />
-                            Add Reminder
+                        <Button className="cursor-pointer shrink-0 flex items-center gap-1">
+                            <Plus size={18} />
+                            <span className="hidden lg:inline 2xl:hidden">Add</span>
+                            <span className="inline lg:hidden 2xl:inline">Add Reminder</span>
                         </Button>
                     </NewReminderDialog>
                 </div>
-                <div className="flex flex-wrap">
+                <div className="flex flex-wrap w-full">
                     <ReminderFilters
                         value={selectedFilter}
                         onValueChange={(value) => {
                             if (!value) return;
                             setSelectedFilter(value);
                         }}
-                        onRefresh={handleRefresh}
-                        refreshing={refreshing}
                     />
                 </div>
             </CardHeader>
