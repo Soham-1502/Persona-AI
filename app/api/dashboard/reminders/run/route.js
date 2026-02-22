@@ -1,10 +1,10 @@
 // This is in app/api/dashboard/reminders/run/route.js
 
-import { connectToDB } from "@/lib/db";
+import connectDB from "@/lib/db";
 import { sendInAppNotification } from "@/lib/notifications";
 
 export async function GET() {
-  const db = await connectToDB();
+  const db = await connectDB();
   const now = new Date();
 
   const reminders = await db

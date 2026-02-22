@@ -22,10 +22,10 @@ import { useEffect, useState, useRef } from "react";
 
 export function DateFilter({ value, onValueChange }) {
     return (
-        <div className='w-32 h-20 flex items-center justify-center rounded-lg'>
-            <Select value={value} onValueChange={onValueChange}>
+        <div className='w-24 md:w-32 h-10 md:h-20 flex items-center justify-center rounded-lg'>
+            <Select value={value} onValueChange={onValueChange} modal={false}>
                 <SelectTrigger className={cn(
-                    "h-20 w-full bg-background text-foreground border-ring/5 py-2 border-2 cursor-pointer transition-all duration-200 ease-in-out",
+                    "h-10 md:h-20 w-full bg-background text-foreground border-ring/5 py-2 border-2 cursor-pointer transition-all duration-200 ease-in-out",
                     "hover:border-ring hover:border-2",
                     "dark:bg-background dark:text-foreground"
                 )}>
@@ -136,7 +136,7 @@ export function Notifications() {
             "h-10 w-10 border-0 border-ring flex items-center justify-center rounded-lg transition-all duration-100 ease-in-out cursor-pointer relative",
             "hover:border-ring hover:border-2"
         )}>
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild className="cursor-pointer">
                     <button className="relative">
                         <Bell />
@@ -147,9 +147,14 @@ export function Notifications() {
                         )}
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={15} alignOffset={-5} className="w-96">
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                <DropdownMenuContent
+                    align="end"
+                    sideOffset={15}
+                    alignOffset={-5}
+                    className="notification-dropdown w-[calc(100vw-2rem)] sm:w-96 max-h-[80vh] flex flex-col p-0 overflow-hidden"
+                >
+                    {/* Header — sticky, never scrolls */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b sticky top-0 bg-popover z-10 shrink-0">
                         <h3 className="font-semibold text-base">Notifications</h3>
                         {unreadCount > 0 && (
                             <button
@@ -161,8 +166,8 @@ export function Notifications() {
                         )}
                     </div>
 
-                    {/* Notifications List */}
-                    <div className="max-h-96 overflow-y-auto">
+                    {/* Notifications List — scrolls independently */}
+                    <div className="overflow-y-auto flex-1">
                         {loading ? (
                             <div className="p-4 text-center text-muted-foreground">
                                 Loading...
@@ -221,7 +226,7 @@ export function Theme() {
         <div className={cn("h-10 w-10 border-0 border-ring flex items-center justify-center rounded-lg transition-all duration-100 ease-in-out cursor-pointer",
             "hover:border-ring hover:border-2"
         )} >
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild className="cursor-pointer">
                     <button size="icon">
                         <Sun className='scale-100 dark:scale-0' />

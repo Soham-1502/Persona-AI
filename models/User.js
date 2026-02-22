@@ -81,6 +81,31 @@ const userSchema = new mongoose.Schema({
     },
   },
 
+  // Micro-Learning stats
+  microLearningStats: {
+    lessonsCompleted: { type: Number, default: 0 },
+    totalXP: { type: Number, default: 0 },
+    lastLessonDate: { type: Date, default: null },
+    currentStreak: { type: Number, default: 0 },
+    longestStreak: { type: Number, default: 0 },
+  },
+
+  // Social Mentor stats
+  mentorStats: {
+    sessionsAttended: { type: Number, default: 0 },
+    scenariosCompleted: { type: Number, default: 0 },
+    lastSessionDate: { type: Date, default: null },
+    averageConfidenceScore: { type: Number, default: 0 },
+  },
+
+  // Confidence Coach stats
+  confidenceCoachStats: {
+    sessionsCompleted: { type: Number, default: 0 },
+    voiceTrainingMinutes: { type: Number, default: 0 },
+    lastSessionDate: { type: Date, default: null },
+    averageScore: { type: Number, default: 0 },
+  },
+
   // Profile information
   profile: {
     firstName: String,

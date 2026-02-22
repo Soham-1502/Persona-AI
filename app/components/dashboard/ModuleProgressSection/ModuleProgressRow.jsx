@@ -27,49 +27,54 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
   const status = isCompleted
     ? "Completed"
     : isPending
-    ? "Pending"
-    : "In Progress";
+      ? "Pending"
+      : "In Progress";
 
   const actionText = isCompleted
     ? "Review"
     : isPending
-    ? "Start"
-    : "Continue";
+      ? "Start"
+      : "Continue";
 
   return (
-    <div className="flex items-center justify-between border-2 border-muted rounded-lg px-4 py-4 hover:bg-muted/40 hover:shadow-md hover:shadow-black/20 transition-all duration-200 hover:border-ring hover:border-2 cursor-pointer">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between border-2 border-muted rounded-lg px-4 py-3 gap-2 md:gap-0 md:py-4 hover:bg-muted/40 hover:shadow-md hover:shadow-black/20 transition-all duration-200 hover:border-ring cursor-pointer">
+
       {/* LEFT AREA: ICON + TITLES */}
-      <div className="flex flex-col gap-1 w-[220px]">
+      <div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1 md:w-[220px]">
         <div className="flex items-center gap-3">
-          <Icon className="w-6 h-6 text-muted-foreground" />
+          <Icon className="w-6 h-6 text-muted-foreground shrink-0" />
           <p className="font-medium text-sm">{submodule.name}</p>
         </div>
-        <span className="text-xs text-muted-foreground pl-9">
+        <span className="text-xs text-muted-foreground md:pl-9 hidden md:block">
+          {parentModule.name}
+        </span>
+        {/* parent module name shown inline on mobile */}
+        <span className="text-xs text-muted-foreground md:hidden">
           {parentModule.name}
         </span>
       </div>
 
       {/* CENTER: PROGRESS + % */}
-      <div className="flex flex-row items-center w-[200px] gap-2">
-        <Progress value={submodule.progress} className="h-2 rounded-full" />
-        <span className="text-xs text-muted-foreground">{submodule.progress}%</span>
+      <div className="flex flex-row items-center gap-2 md:w-[200px]">
+        <Progress value={submodule.progress} className="h-2 rounded-full flex-1" />
+        <span className="text-xs text-muted-foreground shrink-0">{submodule.progress}%</span>
       </div>
 
-      {/* STATUS BADGE */}
-      <Badge
-        variant={isCompleted ? "default" : isPending ? "outline" : "secondary"}
-        className="w-fit"
-      >
-        {status}
-      </Badge>
-
-      {/* ACTION BUTTON */}
-      <Button
-        variant={isCompleted ? "outline" : "default"}
-        className="ml-4"
-      >
-        {actionText}
-      </Button>
+      {/* BOTTOM on mobile / right on desktop: BADGE + BUTTON */}
+      <div className="flex items-center justify-between md:contents">
+        <Badge
+          variant={isCompleted ? "default" : isPending ? "outline" : "secondary"}
+          className="w-fit"
+        >
+          {status}
+        </Badge>
+        <Button
+          variant={isCompleted ? "outline" : "default"}
+          className="md:ml-4"
+        >
+          {actionText}
+        </Button>
+      </div>
     </div>
   );
 }
