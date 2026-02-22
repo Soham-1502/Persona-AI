@@ -53,3 +53,5 @@ build_output*.txt
 /plugins/
 /adapters/
 /docs/
+.coderabbit.yaml
+.cursorrules
