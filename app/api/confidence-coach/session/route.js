@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { connectDB } from "@/lib/mongodb";
-import { User } from "@/models/User";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authenticate } from "@/lib/auth";
+import connectDB from "@/lib/db";
 
 export async function POST(req) {
     try {
-        const session = await getServerSession(authOptions);
+        await connectDB();
 
-        if (!session) {
+        let user;
+        try {
+            user = await authenticate(req);
+        } catch (authError) {
             return NextResponse.json(
                 { success: false, error: "Unauthorized access" },
                 { status: 401 }
@@ -22,18 +23,6 @@ export async function POST(req) {
             return NextResponse.json(
                 { success: false, error: "Missing required session parameters (score, timeTaken)" },
                 { status: 400 }
-            );
-        }
-
-        await connectDB();
-
-        // 1. Fetch User Record
-        const user = await User.findOne({ email: session.user.email });
-
-        if (!user) {
-            return NextResponse.json(
-                { success: false, error: "User not found" },
-                { status: 404 }
             );
         }
 
