@@ -55,3 +55,6 @@ build_output*.txt
 /docs/
 .coderabbit.yaml
 .cursorrules
+GSD-STYLE.md
+PROJECT_RULES.md
+model_capabilities.yaml
