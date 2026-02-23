@@ -1,9 +1,9 @@
 import Groq from 'groq-sdk'
-
+// Sets timeout to 5 minutes
 export async function POST(request) {
   try {
     const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY
+      apiKey: process.env.GROQ_API_KEY_3
     })
 
     const formData = await request.formData()

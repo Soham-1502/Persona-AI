@@ -1,7 +1,7 @@
 import { Groq } from "groq-sdk";
 import { NextResponse } from "next/server";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY_3 });
 
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 

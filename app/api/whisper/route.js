@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 // Initialize Groq client with your API Key
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.GROQ_API_KEY_3,
 });
 
 /**
@@ -59,4 +59,4 @@ export async function POST(req) {
  * If you are deploying to Vercel and expect long recordings, 
  * you may need to increase the maximum execution time.
  */
-export const maxDuration = 60; // 60 seconds (requires Pro plan on Vercel)
+export const maxDuration = 300; // 60 seconds (requires Pro plan on Vercel)

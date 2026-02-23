@@ -1,7 +1,7 @@
 import { Groq } from 'groq-sdk';
 import { NextResponse } from 'next/server';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY_3 });
 
 // In-memory cache with TTL (1 hour)
 const quizCache = new Map();
