@@ -1,50 +1,149 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Highlighter from "react-highlight-words";
 
-export default function ArticulationResults({ analysis, userText, theme }) {
+export default function ArticulationResults() {
+  const [analysisData, setAnalysisData] = useState(null);
+  const [userText, setUserText] = useState("");
+  const [loading, setLoading] = useState(true);
   const [diagnosticAnswers, setDiagnosticAnswers] = useState({});
   const [diagnosticSubmitted, setDiagnosticSubmitted] = useState(false);
+
+  // Read main MCQ points saved from the previous quiz page
+  const mainMcqPoints = Number(localStorage.getItem('mainMcqPoints') || '0');
+
+  // Define theme inside the component (same as previous pages)
+  const theme = {
+    bg: '#0a0a0a',
+    card: '#141414',
+    cardHover: '#1c1c1c',
+    accent: '#a855f7',
+    accentMuted: 'rgba(168, 85, 247, 0.15)',
+    text: '#f9fafb',
+    textMuted: '#94a3b8',
+    border: '#262626',
+    success: '#10b981',
+    error: '#f43f5e',
+    warning: '#f59e0b'
+  };
+
+  useEffect(() => {
+    // Load data from localStorage (saved by articulation-round page)
+    const savedData = localStorage.getItem('articulationResult');
+    
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setAnalysisData(parsed.analysis);
+        setUserText(parsed.userText || "");
+        
+        // Optional: clean up after loading to avoid stale data
+        localStorage.removeItem('articulationResult');
+      } catch (err) {
+        console.error("Failed to parse saved articulation result:", err);
+      }
+    }
+    
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        height: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.bg,
+        color: theme.text
+      }}>
+        Loading results...
+      </div>
+    );
+  }
+
+  if (!analysisData) {
+    return (
+      <div style={{
+        display: 'flex',
+        height: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.bg,
+        color: theme.text,
+        textAlign: 'center',
+        padding: '40px'
+      }}>
+        <div>
+          <h2>No Results Available</h2>
+          <p style={{ color: theme.textMuted, marginTop: '16px' }}>
+            Please complete an articulation round first.
+          </p>
+          <button
+            onClick={() => window.history.back()}
+            style={{
+              marginTop: '24px',
+              padding: '16px 32px',
+              background: theme.accent,
+              color: '#fff',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: '800',
+              cursor: 'pointer'
+            }}
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const {
     accuracy,
     linguisticMarkers = [],
-    clutterFound = [],
     feedback,
-    diagnosticMCQs,
-    advancedRecommendations,
-  } = analysis;
+    diagnosticMCQs = [],
+    advancedRecommendations = [],
+  } = analysisData;
 
   const getStatus = () => {
-    if (accuracy < 50)
-      return { label: "Articulation Deficit", color: theme.error };
-    if (accuracy >= 90)
-      return { label: "Explanatory Mastery", color: theme.success };
+    if (accuracy < 50) return { label: "Articulation Deficit", color: theme.error };
+    if (accuracy >= 90) return { label: "Explanatory Mastery", color: theme.success };
     return { label: "Linguistic Alignment Stable", color: theme.accent };
   };
+
   const status = getStatus();
 
-  // FIX: Merge markers safely and ensure it's an array
-  const allMarkers = [...(linguisticMarkers || []), ...(clutterFound || [])];
-  const disfluencyCount = allMarkers.length;
+  const disfluencyCount = linguisticMarkers.length;
 
-  // FIX: Provide clean strings to the highlighter. 
-  // We use strings here because react-highlight-words handles the regex creation internally.
-  const highlightWords = allMarkers
+  const highlightWords = linguisticMarkers
     .map((item) => {
-      // Extract word from quotes or after a colon
-      const match = item.match(/['"]([^'"]+)['"]/);
-      const word = match ? match[1] : item.replace(/.*:\s*/, "").trim();
-      return word; 
-    })
-    .filter(Boolean); // Remove null/empty entries
+      const quotedMatch = item.match(/['"]([^'"]+)['"]/);
+      if (quotedMatch) return quotedMatch[1];
 
-  const diagnosticCorrectCount =
-    diagnosticMCQs?.filter((m, i) => diagnosticAnswers[i] === m.answer)
-      .length || 0;
-  
-  const totalMCQs = diagnosticMCQs?.length || 1;
+      const afterColon = item.split(/:\s*/)[1]?.trim();
+      return afterColon || "";
+    })
+    .filter(Boolean);
+
+  const diagnosticCorrectCount = diagnosticMCQs.filter(
+    (m, i) => diagnosticAnswers[i] === m.answer
+  ).length;
+
+  const totalMCQs = diagnosticMCQs.length || 1;
   const diagnosticScore = (diagnosticCorrectCount / totalMCQs) * 100;
+
+  // ────────────────────────────────────────────────
+  // Articulation Points based on accuracy %
+  // ────────────────────────────────────────────────
+  let articulationPoints = 5; // default/middle
+  if (accuracy < 50) articulationPoints = 4;
+  else if (accuracy >= 90) articulationPoints = 8;
+  else if (accuracy >= 70) articulationPoints = 6;
+
+  // Total points = articulation points + main MCQ points from previous quiz
+  const totalPoints = articulationPoints + mainMcqPoints;
 
   const getVerdict = () => {
     if (diagnosticScore < 40 && accuracy < 40) {
@@ -52,7 +151,8 @@ export default function ArticulationResults({ analysis, userText, theme }) {
     }
     if (diagnosticScore >= 70 && accuracy < 50) {
       return "Conceptual mastery confirmed, but verbal delivery framework requires structural reorganization.";
-    } else if (diagnosticScore < 50 && accuracy >= 50) {
+    }
+    if (diagnosticScore < 50 && accuracy >= 50) {
       return "High verbal fluency detected, but underlying conceptual nodes are misaligned with source logic.";
     }
     return "Balanced articulation and conceptual alignment achieved.";
@@ -73,7 +173,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
       }}
     >
       {/* 1. HERO SCORE SECTION */}
-      <div style={{ textAlign: "center", marginBottom: "60px" }}>
+      <div style={{ textAlign: "center", marginBottom: "60px", position: "relative" }}>
         <h1
           style={{
             fontSize: "6rem",
@@ -86,6 +186,61 @@ export default function ArticulationResults({ analysis, userText, theme }) {
         >
           {accuracy}%
         </h1>
+
+        {/* Points display — right side of accuracy % */}
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            right: "5%",
+            transform: "translateY(-50%)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "8px",
+          }}
+        >
+          {/* Articulation Points */}
+          <div
+            style={{
+              background: "rgba(168,85,247,0.10)",
+              border: `1px solid #9333ea`,
+              borderRadius: "10px",
+              padding: "6px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "1rem",
+              fontWeight: "700",
+              color: theme.accent,
+            }}
+          >
+            <span style={{ fontSize: "1.2rem", opacity: 0.9 }}>✦</span>
+            {articulationPoints} XP
+            <span style={{ fontSize: "0.8rem", opacity: 0.75, color: theme.textMuted }}>Articulation</span>
+          </div>
+
+          {/* MCQ Points (from previous quiz) */}
+          <div
+            style={{
+              background: "rgba(251,191,36,0.10)",
+              border: "1px solid rgba(251,191,36,0.25)",
+              borderRadius: "10px",
+              padding: "6px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "1rem",
+              fontWeight: "700",
+              color: "#fbbf24",
+            }}
+          >
+            <span style={{ fontSize: "1.2rem", opacity: 0.9 }}>★</span>
+            {mainMcqPoints} XP
+            <span style={{ fontSize: "0.8rem", opacity: 0.75, color: theme.textMuted }}>MCQ</span>
+          </div>
+        </div>
+
         <div style={{ marginTop: "10px" }}>
           <span
             style={{
@@ -171,7 +326,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
             <Highlighter
               searchWords={highlightWords}
               autoEscape={true}
-              textToHighlight={userText}
+              textToHighlight={userText || ""}
               highlightStyle={{
                 backgroundColor: "transparent",
                 color: theme.error,
@@ -183,9 +338,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
         </div>
 
         {/* 3. STACKED ANALYSIS SECTION */}
-        <div
-          style={{ display: "grid", gridTemplateColumns: "1fr", gap: "30px" }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "30px" }}>
           <div
             style={{
               backgroundColor: theme.card,
@@ -213,7 +366,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
                 margin: 0,
               }}
             >
-              {feedback}
+              {feedback || "No detailed feedback available."}
             </p>
           </div>
 
@@ -236,7 +389,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
             >
               ENHANCEMENTS:
             </p>
-            {advancedRecommendations?.slice(0, 3).map((rec, i) => (
+            {advancedRecommendations.slice(0, 3).map((rec, i) => (
               <div
                 key={i}
                 style={{
@@ -258,7 +411,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
         </div>
 
         {/* 4. DEEP SYNTHESIS DIAGNOSTIC */}
-        {accuracy < 60 && diagnosticMCQs?.length > 0 && (
+        {accuracy < 60 && diagnosticMCQs.length > 0 && (
           <div style={{ marginTop: "40px" }}>
             <div style={{ textAlign: "center", marginBottom: "30px" }}>
               <h3
@@ -326,10 +479,10 @@ export default function ArticulationResults({ analysis, userText, theme }) {
                         <button
                           key={key}
                           onClick={() =>
-                            setDiagnosticAnswers({
-                              ...diagnosticAnswers,
+                            setDiagnosticAnswers((prev) => ({
+                              ...prev,
                               [qIdx]: key,
-                            })
+                            }))
                           }
                           style={{
                             textAlign: "left",
@@ -339,9 +492,12 @@ export default function ArticulationResults({ analysis, userText, theme }) {
                               diagnosticAnswers[qIdx] === key
                                 ? `${theme.accent}15`
                                 : "rgba(255,255,255,0.02)",
-                            border: `1px solid ${diagnosticAnswers[qIdx] === key ? theme.accent : "rgba(255,255,255,0.08)"}`,
-                            color:
-                              diagnosticAnswers[qIdx] === key ? "#fff" : "#aaa",
+                            border: `1px solid ${
+                              diagnosticAnswers[qIdx] === key
+                                ? theme.accent
+                                : "rgba(255,255,255,0.08)"
+                            }`,
+                            color: diagnosticAnswers[qIdx] === key ? "#fff" : "#aaa",
                             cursor: "pointer",
                             transition: "0.3s",
                             fontSize: "1.05rem",
@@ -363,12 +519,10 @@ export default function ArticulationResults({ analysis, userText, theme }) {
                     </div>
                   </div>
                 ))}
+
                 <button
                   onClick={() => setDiagnosticSubmitted(true)}
-                  disabled={
-                    Object.keys(diagnosticAnswers).length <
-                    diagnosticMCQs.length
-                  }
+                  disabled={Object.keys(diagnosticAnswers).length < diagnosticMCQs.length}
                   style={{
                     padding: "30px",
                     borderRadius: "20px",
@@ -380,10 +534,7 @@ export default function ArticulationResults({ analysis, userText, theme }) {
                     fontSize: "1.1rem",
                     boxShadow: `0 20px 40px ${theme.accent}33`,
                     opacity:
-                      Object.keys(diagnosticAnswers).length <
-                      diagnosticMCQs.length
-                        ? 0.4
-                        : 1,
+                      Object.keys(diagnosticAnswers).length < diagnosticMCQs.length ? 0.4 : 1,
                   }}
                 >
                   Execute Neural Verification
@@ -484,7 +635,19 @@ export default function ArticulationResults({ analysis, userText, theme }) {
       </div>
 
       <button
-        onClick={() => window.location.reload()}
+        onClick={() => {
+          // ────────────────────────────────────────────────
+          // When next page is ready, uncomment and use one of these:
+          // Option A: Query param (simple)
+          // window.location.href = `/next-page?totalPoints=${totalPoints}`;
+
+          // Option B: Save to localStorage + redirect (cleaner)
+          // localStorage.setItem('sessionTotalPoints', totalPoints.toString());
+          // window.location.href = '/next-page';
+
+          // For now — going to categories as before
+          window.location.href = '/categories';
+        }}
         style={{
           marginTop: "60px",
           width: "100%",

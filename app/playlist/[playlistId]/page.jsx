@@ -177,7 +177,7 @@ const styles = {
     borderRadius: "12px",
     overflow: "hidden",
     backgroundColor: "#1a1a1a",
-    border: "1px solid #333",
+    border: "1px solid #a855f7",
   },
   thumbnail: { width: "100%", aspectRatio: "16/9", objectFit: "cover" },
   duration: {

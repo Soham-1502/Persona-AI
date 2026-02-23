@@ -1,18 +1,26 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function ArticulationRound({ transcript, onAnalysisComplete }) {
+export default function ArticulationRound() {
+  const router = useRouter();
+
   const [text, setText] = useState('');
   const [interimText, setInterimText] = useState(''); 
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [error, setError] = useState(null); // NEW: Error state
+  const [error, setError] = useState(null);
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null); 
+
+  // Get transcript from localStorage (set by quiz page)
+  const transcript = typeof window !== 'undefined' 
+    ? localStorage.getItem('quizTranscript') || '' 
+    : '';
 
   const theme = {
     accent: '#a855f7',
@@ -48,7 +56,7 @@ export default function ArticulationRound({ transcript, onAnalysisComplete }) {
   }, []);
 
   const startRecording = async () => {
-    setError(null); // Clear previous errors
+    setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
@@ -127,9 +135,15 @@ export default function ArticulationRound({ transcript, onAnalysisComplete }) {
       const data = await res.json();
       
       if (data.success) {
-        onAnalysisComplete(data.analysis, text);
+        // Store analysis + user text for the results page
+        localStorage.setItem('articulationResult', JSON.stringify({
+          analysis: data.analysis,
+          userText: text
+        }));
+        
+        // Redirect to results page
+        router.push('/articulation-results');
       } else {
-        // Specifically catch the "Network Connection Issue" from our API
         throw new Error(data.error || "Cognitive Audit failed.");
       }
     } catch (err) {

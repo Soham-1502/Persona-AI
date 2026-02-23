@@ -2,10 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
-import GeminiChatTab from '@/components/GeminiChatTab';
-// NEW IMPORTS FOR AUTOMATION
+import DigitalSmartNotesTab from '@/components/DigitalSmartNotesTab';
 import { segmentTranscript } from '@/lib/segmenter';
-import { getVideoTranscript } from '@/lib/youtube-transcript';
 
 export default function VideoPlayerPage() {
   const params = useParams();
@@ -21,24 +19,37 @@ export default function VideoPlayerPage() {
   const [videoDetails, setVideoDetails] = useState(null);
   const [activeRightTab, setActiveRightTab] = useState('course');
   
-  // NEW STATE FOR BUTTON LOCK
+  // Video end state
   const [isVideoEnded, setIsVideoEnded] = useState(false);
 
-  // TRIGGER TRACKER
-  const hasTriggeredTranscript = useRef(false);
+  // Transcript states
+  const hasTriggeredGladia = useRef(false);
+  const [transcriptStatus, setTranscriptStatus] = useState('not_started');
+
+  // MCQ states
+  const hasSentToMCQ = useRef(false);
+  const [mcqStatus, setMcqStatus] = useState('not_started');
 
   const theme = {
     accent: '#a855f7',
     bg: '#050505',
     border: '#262626',
     sidebar: '#0a0a0a',
-    textMuted: '#94a3b8'
+    textMuted: '#94a3b8',
+    success: '#10b981'
   };
 
-  // --- AUTOMATION TRIGGER: 80% PROGRESS ---
+  // Reset everything on video change
+  useEffect(() => {
+    hasTriggeredGladia.current = false;
+    hasSentToMCQ.current = false;
+    setTranscriptStatus('not_started');
+    setMcqStatus('not_started');
+  }, [videoId]);
+
+  // Progress checking + Gladia + auto-MCQ
   useEffect(() => {
     if (!player || !videoId) return;
-    hasTriggeredTranscript.current = false; 
 
     const interval = setInterval(async () => {
       if (player.getCurrentTime && player.getDuration) {
@@ -47,29 +58,62 @@ export default function VideoPlayerPage() {
         
         if (duration > 0) {
           const progress = (currentTime / duration) * 100;
-          
-          if (progress >= 80 && !hasTriggeredTranscript.current) {
-            hasTriggeredTranscript.current = true;
-            
-            console.log("🚀 80% Milestone: Starting automated MCQ generation...");
+
+          if (progress >= 70 && !hasTriggeredGladia.current && transcriptStatus === 'not_started') {
+            hasTriggeredGladia.current = true;
+            setTranscriptStatus('generating');
+            console.log("70% reached → Starting Gladia transcript");
 
             try {
-              const rawXml = await getVideoTranscript(videoId);
-              if (rawXml) {
-                const cleanText = rawXml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-                const segments = segmentTranscript(cleanText, 1);
-                const response = await fetch('/api/mcq', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ segments, videoId }) 
-                });
-                
-                if (response.ok) {
-                  console.log("✅ Neural Assessment generated silently in the background.");
-                }
+              const response = await fetch('/api/generate-transcript', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoId }),
+              });
+
+              if (!response.ok) throw new Error(`Gladia failed: ${response.status}`);
+
+              const data = await response.json();
+              if (data.transcript) {
+                localStorage.setItem(`transcript_${videoId}`, data.transcript);
+                setTranscriptStatus('ready');
+                console.log("Gladia transcript ready");
+              } else {
+                throw new Error('No transcript data');
               }
             } catch (err) {
-              console.error("Auto-Automation Error:", err);
+              console.error("Gladia error:", err);
+              setTranscriptStatus('error');
+            }
+          }
+
+          if (transcriptStatus === 'ready' && !hasSentToMCQ.current) {
+            hasSentToMCQ.current = true;
+            setMcqStatus('generating');
+            console.log("Transcript ready → Starting MCQ generation");
+
+            const storedTranscript = localStorage.getItem(`transcript_${videoId}`);
+            if (storedTranscript) {
+              try {
+                const segments = segmentTranscript(storedTranscript, 1);
+
+                const mcqResponse = await fetch('/api/mcq', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ segments, videoId }),
+                });
+
+                if (mcqResponse.ok) {
+                  setMcqStatus('ready');
+                  console.log("MCQs generated and cached");
+                } else {
+                  console.error("MCQ failed:", mcqResponse.status);
+                  setMcqStatus('error');
+                }
+              } catch (err) {
+                console.error("MCQ generation error:", err);
+                setMcqStatus('error');
+              }
             }
           }
         }
@@ -77,9 +121,9 @@ export default function VideoPlayerPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [player, videoId]);
+  }, [player, videoId, transcriptStatus]);
 
-  // Fetch playlist for sidebar
+  // Fetch playlist
   useEffect(() => {
     async function fetchPlaylist() {
       if (!playlistId) return;
@@ -98,17 +142,17 @@ export default function VideoPlayerPage() {
         setVideos(items);
         setLoading(false);
       } catch (err) {
-        console.error("Playlist fetch error:", err);
+        console.error("Playlist error:", err);
         setLoading(false);
       }
     }
     fetchPlaylist();
   }, [playlistId, router]);
 
-  // Fetch current video details
+  // Fetch video details
   useEffect(() => {
     if (!videoId) return;
-    setIsVideoEnded(false); // Reset lock when switching videos
+    setIsVideoEnded(false);
 
     async function fetchVideoDetails() {
       const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
@@ -118,7 +162,7 @@ export default function VideoPlayerPage() {
         const res = await fetch(
           `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`
         );
-        if (!res.ok) throw new Error(`Video details fetch failed: ${res.status}`);
+        if (!res.ok) throw new Error(`Video fetch failed: ${res.status}`);
         const data = await res.json();
         if (data.items?.[0]?.snippet) {
           const item = data.items[0].snippet;
@@ -134,7 +178,7 @@ export default function VideoPlayerPage() {
     fetchVideoDetails();
   }, [videoId]);
 
-  // Initialize YouTube player
+  // YouTube player init
   useEffect(() => {
     if (!videoId || player) return;
 
@@ -154,13 +198,10 @@ export default function VideoPlayerPage() {
           disablekb: 1
         },
         events: {
-          onReady: () => {
-            console.log("YouTube Player is fully ready!");
-          },
+          onReady: () => console.log("YouTube Player ready"),
           onStateChange: (event) => {
-            // Check if video has ended
             if (event.data === window.YT.PlayerState.ENDED) {
-              setIsVideoEnded(true); 
+              setIsVideoEnded(true);
               handleAutoNext();
             }
           }
@@ -178,29 +219,43 @@ export default function VideoPlayerPage() {
     }
 
     intervalId = setInterval(() => {
-      if (window.YT && window.YT.Player) {
-        initPlayer();
-      }
+      if (window.YT && window.YT.Player) initPlayer();
     }, 100);
 
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    return () => clearInterval(intervalId);
   }, [videoId, player]);
 
-  // Spacebar to play/pause
+  // Keyboard controls: Space = play/pause, Left = -5s, Right = +5s
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Prevent action when typing in input/textarea
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (!player) return;
+
+      // Space → Play/Pause
       if (e.code === 'Space' || e.key === ' ') {
-        e.preventDefault();
-        if (!player) return;
+        e.preventDefault(); // prevent page scroll
         const state = player.getPlayerState();
         if (state === window.YT.PlayerState.PLAYING) {
           player.pauseVideo();
         } else {
           player.playVideo();
         }
+      }
+
+      // Arrow Left → -5 seconds
+      else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        const current = player.getCurrentTime();
+        player.seekTo(Math.max(0, current - 5), true); // true = allow seek during buffering
+      }
+
+      // Arrow Right → +5 seconds
+      else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        const current = player.getCurrentTime();
+        const duration = player.getDuration() || 999999;
+        player.seekTo(Math.min(duration, current + 5), true);
       }
     };
 
@@ -218,13 +273,15 @@ export default function VideoPlayerPage() {
   const handleAutoNext = () => {
     const currentIndex = videos.findIndex(v => v.id === videoId);
     if (currentIndex !== -1 && currentIndex < videos.length - 1) {
-      // Auto-next logic could go here if desired
+      // Optional auto-next – you can implement switchVideo(videos[currentIndex + 1].id) here
     }
   };
 
   if (loading && videos.length === 0) {
     return <div style={{ background: theme.bg, color: '#fff', height: '100vh', padding: '40px' }}>Loading...</div>;
   }
+
+  const isAssessmentEnabled = isVideoEnded && mcqStatus === 'ready';
 
   return (
     <div style={{ display: 'flex', height: '100vh', backgroundColor: theme.bg, color: '#fff', overflow: 'hidden' }}>
@@ -245,68 +302,67 @@ export default function VideoPlayerPage() {
           <div id="youtube-player" style={{ width: '100%', height: '100%' }} />
         </div>
         
-        {/* TITLE BAR WITH REVISED MCQ BUTTON */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '30px', gap: '20px' }}>
           <h1 style={{ fontSize: '1.8rem', fontWeight: '800', margin: 0, flex: 1 }}>
             {videoDetails?.title || "Loading..."}
           </h1>
           
-          <button 
-            disabled={!isVideoEnded}
-            onClick={() => router.push(`/quiz?videoId=${videoId}`)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '14px 28px',
-              borderRadius: '16px',
-              whiteSpace: 'nowrap',
-              fontSize: '0.95rem',
-              fontWeight: '800',
-              letterSpacing: '0.5px',
-              cursor: isVideoEnded ? 'pointer' : 'not-allowed',
-              transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-              
-              // Conditional Design
-              backgroundColor: isVideoEnded ? theme.accent : 'rgba(255, 255, 255, 0.03)',
-              color: isVideoEnded ? '#fff' : 'rgba(148, 163, 184, 0.4)',
-              border: isVideoEnded 
-                ? `1px solid ${theme.accent}` 
-                : '1px solid rgba(255, 255, 255, 0.08)',
-              
-              // Visual Effects
-              boxShadow: isVideoEnded 
-                ? `0 10px 25px -5px ${theme.accent}66, inset 0 1px 0 rgba(255,255,255,0.3)` 
-                : 'none',
-              filter: isVideoEnded ? 'grayscale(0)' : 'grayscale(1)',
-              backdropFilter: isVideoEnded ? 'none' : 'blur(8px)',
-            }}
-            onMouseOver={(e) => {
-              if (isVideoEnded) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = `0 15px 30px -5px ${theme.accent}88, inset 0 1px 0 rgba(255,255,255,0.4)`;
-              }
-            }}
-            onMouseOut={(e) => {
-              if (isVideoEnded) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = `0 10px 25px -5px ${theme.accent}66, inset 0 1px 0 rgba(255,255,255,0.3)`;
-              }
-            }}
-          >
-            {isVideoEnded ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {transcriptStatus === 'generating' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b', fontSize: '0.9rem', fontWeight: '600' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span>Transcript Processing</span>
+              </div>
             )}
-            <span>{isVideoEnded ? "TAKE ASSESSMENT" : "LOCKED"}</span>
-          </button>
+
+            {transcriptStatus === 'ready' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: theme.success, fontSize: '0.9rem', fontWeight: '600' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <span>Transcript Ready</span>
+              </div>
+            )}
+
+            <button 
+              disabled={!isAssessmentEnabled}
+              onClick={() => router.push(`/quiz?videoId=${videoId}`)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '14px 28px',
+                borderRadius: '16px',
+                whiteSpace: 'nowrap',
+                fontSize: '0.95rem',
+                fontWeight: '800',
+                letterSpacing: '0.5px',
+                cursor: isAssessmentEnabled ? 'pointer' : 'not-allowed',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                backgroundColor: isAssessmentEnabled ? theme.accent : 'rgba(255, 255, 255, 0.03)',
+                color: isAssessmentEnabled ? '#fff' : 'rgba(148, 163, 184, 0.4)',
+                border: isAssessmentEnabled ? `1px solid ${theme.accent}` : '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: isAssessmentEnabled ? `0 10px 25px -5px ${theme.accent}66, inset 0 1px 0 rgba(255,255,255,0.3)` : 'none',
+              }}
+            >
+              {isAssessmentEnabled ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              )}
+              <span>{isAssessmentEnabled ? "TAKE ASSESSMENT" : "LOCKED"}</span>
+            </button>
+          </div>
         </div>
         
         <p style={{ color: theme.textMuted, marginTop: '16px', fontSize: '1rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
@@ -314,7 +370,7 @@ export default function VideoPlayerPage() {
         </p>
       </div>
 
-      {/* Right: Sidebar with Tabs */}
+      {/* Right: Sidebar */}
       <div style={{ 
         width: '400px', 
         backgroundColor: theme.sidebar, 
@@ -332,11 +388,11 @@ export default function VideoPlayerPage() {
           gap: '12px'
         }}>
           <h2 style={{ fontSize: '0.9rem', letterSpacing: '2px', color: theme.accent, fontWeight: '900', margin: 0 }}>
-            {activeRightTab === 'course' ? 'COURSE CONTENT' : 'VIDEO INSIGHTS'}
+            {activeRightTab === 'course' ? 'COURSE CONTENT' : 'DIGITAL SMART NOTES'}
           </h2>
 
           <button
-            onClick={() => setActiveRightTab(activeRightTab === 'course' ? 'gemini' : 'course')}
+            onClick={() => setActiveRightTab(activeRightTab === 'course' ? 'notes' : 'course')}
             style={{
               background: 'transparent',
               border: `1px solid ${theme.accent}`,
@@ -349,7 +405,7 @@ export default function VideoPlayerPage() {
               transition: 'all 0.2s'
             }}
           >
-            {activeRightTab === 'course' ? 'Open Insights' : 'Back to Course'}
+            {activeRightTab === 'course' ? 'Notes' : 'Back to Course'}
           </button>
         </div>
         
@@ -402,7 +458,12 @@ export default function VideoPlayerPage() {
               </div>
             ))
           ) : (
-            <GeminiChatTab player={player} videoId={videoId} theme={theme} />
+            <DigitalSmartNotesTab 
+              player={player} 
+              videoId={videoId} 
+              theme={theme} 
+              videoTitle={videoDetails?.title}   
+            />
           )}
         </div>
       </div>
