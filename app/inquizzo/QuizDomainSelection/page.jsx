@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import Lottie from 'lottie-react';
-import errorAnimationData from '@/public/InQuizoo icons/lottieflow-404-12-1-000000-easey.json';
 import { cn } from "@/lib/utils";
 import { useRouter } from 'next/navigation';
 import { useTheme } from "next-themes";
