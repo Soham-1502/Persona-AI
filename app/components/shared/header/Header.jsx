@@ -1,3 +1,5 @@
+'use client'
+
 import { DateFilter, Notifications, Theme } from './HeaderComponents';
 import { useEffect, useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';

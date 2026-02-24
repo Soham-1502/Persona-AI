@@ -145,7 +145,7 @@ export default function Home() {
         <Header DateValue={selectedDate} onDateChange={onDateChange} tempDate={today} />
       </div>
       {/* Mobile: swiper shows 1 card at a time; Desktop: unchanged 4-col grid */}
-      <div className='h-fit p-2 px-3 rounded-md flex flex-col gap-3 md:grid md:grid-cols-4'>
+      <div className='h-fit p-2 px-3 rounded-md flex flex-col gap-3 md:grid md:grid-cols-2 lg:grid-cols-4'>
         <MetricCardSwiper count={4}>
           <MetricCard
             icon={Activity}
@@ -180,10 +180,10 @@ export default function Home() {
             subtitle={selectedDate}
           />
         </MetricCardSwiper>
-        <div className='col-span-full md:col-span-3'>
+        <div className='col-span-full lg:col-span-3'>
           <ActivityChart data={ActivityChartData} selectedDate={selectedDate} />
         </div>
-        <div>
+        <div className='col-span-full lg:col-span-1'>
           <InsightsCard
             insights={insightsData?.insights}
             streak={insightsData?.streak}
