@@ -10,7 +10,6 @@ import {
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import { motion } from 'framer-motion';
 import Lottie from 'lottie-react';
-import errorAnimationData from '@/public/InQuizoo icons/lottieflow-404-12-1-000000-easey.json';
 import Header from '@/app/components/shared/header/Header.jsx';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import CursorAura from '@/app/components/inquizzo/CursorAura';
