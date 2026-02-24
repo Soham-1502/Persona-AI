@@ -53,7 +53,8 @@ export default function AppSidebar() {
   const pathname = usePathname();
   const { toggleSidebar, state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
   const router = useRouter();
 
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
@@ -87,7 +88,14 @@ export default function AppSidebar() {
     }
   }, []);
 
-  const isDarkMode = theme === "dark";
+  const isDarkMode = resolvedTheme === "dark";
+
+  // Glassmorphism styles matching the header
+  const glassStyle = {
+    backgroundColor: isLight ? 'rgba(232, 224, 240, 0.5)' : 'rgba(10, 8, 16, 0.1)',
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
+  };
 
   // ✅ GET INITIALS FOR AVATAR FALLBACK
   const getInitials = (name) => {
@@ -117,14 +125,26 @@ export default function AppSidebar() {
     }, 500);
   }
 
+  if (!mounted) return null;
+
   return (
     <Sidebar
       data-sidebar="sidebar"
-      className="h-screen border-r dark:border-white/10"
+      className="h-screen"
       collapsible="icon"
+      style={{
+        ...glassStyle,
+        borderRight: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.06)',
+      }}
     >
       {/* HEADER */}
-      <SidebarHeader className="h-20 py-4 border-b dark:border-white/10 bg-sidebar-foreground dark:bg-sidebar">
+      <SidebarHeader
+        className="h-20 py-4"
+        style={{
+          borderBottom: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'transparent',
+        }}
+      >
         <div className="h-full flex items-center justify-between px-2 group-data-[collapsible=icon]:px-0">
           {/* Logo + text */}
           <div className="flex items-center gap-2 overflow-hidden">
@@ -167,7 +187,7 @@ export default function AppSidebar() {
       </SidebarHeader>
 
       {/* NAV */}
-      <SidebarContent className="py-1 bg-sidebar-foreground dark:bg-sidebar px-1">
+      <SidebarContent className="py-1 px-1" style={{ background: 'transparent' }}>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
@@ -205,7 +225,13 @@ export default function AppSidebar() {
       </SidebarContent>
 
       {/* FOOTER */}
-      <SidebarFooter className="border-t border-black/20 dark:border-white/15 bg-sidebar-foreground dark:bg-sidebar group/footer">
+      <SidebarFooter
+        className="group/footer"
+        style={{
+          borderTop: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'transparent',
+        }}
+      >
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton

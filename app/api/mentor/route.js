@@ -1,9 +1,9 @@
-// app/api/mentor/route.js
 import { Groq } from 'groq-sdk';
 import jwt from "jsonwebtoken";
 import connectDB from "@/lib/db";
 import UserAttempt from "@/models/UserAttempt";
 import User from "@/models/User";
+import { getGroqChain, isKeyRateLimited, markKeyRateLimited } from "@/lib/ai-handler";
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 function getUserFromToken(req) {
@@ -58,16 +58,63 @@ Make your entire response feel like a single, cohesive piece of advice from a re
                 }))
         ];
 
-        // Create streaming chat completion
-        const chatCompletion = await groq.chat.completions.create({
-            messages: groqMessages,
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.7,
-            max_completion_tokens: 1024,
-            top_p: 1,
-            stream: true,
-            stop: null
-        });
+        const keys = getGroqChain();
+        const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+        let chatCompletion = null;
+
+        for (let m = 0; m < models.length; m++) {
+            const model = models[m];
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i].trim();
+                if (!key) continue;
+
+                if (isKeyRateLimited(key, model)) {
+                    continue; // Instantly skip exhausted keys
+                }
+
+                const groq = new Groq({ apiKey: key });
+
+                try {
+                    // Create streaming chat completion
+                    chatCompletion = await groq.chat.completions.create({
+                        messages: groqMessages,
+                        model: model,
+                        temperature: 0.7,
+                        max_completion_tokens: 1024,
+                        top_p: 1,
+                        stream: true,
+                        stop: null
+                    });
+
+                    // If successful, break out of both loops
+                    break;
+                } catch (error) {
+                    const status = error.status || error.response?.status;
+                    const message = error.message || "";
+
+                    if (status === 429 || message.toLowerCase().includes("rate limit")) {
+                        console.warn(`⚠️ [Mentor Groq Key ${i} | ${model}] failed: ${message} -> Marking Exhausted & Trying NEXT KEY...`);
+                        markKeyRateLimited(key, model, message);
+                        continue;
+                    } else if (status === 401) {
+                        console.warn(`⚠️ [Mentor Groq Key ${i} | ${model}] Auth Error -> Skipping key...`);
+                        markKeyRateLimited(key, model, "try again in 24h");
+                        continue;
+                    } else if (status === 400 && message.toLowerCase().includes("decommissioned")) {
+                        console.warn(`⚠️ [Mentor Groq Key ${i} | ${model}] decommissioned -> Trying NEXT MODEL...`);
+                        break;
+                    } else {
+                        console.warn(`⚠️ [Mentor Groq Key ${i} | ${model}] unknown error: ${message}`);
+                        continue;
+                    }
+                }
+            }
+            if (chatCompletion) break; // Break outer loop if we got a completion stream
+        }
+
+        if (!chatCompletion) {
+            throw new Error("All Groq keys and models exhausted for Mentor Stream.");
+        }
 
         // Save session to DB (best-effort, non-blocking)
         const decoded = getUserFromToken(req);
@@ -105,6 +152,7 @@ Make your entire response feel like a single, cohesive piece of advice from a re
                 'Connection': 'keep-alive',
             },
         });
+
 
     } catch (error) {
         console.error('API Error:', error);

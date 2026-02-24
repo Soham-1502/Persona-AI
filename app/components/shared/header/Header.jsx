@@ -3,9 +3,12 @@
 import { DateFilter, Notifications, Theme } from './HeaderComponents';
 import { useEffect, useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useTheme } from 'next-themes';
 
 export default function Header({ DateValue, onDateChange, tempDate, showDateFilter = true }) {
     const [userName, setUserName] = useState('User');
+    const { resolvedTheme } = useTheme();
+    const isLight = resolvedTheme === 'light';
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -20,7 +23,15 @@ export default function Header({ DateValue, onDateChange, tempDate, showDateFilt
     }, []);
 
     return (
-        <header className='w-full bg-background text-foreground px-4 z-50 sticky top-0'>
+        <header
+            className='w-full text-foreground px-4 z-50 sticky top-0'
+            style={{
+                backgroundColor: isLight ? 'rgba(255, 255, 255, 0.05)' : 'rgba(10, 8, 16, 0.1)',
+                backdropFilter: 'blur(6px)',
+                WebkitBackdropFilter: 'blur(6px)',
+                borderBottom: isLight ? '1px solid rgba(0, 0, 0, 0.05)' : '1px solid rgba(255, 255, 255, 0.06)',
+            }}
+        >
 
             {/* Main row: hamburger | welcome | [date desktop] | buttons */}
             <div className="h-16 flex flex-row items-center justify-between gap-2">

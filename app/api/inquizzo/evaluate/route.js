@@ -52,8 +52,8 @@ Respond ONLY in JSON:
       console.log(`💡 Partial points awarded based on similarity (${Math.round(similarity * 100)}%): ${score}`);
     }
 
-    // Update user stats
-    await user.updateGameStats(score, evaluation.isCorrect);
+    // We no longer update stats here as it's double counting. 
+    // RandomQuiz calls /api/inquizzo/attempt separately to save the record and update stats.
 
     console.log("-----------------------------------------");
     console.log(`📊 EVALUATION [Score: ${score}/15]:`);

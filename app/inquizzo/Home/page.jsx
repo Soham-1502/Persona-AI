@@ -57,7 +57,7 @@ const ShowcaseSection = () => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] px-8 text-center">
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-[60vh] md:min-h-[80vh] px-4 md:px-8 text-center">
         {/* Badge chip */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#7303C0]/30 bg-[#7303C0]/10 backdrop-blur-sm mb-6">
           <div className="w-1.5 h-1.5 rounded-full bg-[#EC38BC] animate-pulse" />
@@ -66,13 +66,13 @@ const ShowcaseSection = () => {
           </span>
         </div>
 
-        <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 leading-tight">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-6 leading-tight">
           InQuizo
         </h1>
-        <h2 className="text-2xl md:text-3xl text-white/90 mb-4 font-light">
+        <h2 className="text-xl md:text-2xl lg:text-3xl text-white/90 mb-4 font-light">
           Voice-Controlled Quiz Platform
         </h2>
-        <p className="text-lg text-white/80 mb-12 max-w-2xl">
+        <p className="text-base md:text-lg text-white/80 mb-12 max-w-2xl px-2">
           Experience the future of learning with our advanced voice-controlled quiz system
         </p>
 
@@ -88,12 +88,12 @@ const ShowcaseSection = () => {
 
       {/* Cards Section */}
       <div id="cards" className="relative z-10 py-20">
-        <div className="container mx-auto px-8">
-          <h3 className="text-3xl font-bold text-white text-center mb-12">
+        <div className="container mx-auto px-4 md:px-8">
+          <h3 className="text-2xl md:text-3xl font-bold text-white text-center mb-8 md:mb-12">
             Explore InQuizo Features
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             {items.map((item, index) => (
               <Link
                 href={item.link}

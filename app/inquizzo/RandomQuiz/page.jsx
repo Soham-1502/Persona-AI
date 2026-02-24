@@ -2,37 +2,28 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from "react";
+import { useTheme } from "next-themes";
 import {
-  Mic,
-  MicOff,
-  Volume2,
-  CheckCircle,
-  XCircle,
-  RotateCcw,
-  Play,
-  Zap,
-  Target,
-  Brain,
-  History,
-  Shield,
-  BarChart3,
-  Clock
+  Mic, MicOff, Volume2, CheckCircle, XCircle,
+  Zap, ArrowLeft
 } from "lucide-react";
+import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
+import { motion } from 'framer-motion';
+import Lottie from 'lottie-react';
+import errorAnimationData from '@/public/InQuizoo icons/lottieflow-404-12-1-000000-easey.json';
 import Header from '@/app/components/shared/header/Header.jsx';
-import { Card } from "@/components/ui/card";
+import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
+import CursorAura from '@/app/components/inquizzo/CursorAura';
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { jsPDF } from "jspdf";
-import axios from "axios";
+import { toast, Toaster } from "sonner";
 
-// Loading state indicator
-const LoaderIcon = () => (
-  <div className="w-5 h-5 border-2 border-persona-purple border-t-transparent rounded-full animate-spin" />
-);
-
+/* ═══════════════════════════════════════════════════════════════
+   COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
 const Quiz = () => {
+  // ── State ──────────────────────────────────────────────────
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -50,9 +41,10 @@ const Quiz = () => {
   const [timerActive, setTimerActive] = useState(false);
   const [lastGainedScore, setLastGainedScore] = useState(0);
   const [isBrowserSupported, setIsBrowserSupported] = useState(true);
-
-  // Difficulty
   const [selectedDifficulty, setSelectedDifficulty] = useState("medium");
+  const [lastIsCorrect, setLastIsCorrect] = useState(false);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
   // Session tracking (10 questions per session)
   const SESSION_LENGTH = 10;
@@ -62,43 +54,9 @@ const Quiz = () => {
   const [showSessionEnd, setShowSessionEnd] = useState(false);
   const questionStartTimeRef = useRef(Date.now());
 
-
-  useEffect(() => {
-    // ✅ Load user data from localStorage
-    const token = localStorage.getItem("token");
-    const userStr = localStorage.getItem("user");
-
-    if (token && userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        setUsername(userData.name || userData.username || userData.email || "");
-        setIsAuthenticated(true);
-      } catch {
-        setUsername("");
-        setIsAuthenticated(false);
-      }
-    } else {
-      setUsername(localStorage.getItem("username") || "");
-      setIsAuthenticated(false);
-    }
-
-    // Initial check for browser support
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setIsBrowserSupported(false);
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-    };
-  }, []);
-
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
-
   const [chatHistory, setChatHistory] = useState([]);
 
   const recognitionRef = useRef(null);
@@ -107,41 +65,47 @@ const Quiz = () => {
   const voicesRef = useRef([]);
   const transcriptRef = useRef("");
 
-  // ✅ Helper: get localStorage key for this user's seen questions
+  // ── Init ───────────────────────────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+    if (token && userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setUsername(userData.name || userData.username || userData.email || "");
+        setIsAuthenticated(true);
+      } catch { setUsername(""); setIsAuthenticated(false); }
+    } else {
+      setUsername(localStorage.getItem("username") || "");
+      setIsAuthenticated(false);
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) setIsBrowserSupported(false);
+    setMounted(true);
+    return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
+  }, []);
+
+  // ── Helpers ────────────────────────────────────────────────
   const getSeenQuestionsKey = () => {
     const userStr = localStorage.getItem("user");
-    if (userStr) {
-      try {
-        const u = JSON.parse(userStr);
-        return `quiz_seen_${u.id || u.email || "default"}`;
-      } catch { return "quiz_seen_default"; }
-    }
+    if (userStr) { try { const u = JSON.parse(userStr); return `quiz_seen_${u.id || u.email || "default"}`; } catch { return "quiz_seen_default"; } }
     return "quiz_seen_default";
   };
 
-  // ✅ Load seen questions from localStorage on mount
   useEffect(() => {
     const key = getSeenQuestionsKey();
-    try {
-      const stored = JSON.parse(localStorage.getItem(key) || "[]");
-      seenQuestionsRef.current = Array.isArray(stored) ? stored : [];
-    } catch { seenQuestionsRef.current = []; }
+    try { const stored = JSON.parse(localStorage.getItem(key) || "[]"); seenQuestionsRef.current = Array.isArray(stored) ? stored : []; } catch { seenQuestionsRef.current = []; }
   }, []);
 
-  // ✅ Preload TTS voices
   useEffect(() => {
     if ("speechSynthesis" in window) {
-      const loadVoices = () => {
-        voicesRef.current = speechSynthesis.getVoices();
-      };
+      const loadVoices = () => { voicesRef.current = speechSynthesis.getVoices(); };
       loadVoices();
       speechSynthesis.onvoiceschanged = loadVoices;
     }
   }, []);
 
-  const getAuthToken = () => {
-    return localStorage.getItem("token") || localStorage.getItem("authToken");
-  };
+  const getAuthToken = () => localStorage.getItem("token") || localStorage.getItem("authToken");
 
   const handleAuthError = () => {
     localStorage.removeItem("token");
@@ -152,170 +116,122 @@ const Quiz = () => {
 
   const makeAuthenticatedRequest = async (url, options = {}) => {
     const token = getAuthToken();
-    if (!token) {
-      handleAuthError();
-      throw new Error("No authentication token found");
-    }
+    if (!token) { handleAuthError(); throw new Error("No authentication token found"); }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2-minute timeout limit
 
     const config = {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options.headers },
+      signal: controller.signal
     };
 
     try {
       const response = await fetch(url, config);
-      if (response.status === 401) {
-        handleAuthError();
-        throw new Error("Authentication failed");
-      }
+      clearTimeout(timeoutId);
+
+      if (response.status === 401) { handleAuthError(); throw new Error("Authentication failed"); }
       if (!response.ok) {
         let errorMsg = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.message) errorMsg = errorData.message;
-        } catch (e) {}
+        try { const errorData = await response.json(); if (errorData?.message) errorMsg = errorData.message; } catch { }
         throw new Error(errorMsg);
       }
       return await response.json();
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error("API call error:", error);
       throw error;
     }
   };
 
   useEffect(() => {
-    currentQuestionRef.current = {
-      question: currentQuestion,
-      answer: correctAnswer,
-    };
+    currentQuestionRef.current = { question: currentQuestion, answer: correctAnswer };
   }, [currentQuestion, correctAnswer, isLoading, showResult]);
 
+  // ── Speech Recognition ─────────────────────────────────────
   const startListening = () => {
     if (typeof window === 'undefined') return;
     if (!currentQuestion) return;
-
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setFeedback("Speech Recognition not supported in this browser.");
-      setIsBrowserSupported(false);
-      return;
-    }
+    if (!SpeechRecognition) { setFeedback("Speech Recognition not supported."); setIsBrowserSupported(false); return; }
 
     if (!isListening) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch { }
-      }
-      setTranscript("");
-      transcriptRef.current = "";
-      setFeedback("");
-      setTimer(30);
-      setTimerActive(true);
+      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { } }
+      setTranscript(""); transcriptRef.current = ""; setFeedback(""); setTimer(30); setTimerActive(true);
 
       let intentionalStop = false;
       let silenceTimer;
-
-      const startSilenceTimer = () => {
-        clearTimeout(silenceTimer);
-        silenceTimer = setTimeout(() => {
-          intentionalStop = true;
-          recognition.stop();
-        }, 6000);
-      };
+      const startSilenceTimer = () => { clearTimeout(silenceTimer); silenceTimer = setTimeout(() => { intentionalStop = true; recognition.stop(); }, 6000); };
 
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-      recognition.maxAlternatives = 1;
+      recognition.continuous = true; recognition.interimResults = true; recognition.lang = "en-US"; recognition.maxAlternatives = 1;
 
-      recognition.onstart = () => {
-        setIsListening(true);
-      };
-
+      recognition.onstart = () => setIsListening(true);
       recognition.onresult = (event) => {
         startSilenceTimer();
-        let finalTranscript = "";
-        let interimTranscript = "";
+        let finalTranscript = ""; let interimTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
           else interimTranscript += event.results[i][0].transcript;
         }
-        if (finalTranscript) {
-          const newTranscript = (transcriptRef.current + " " + finalTranscript).trim();
-          transcriptRef.current = newTranscript;
-          setTranscript(newTranscript);
-        } else if (interimTranscript) {
-          setTranscript((transcriptRef.current + " " + interimTranscript).trim());
-        }
+        if (finalTranscript) { const t = (transcriptRef.current + " " + finalTranscript).trim(); transcriptRef.current = t; setTranscript(t); }
+        else if (interimTranscript) setTranscript((transcriptRef.current + " " + interimTranscript).trim());
       };
-
       recognition.onend = () => {
         clearTimeout(silenceTimer);
         if (intentionalStop || transcriptRef.current.trim()) {
-          setIsListening(false);
-          recognitionRef.current = null;
+          setIsListening(false); recognitionRef.current = null;
           if (transcriptRef.current.trim()) checkAnswer(transcriptRef.current);
-        } else {
-          try { recognition.start(); } catch {
-            setIsListening(false);
-            recognitionRef.current = null;
-          }
-        }
+        } else { try { recognition.start(); } catch { setIsListening(false); recognitionRef.current = null; } }
       };
-
       recognition.onerror = (event) => {
         clearTimeout(silenceTimer);
-        if (event.error === "no-speech") return;
-        if (event.error === "aborted") return;
-        intentionalStop = true;
-        setIsListening(false);
-        recognitionRef.current = null;
+        if (event.error === "no-speech" || event.error === "aborted") return;
+        intentionalStop = true; setIsListening(false); recognitionRef.current = null;
         setFeedback(`Mic Error: ${event.error}`);
       };
-
       recognition._setIntentionalStop = () => { intentionalStop = true; };
-      recognitionRef.current = recognition;
-      recognition.start();
+      recognitionRef.current = recognition; recognition.start();
     }
   };
 
   const stopListening = () => {
-    if (recognitionRef.current && isListening) {
+    if (recognitionRef.current) {
       setTimerActive(false);
-      if (recognitionRef.current._setIntentionalStop) {
-        recognitionRef.current._setIntentionalStop();
+      // Ensure we capture whatever is in the current transcript state (including interim) before stopping
+      if (transcript && !transcriptRef.current) {
+        transcriptRef.current = transcript;
       }
-      recognitionRef.current.stop();
+      if (recognitionRef.current._setIntentionalStop) recognitionRef.current._setIntentionalStop();
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.error("Error stopping recognition:", e);
+      }
+      setIsListening(false);
     }
   };
 
+  // ── Evaluate Answer ────────────────────────────────────────
   const checkAnswer = async (spokenText) => {
     const { question, answer } = currentQuestionRef.current;
-    if (!question) {
-      setFeedback("Error: Missing question data.");
-      setShowResult(true);
-      return;
-    }
+    if (!question) { setFeedback("Error: Missing question data."); setShowResult(true); return; }
 
     setIsAnswering(true);
     const timeTaken = Math.round((Date.now() - questionStartTimeRef.current) / 1000);
     const userAnswer = spokenText.trim().toLowerCase();
     const skipPhrases = ["i don't know", "no idea", "skip", "pass", "not sure"];
-    const isSkip = skipPhrases.some((phrase) => userAnswer.includes(phrase));
+    const isSkip = skipPhrases.some((p) => userAnswer.includes(p));
 
     if (isSkip) {
       const feedbackMsg = "You chose to skip this question.";
       const resultData = { question, correctAnswer: answer, userAnswer: spokenText, isCorrect: false, feedback: feedbackMsg, score: 0 };
-      setFeedback(feedbackMsg);
+      setFeedback(feedbackMsg); setLastIsCorrect(false);
       setChatHistory((prev) => [...prev, resultData]);
       setSessionQCount(prev => prev + 1);
       setQuestionsAnswered((prev) => prev + 1);
-      setShowResult(true);
-      setIsAnswering(false);
+      setShowResult(true); setIsAnswering(false);
       await saveAttempt({ question, userAnswer: spokenText, correctAnswer: answer, isCorrect: false, score: 0, timeTaken });
       if (sessionQCount + 1 >= SESSION_LENGTH) setShowSessionEnd(true);
       return;
@@ -323,21 +239,16 @@ const Quiz = () => {
 
     try {
       const data = await makeAuthenticatedRequest("/api/inquizzo/evaluate", {
-        method: "POST",
-        body: JSON.stringify({ userAnswer: spokenText, question, timeTaken }),
+        method: "POST", body: JSON.stringify({ userAnswer: spokenText, question, timeTaken }),
       });
-
       const { result } = data;
       const { isCorrect, similarity, score: gainedScore, feedback: evalFeedback, correctAnswer: correctAns } = result;
-
       const resultData = { question, correctAnswer: correctAns || answer, userAnswer: spokenText, similarity, isCorrect, feedback: evalFeedback, score: gainedScore };
-      
-      if (gainedScore > 0) {
-        setScore((prev) => prev + gainedScore);
-        setSessionScore((prev) => prev + gainedScore);
-      }
-      setFeedback(evalFeedback);
-      setLastGainedScore(gainedScore || 0);
+
+      if (gainedScore > 0) { setScore((prev) => prev + gainedScore); setSessionScore((prev) => prev + gainedScore); }
+      setLastIsCorrect(!!isCorrect);
+      if (isCorrect) setCorrectCount((prev) => prev + 1);
+      setFeedback(evalFeedback); setLastGainedScore(gainedScore || 0);
       setChatHistory((prev) => [...prev, resultData]);
       setSessionQCount(prev => prev + 1);
       setQuestionsAnswered((prev) => prev + 1);
@@ -345,30 +256,23 @@ const Quiz = () => {
 
       await saveAttempt({ question, userAnswer: spokenText, correctAnswer: correctAns || answer, isCorrect, score: gainedScore, timeTaken });
       if (sessionQCount + 1 >= SESSION_LENGTH) setShowSessionEnd(true);
-    } catch (error) {
-      setFeedback("Something went wrong during evaluation.");
-      setShowResult(true);
-    } finally {
-      setIsAnswering(false);
-    }
+    } catch { setFeedback("Something went wrong during evaluation."); setShowResult(true); }
+    finally { setIsAnswering(false); }
   };
 
+  // ── TTS ────────────────────────────────────────────────────
   const speakQuestion = async () => {
     if (!currentQuestion) return;
     try {
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-      const response = await fetch("/api/inquizzo/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: currentQuestion }),
-      });
+      const response = await fetch("/api/inquizzo/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: currentQuestion }) });
       if (!response.ok) throw new Error("TTS proxy failed");
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       audio.onended = () => URL.revokeObjectURL(audioUrl);
-      audio.play().catch(e => console.error("🔇 Audio play failed:", e));
-    } catch (error) {
+      audio.play().catch(e => console.error("Audio play failed:", e));
+    } catch {
       if ("speechSynthesis" in window) {
         const utterance = new SpeechSynthesisUtterance(currentQuestion);
         utterance.rate = 0.95;
@@ -379,29 +283,37 @@ const Quiz = () => {
     }
   };
 
+  // ── Quiz Management ────────────────────────────────────────
   const resetQuiz = (diffOverride = null) => {
+    // Robustly stop any active recognition
+    if (recognitionRef.current) {
+      if (recognitionRef.current._setIntentionalStop) recognitionRef.current._setIntentionalStop();
+      try { recognitionRef.current.abort(); } catch { }
+      recognitionRef.current = null;
+    }
+
     const validLevels = ["easy", "medium", "hard"];
     const actualOverride = typeof diffOverride === "string" && validLevels.includes(diffOverride) ? diffOverride : null;
+
     setIsListening(false);
     setTranscript("");
+    transcriptRef.current = "";
     setFeedback("");
     setShowResult(false);
     setIsAnswering(false);
     setTimer(30);
+    setTimerActive(false);
     setError("");
+
     questionStartTimeRef.current = Date.now();
     getAIQuestion(actualOverride);
   };
 
   const startNewSession = () => {
     sessionIdRef.current = crypto.randomUUID();
-    setSessionQCount(0);
-    setSessionScore(0);
-    setShowSessionEnd(false);
-    setScore(0);
-    setChatHistory([]);
-    setQuestionsAnswered(0);
-    resetQuiz();
+    setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0);
+    setCorrectCount(0);
+    setChatHistory([]); setQuestionsAnswered(0); resetQuiz();
   };
 
   useEffect(() => {
@@ -410,11 +322,37 @@ const Quiz = () => {
       return () => clearInterval(countdown);
     } else if (timer === 0 && timerActive) {
       setTimerActive(false);
-      if (transcript) checkAnswer(transcript);
-      else {
+      stopListening();
+
+      const sessionQIdx = sessionQCount;
+      const finalTranscript = transcript || transcriptRef.current;
+
+      if (finalTranscript) {
+        checkAnswer(finalTranscript);
+      } else {
+        // No answer given - Timeout
+        const timeTaken = 30;
+        setLastGainedScore(0);
+        setLastIsCorrect(false);
         setFeedback("Time's up! The correct answer is: " + correctAnswer);
         setShowResult(true);
+
         setQuestionsAnswered((prev) => prev + 1);
+        setSessionQCount(prev => prev + 1);
+
+        // Record as failed attempt
+        saveAttempt({
+          question: currentQuestion,
+          userAnswer: "(Timeout - No Answer)",
+          correctAnswer: correctAnswer,
+          isCorrect: false,
+          score: 0,
+          timeTaken
+        });
+
+        if (sessionQIdx + 1 >= SESSION_LENGTH) {
+          setShowSessionEnd(true);
+        }
       }
     }
   }, [timer, timerActive, showResult]);
@@ -438,79 +376,80 @@ const Quiz = () => {
       await fetch("/api/inquizzo/attempt", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          moduleId: "inQuizzo",
-          gameType: "voice",
-          sessionId: sessionIdRef.current,
-          question,
-          userAnswer,
-          correctAnswer,
-          isCorrect,
-          score,
-          difficulty: selectedDifficulty,
-          timeTaken,
-        }),
+        body: JSON.stringify({ moduleId: "inQuizzo", gameType: "voice", sessionId: sessionIdRef.current, question, userAnswer, correctAnswer, isCorrect, score, difficulty: selectedDifficulty, timeTaken }),
       });
-    } catch (e) {}
+    } catch { }
   };
 
   const getAIQuestion = async (diffOverride = null) => {
     const token = getAuthToken();
-    if (!token) {
-      setError("Please login to access quiz questions.");
-      setIsAuthenticated(false);
-      return;
-    }
-    setIsLoading(true);
-    setError("");
+    if (!token) { setError("Please login to access quiz questions."); setIsAuthenticated(false); return; }
+    setIsLoading(true); setError("");
     const actualDifficulty = (typeof diffOverride === "string" && ["easy", "medium", "hard"].includes(diffOverride)) ? diffOverride : (selectedDifficulty || "medium");
     const topics = ["general knowledge", "science", "history", "geography", "technology", "sports", "mathematics", "coding"];
     const randomTopic = topics[Math.floor(Math.random() * topics.length)];
 
     try {
-      const data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
-        method: "POST",
-        body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current, difficulty: actualDifficulty }),
-      });
+      let data = null;
+      let attempts = 0;
+      const MAX_RETRIES = 3;
 
-      if (data && data.question) {
-        setCurrentQuestion(data.question);
-        setCorrectAnswer(data.answer);
+      while (attempts < MAX_RETRIES) {
+        data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
+          method: "POST", body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current, difficulty: actualDifficulty }),
+        });
+
+        if (!seenQuestionsRef.current.includes(data?.question)) break;
+        attempts++;
+        console.warn(`🔄 Duplicate detected (Attempt ${attempts}). Retrying...`);
+      }
+
+      if (data?.question) {
+        setCurrentQuestion(data.question); setCorrectAnswer(data.answer);
         saveSeenQuestion(data.question);
-        setTimer(30);
-        setTimerActive(false);
-        setTranscript("");
-        setFeedback("");
-        setShowResult(false);
-        setIsAnswering(false);
+        setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsAnswering(false);
         questionStartTimeRef.current = Date.now();
       } else throw new Error("Invalid data");
-    } catch (error) {
-      setError("Connection issue. Loading fallback question.");
-      setCurrentQuestion("What is the capital of India?");
-      setCorrectAnswer("New Delhi");
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      console.warn("API failed or timed out. Initiating fallback...", err);
+      try {
+        const response = await fetch(`/fallback_${actualDifficulty}.json`);
+        if (!response.ok) throw new Error("Failed to load fallback JSON");
+        const fallbackQuestions = await response.json();
+
+        // 1. Get unseen questions
+        const unseen = fallbackQuestions.filter(q => !seenQuestionsRef.current.includes(q.question));
+
+        // 2. Pick a random question
+        const pool = unseen.length > 0 ? unseen : fallbackQuestions;
+        const randomQ = pool[Math.floor(Math.random() * pool.length)];
+
+        setError("Connection issue. Using emergency offline question bank.");
+        setCurrentQuestion(randomQ.question);
+        setCorrectAnswer(randomQ.answer);
+
+        saveSeenQuestion(randomQ.question);
+        setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsAnswering(false);
+        questionStartTimeRef.current = Date.now();
+      } catch (fallbackErr) {
+        console.error("Fallback also failed:", fallbackErr);
+        setError("Critical Error: Unable to load any questions.");
+        setCurrentQuestion("What is the capital of India?");
+        setCorrectAnswer("New Delhi");
+      }
     }
+    finally { setIsLoading(false); }
   };
 
-  useEffect(() => {
-    sessionIdRef.current = crypto.randomUUID();
-    getAIQuestion();
-  }, []);
+  useEffect(() => { sessionIdRef.current = crypto.randomUUID(); getAIQuestion(); }, []);
 
+  // ── Downloads ──────────────────────────────────────────────
   const downloadCSV = () => {
     let content = `Score: ${score}\n\n`;
-    chatHistory.forEach((entry, index) => {
-      content += `Q${index + 1}: ${entry.question}\nAnswer: ${entry.userAnswer}\nCorrect: ${entry.correctAnswer}\n\n`;
-    });
+    chatHistory.forEach((entry, index) => { content += `Q${index + 1}: ${entry.question}\nAnswer: ${entry.userAnswer}\nCorrect: ${entry.correctAnswer}\n\n`; });
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "quiz_results.txt";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "quiz_results.txt";
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
   const downloadPDF = () => {
@@ -520,246 +459,536 @@ const Quiz = () => {
     let y = 40;
     chatHistory.forEach((entry, index) => {
       if (y > 270) { doc.addPage(); y = 20; }
-      doc.text(`Q${index + 1}: ${entry.question.substring(0, 70)}`, 20, y);
-      y += 10;
+      doc.text(`Q${index + 1}: ${entry.question.substring(0, 70)}`, 20, y); y += 10;
     });
     doc.save("quiz_results.pdf");
   };
 
+  // ── Derived ────────────────────────────────────────────────
+  const isCorrectResult = lastIsCorrect;
+
+  /* ════════════════════════════════════════════════════════════
+     THEME CONFIG — reads from global next-themes provider
+     ════════════════════════════════════════════════════════════ */
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  // Palettes: #655A7C #AB92BF #AFC1D6 #CEF9F2 #D6CA98 + #242038 #9067C6 #8D86C9 #CAC4CE
+  const t = isLight ? {
+    // ── Light Theme (richly tinted, not plain white) ──
+    pageBg: '#E8E0F0',                              // lavender-tinted page bg from #AB92BF
+    primary: '#9067C6',
+    primaryLight: '#8D86C9',
+    accent: '#D6CA98',
+    mint: '#CEF9F2',
+    steel: '#AFC1D6',
+    // Glass panels — tinted with palette, not white
+    glassBg: 'rgba(171, 146, 191, 0.12)',            // #AB92BF tint
+    glassBorder: 'rgba(101, 90, 124, 0.22)',         // #655A7C border
+    glassHoverBg: 'rgba(144, 103, 198, 0.1)',        // #9067C6 hover
+    // Cards — lavender-frosted glass
+    cardBg: 'rgba(175, 193, 214, 0.2)',              // #AFC1D6 tinted card
+    cardBorder: 'rgba(101, 90, 124, 0.2)',           // #655A7C border
+    cardInnerBg: 'rgba(206, 249, 242, 0.3)',         // #CEF9F2 inner
+    // Text
+    textPrimary: '#242038',
+    textSecondary: '#655A7C',
+    textMuted: '#655A7C',                            // cyber grape, not too light
+    textSubtle: '#8D86C9',
+    // Buttons
+    btnPrimaryBg: '#9067C6',
+    btnPrimaryHover: '#7B56B3',
+    btnSecondaryBg: 'rgba(171, 146, 191, 0.18)',     // #AB92BF visible tint
+    btnSecondaryBorder: 'rgba(101, 90, 124, 0.3)',   // #655A7C border
+    btnSecondaryText: '#242038',
+    // Mic
+    micGradientFrom: '#9067C6',
+    micGradientTo: '#655A7C',
+    micShadow: 'rgba(144, 103, 198, 0.35)',
+    micGlow: 'rgba(171, 146, 191, 0.3)',
+    // Badge
+    badgeBg: 'rgba(144, 103, 198, 0.15)',
+    badgeBorder: 'rgba(101, 90, 124, 0.25)',
+    badgeText: '#655A7C',
+    // Orbs — much more visible
+    orb1: 'rgba(171, 146, 191, 0.4)',                // #AB92BF strong
+    orb2: 'rgba(175, 193, 214, 0.45)',               // #AFC1D6 strong
+    orb3: 'rgba(206, 249, 242, 0.5)',                // #CEF9F2 vibrant
+    // Stats — prominent mint backgrounds
+    statBg: 'rgba(206, 249, 242, 0.35)',             // #CEF9F2 noticeable
+    statLabel: '#655A7C',
+    statValue: '#242038',
+    statAccent: '#9067C6',
+    // Difficulty — visible palette bg
+    diffBg: 'rgba(175, 193, 214, 0.3)',              // #AFC1D6 bg
+    diffBorder: 'rgba(101, 90, 124, 0.2)',           // #655A7C border
+    diffInactive: '#655A7C',
+    // Export — tinted rows
+    exportBg: 'rgba(175, 193, 214, 0.15)',           // #AFC1D6 visible
+    exportBorder: 'rgba(101, 90, 124, 0.15)',        // #655A7C border
+    exportText: '#242038',
+    // Transcript
+    transcriptBg: 'rgba(175, 193, 214, 0.2)',        // #AFC1D6 tinted
+    transcriptBorder: 'rgba(101, 90, 124, 0.2)',     // #655A7C border
+    transcriptText: '#242038',
+    // Separator
+    separator: 'rgba(101, 90, 124, 0.15)',           // #655A7C visible
+    // Session end
+    overlayBg: 'rgba(232, 224, 240, 0.96)',          // lavender overlay
+    overlayCardBg: 'rgba(175, 193, 214, 0.25)',      // #AFC1D6 tinted card
+    overlayBorder: 'rgba(101, 90, 124, 0.2)',
+    overlayStatBg: 'rgba(206, 249, 242, 0.3)',       // #CEF9F2 visible
+  } : {
+    // ── Dark Theme (original) ──
+    pageBg: null,
+    primary: '#934cf0',
+    primaryLight: '#934cf0',
+    accent: '#934cf0',
+    mint: '#934cf0',
+    steel: '#934cf0',
+    glassBg: 'rgba(147, 76, 240, 0.05)',
+    glassBorder: 'rgba(255, 255, 255, 0.1)',
+    glassHoverBg: 'rgba(255, 255, 255, 0.05)',
+    cardBg: 'rgba(147, 76, 240, 0.05)',
+    cardBorder: 'rgba(255, 255, 255, 0.1)',
+    cardInnerBg: 'rgba(24, 16, 34, 0.3)',
+    textPrimary: '#ffffff',
+    textSecondary: '#ffffff',
+    textMuted: '#94A3B8',
+    textSubtle: '#94A3B8',
+    btnPrimaryBg: '#934cf0',
+    btnPrimaryHover: 'rgba(147, 76, 240, 0.9)',
+    btnSecondaryBg: 'rgba(147, 76, 240, 0.05)',
+    btnSecondaryBorder: 'rgba(255, 255, 255, 0.1)',
+    btnSecondaryText: '#CBD5E1',
+    micGradientFrom: '#934cf0',
+    micGradientTo: '#4338ca',
+    micShadow: 'rgba(147, 76, 240, 0.4)',
+    micGlow: 'rgba(147, 76, 240, 0.2)',
+    badgeBg: 'rgba(147, 76, 240, 0.2)',
+    badgeBorder: 'rgba(147, 76, 240, 0.3)',
+    badgeText: '#934cf0',
+    orb1: 'rgba(147, 76, 240, 0.4)',
+    orb2: 'rgba(79, 70, 229, 0.4)',
+    orb3: 'rgba(88, 28, 135, 0.2)',
+    statBg: 'rgba(24, 16, 34, 0.3)',
+    statLabel: '#64748B',
+    statValue: '#ffffff',
+    statAccent: '#934cf0',
+    diffBg: 'rgba(24, 16, 34, 0.5)',
+    diffBorder: 'rgba(255, 255, 255, 0.05)',
+    diffInactive: '#64748B',
+    exportBg: 'rgba(147, 76, 240, 0.03)',
+    exportBorder: 'rgba(255, 255, 255, 0.06)',
+    exportText: '#E2E8F0',
+    transcriptBg: 'rgba(24, 16, 34, 0.6)',
+    transcriptBorder: 'rgba(147, 76, 240, 0.2)',
+    transcriptText: '#ffffff',
+    separator: 'rgba(255, 255, 255, 0.05)',
+    overlayBg: 'rgba(24, 16, 34, 0.9)',
+    overlayCardBg: 'rgba(147, 76, 240, 0.05)',
+    overlayBorder: 'rgba(255, 255, 255, 0.1)',
+    overlayStatBg: 'rgba(24, 16, 34, 0.3)',
+  };
+
+  /* ════════════════════════════════════════════════════════════
+     RENDER
+     ════════════════════════════════════════════════════════════ */
+  if (!mounted) return null;
+
   return (
-    <div className="relative min-h-screen flex flex-col bg-background text-foreground font-sans overflow-x-hidden">
-      <Header 
-        DateValue="random-practice" 
-        onDateChange={() => {}} 
-        tempDate={new Date().toLocaleDateString('en-GB', {
-          weekday: 'short',
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        })} 
+    <div
+      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
+      style={isLight ? { backgroundColor: t.pageBg } : undefined}
+    >
+      {!isLight && <NoiseMesh />}
+      <CursorAura />
+
+      {/* ── Ambient orbs ── */}
+      {isLight ? (
+        <>
+          {/* Light mode: solid blur orbs using each palette color — same technique as dark mode */}
+          <div className="absolute -top-24 -left-24 w-[500px] h-[500px] blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: '#AB92BF', opacity: 0.55 }} />
+          <div className="absolute -bottom-16 -right-16 w-[450px] h-[450px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#AFC1D6', opacity: 0.6 }} />
+          <div className="absolute top-[25%] right-[5%] w-[400px] h-[400px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#CEF9F2', opacity: 0.7 }} />
+          <div className="absolute top-[55%] left-[8%] w-[350px] h-[350px] blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: '#D6CA98', opacity: 0.45 }} />
+          <div className="absolute top-[10%] left-[45%] w-[300px] h-[300px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#655A7C', opacity: 0.35 }} />
+        </>
+      ) : (
+        <>
+          {/* Dark mode: original orbs */}
+          <div className="absolute -top-20 -left-20 w-[400px] h-[400px] blur-[80px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: t.orb1 }} />
+          <div className="absolute bottom-10 right-10 w-[300px] h-[300px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb2 }} />
+          <div className="absolute top-1/2 left-1/3 w-[250px] h-[250px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb3 }} />
+        </>
+      )}
+
+      <Header
+        DateValue="practice"
+        onDateChange={() => { }}
+        tempDate={new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
         showDateFilter={false}
       />
 
-      <main className="relative z-10 flex flex-col items-center px-4 py-8 grow justify-center">
-        <div className="w-full max-w-3xl mx-auto animate-fadeIn group">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold text-persona-ink">Random Practice</h2>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Clock className={cn("w-5 h-5", timer <= 10 && isListening ? "text-red-500 animate-pulse" : "text-persona-purple")} />
-                <span className={cn("text-xl font-bold tabular-nums", timer <= 10 && isListening ? "text-red-500" : "text-persona-ink")}>
-                  {isListening ? `0:${timer < 10 ? `0${timer}` : timer}` : "--:--"}
+      {/* ── Minimal Sub-Header ─────────────────────── */}
+      <div className="relative z-10 flex items-center justify-between px-4 md:px-8 pt-6 md:pt-10 max-w-7xl mx-auto w-full">
+        <div className="flex-1">
+          <button
+            onClick={() => window.location.href = '/inquizzo'}
+            className="flex items-center gap-2 group transition-colors"
+            style={{ color: t.textMuted }}
+            data-cursor="button"
+          >
+            <AnimeIcon Icon={ArrowLeft} className="w-5 h-5" animation="slide" selfHover={true} />
+            <span className="font-medium text-sm">Back</span>
+          </button>
+        </div>
+        <h1 className="text-lg md:text-xl font-bold tracking-tight text-center" style={{ color: isLight ? t.textPrimary : 'rgba(255,255,255,0.9)' }}>Random Quiz</h1>
+        <div className="flex-1" /> {/* Spacer for symmetry */}
+      </div>
+
+      {/* ── Main Content: 12-col grid ─────────────── */}
+      <main className="relative z-10 flex-grow flex flex-col items-center px-4 py-8 md:py-12 lg:py-16">
+        <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-8 items-start">
+
+          {/* ════ LEFT: Question Area (8 cols) ════ */}
+          <div className="xl:col-span-8 flex flex-col gap-6 md:gap-8">
+
+            {/* ── Question Card ── */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="rounded-xl md:rounded-2xl p-4 sm:p-6 md:p-8 lg:p-10 min-h-[250px] md:min-h-[350px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
+              style={{ background: t.cardBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.cardBorder}` }}
+            >
+              {/* Question badge */}
+              <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2 px-3 py-1 rounded-full" style={{ background: t.badgeBg, border: `1px solid ${t.badgeBorder}` }}>
+                <AnimeIcon Icon={Zap} className="w-3 h-3" style={{ color: t.badgeText }} animation="jump" selfHover={true} />
+                <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest" style={{ color: t.badgeText }}>
+                  Question {questionsAnswered + 1}/{SESSION_LENGTH}
                 </span>
               </div>
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-persona-purple/5 rounded-full border border-persona-purple/20 shadow-sm">
-                <Zap className="w-4 h-4 text-persona-purple" />
-                <span className="font-bold text-persona-purple text-sm">{score}</span>
-              </div>
-            </div>
-          </div>
 
-          <Card className="border-2 border-muted shadow-xl rounded-3xl overflow-hidden mb-6 bg-card">
-            <div className="p-8">
-              <div className="flex items-start justify-between gap-4 mb-8">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground py-0">Question {questionsAnswered + 1}</Badge>
-                    <div className="flex gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className={cn("w-6 h-1 rounded-full bg-muted", i <= questionsAnswered % 5 && "bg-persona-purple")} />
-                      ))}
-                    </div>
-                  </div>
-                  <h3 className="text-2xl md:text-3xl font-bold text-persona-ink leading-tight">
-                    {isLoading ? (
-                      <div className="flex items-center gap-3">
-                        <LoaderIcon />
-                        Fetching next challenge...
-                      </div>
-                    ) : currentQuestion || "Ready to start?"}
-                  </h3>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
+              {/* Speaker button */}
+              {!isLoading && currentQuestion && (
+                <button
+                  data-cursor="button"
                   onClick={speakQuestion}
-                  disabled={!currentQuestion || isLoading}
-                  className="w-12 h-12 rounded-xl flex-shrink-0 border-muted hover:border-persona-purple hover:text-persona-purple shadow-sm transition-all"
+                  className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group/btn"
+                  style={{ background: isLight ? 'rgba(101,90,124,0.06)' : 'rgba(255,255,255,0.05)', border: `1px solid ${t.glassBorder}` }}
+                  title="Listen to question"
                 >
-                  <Volume2 className="w-6 h-6" />
-                </Button>
-              </div>
+                  <Volume2 className="w-5 h-5 transition-colors" style={{ color: t.textMuted }} />
+                </button>
+              )}
 
+              {/* Error */}
               {error && (
-                <div className="mb-8 p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-red-500 text-sm flex flex-col items-center gap-3">
-                  <p>{error}</p>
-                  <Button variant="outline" size="sm" onClick={() => getAIQuestion()} className="border-red-500/30 text-red-500">Retry Fetch</Button>
+                <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-3 w-full">
+                  <Lottie animationData={errorAnimationData} loop autoplay style={{ width: 80, height: 80 }} />
+                  <p className="font-medium text-sm">{error}</p>
+                  <button onClick={() => getAIQuestion()} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10">Retry</button>
                 </div>
               )}
 
-              <div className="flex flex-col items-center justify-center py-6 border-y border-muted/50 mb-6 bg-muted/5 rounded-2xl">
-                <div className="relative mb-6">
+              {/* Question text */}
+              <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight max-w-2xl mt-6 md:mt-0 transition-colors duration-500" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
+                    <span style={{ color: t.textMuted }}>Generating challenge...</span>
+                  </div>
+                ) : currentQuestion || "Ready to start?"}
+              </h2>
+
+              {/* Voice / Listen Button */}
+              <div className="mt-8 md:mt-12 flex flex-col items-center gap-3 md:gap-4">
+                <div className="relative">
+                  {/* Pulsing ripple rings */}
                   {isListening && (
-                    <div className="absolute -inset-4 bg-red-500/10 rounded-full animate-ping pointer-events-none" />
+                    <>
+                      <div className="ripple-effect" />
+                      <div className="ripple-effect ripple-2" />
+                      <div className="ripple-effect ripple-3" />
+                      <motion.div
+                        animate={{ scale: [1, 1.3, 1] }}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="absolute -inset-6 rounded-full blur-2xl"
+                        style={{ backgroundColor: t.micGlow }}
+                      />
+                    </>
                   )}
-                  <Button
+                  <button
+                    data-cursor="button"
                     onClick={isListening ? stopListening : startListening}
                     disabled={isAnswering || isLoading || !currentQuestion}
-                    className={cn(
-                      "w-24 h-24 rounded-full shadow-2xl transition-all duration-300 scale-100 hover:scale-105 active:scale-95",
-                      isListening 
-                        ? "bg-red-500 hover:bg-red-600 text-white shadow-red-500/20" 
-                        : "bg-persona-purple hover:bg-persona-purple/90 text-white shadow-persona-purple/20"
-                    )}
+                    className="relative z-10 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-xl hover:scale-105 active:scale-90 transition-transform duration-300 group"
+                    style={isListening
+                      ? { backgroundColor: '#EF4444', boxShadow: '0 0 30px rgba(239,68,68,0.4)' }
+                      : { background: `linear-gradient(135deg, ${t.micGradientFrom}, ${t.micGradientTo})`, boxShadow: `0 0 30px ${t.micShadow}` }
+                    }
                   >
-                    {isListening ? (
-                      <MicOff className="w-10 h-10" />
-                    ) : (
-                      <Mic className="w-10 h-10" />
-                    )}
-                  </Button>
+                    {isListening
+                      ? <MicOff className="w-7 h-7 md:w-9 md:h-9 text-white group-active:scale-90 transition-transform" />
+                      : <Mic className="w-7 h-7 md:w-9 md:h-9 text-white group-active:scale-90 transition-transform" />
+                    }
+                  </button>
                 </div>
 
                 {isAnswering ? (
-                  <div className="flex flex-col items-center gap-2">
-                     <div className="flex items-center gap-3 text-persona-purple font-semibold">
-                      <LoaderIcon />
-                      AI is evaluating...
-                    </div>
+                  <div className="flex items-center gap-2 font-bold text-sm animate-pulse" style={{ color: t.primary }}>
+                    <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
+                    EVALUATING...
                   </div>
                 ) : (
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-persona-ink/60">
-                      {isListening ? "Listening... Speak now" : "Tap the mic and answer aloud"}
-                    </p>
-                    {isListening && transcript && (
-                      <p className="mt-4 px-4 py-2 bg-white/50 backdrop-blur-sm rounded-lg border border-muted text-persona-ink/80 text-sm italic shadow-inner line-clamp-2 max-w-md mx-auto">
-                        "{transcript}"
-                      </p>
-                    )}
-                  </div>
+                  <span className="text-xs md:text-sm font-medium" style={{ color: t.textMuted }}>
+                    {isListening ? "Listening... speak your answer" : "Tap to answer via voice"}
+                  </span>
+                )}
+
+                {/* Live transcript */}
+                {isListening && transcript && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 p-4 rounded-xl backdrop-blur-md text-sm md:text-base italic max-w-lg mx-auto leading-relaxed"
+                    style={{ background: t.transcriptBg, border: `1px solid ${t.transcriptBorder}`, color: t.transcriptText }}
+                  >
+                    &ldquo;{transcript}&rdquo;
+                  </motion.div>
                 )}
               </div>
+            </motion.div>
+
+            {/* ── Navigation Controls ── */}
+            <div className="flex items-center gap-3 md:gap-4 max-w-md mx-auto w-full">
+              <button
+                data-cursor="button"
+                onClick={() => resetQuiz()}
+                disabled={isLoading}
+                className="flex-1 py-3 md:py-4 rounded-xl font-bold transition-all active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
+                style={{ background: t.btnSecondaryBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.btnSecondaryBorder}`, color: t.btnSecondaryText }}
+              >
+                Skip Question
+              </button>
+              <button
+                data-cursor="button"
+                onClick={() => {
+                  if (showResult) {
+                    resetQuiz();
+                  } else if (isListening) {
+                    stopListening();
+                  } else if (!isAnswering) {
+                    startListening();
+                  }
+                }}
+                className="flex-[2] py-3 md:py-4 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
+                style={{ backgroundColor: isListening ? '#EF4444' : t.btnPrimaryBg, boxShadow: isListening ? '0 10px 25px rgba(239, 68, 68, 0.3)' : `0 10px 25px ${t.micShadow}` }}
+              >
+                {showResult ? "Next Question" : isListening ? "Stop Answering" : "Start Answering"}
+              </button>
             </div>
-          </Card>
 
-          <div className="flex flex-col gap-4">
+            {/* ── Feedback Result ── */}
             {showResult && feedback && (
-              <Card className={cn(
-                "p-6 border-l-4 rounded-2xl shadow-lg border border-border bg-card animate-fadeIn",
-                feedback.toLowerCase().includes("correct") || feedback.includes("✅")
-                  ? "border-l-green-500"
-                  : "border-l-red-500"
-              )}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center",
-                      feedback.toLowerCase().includes("correct") || feedback.includes("✅")
-                        ? "bg-green-500/10 text-green-500"
-                        : "bg-red-500/10 text-red-500"
-                    )}>
-                      {feedback.toLowerCase().includes("correct") || feedback.includes("✅") ? (
-                        <CheckCircle className="w-6 h-6" />
-                      ) : (
-                        <XCircle className="w-6 h-6" />
-                      )}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "p-5 md:p-8 rounded-xl md:rounded-2xl border shadow-2xl text-left relative overflow-hidden",
+                  isCorrectResult ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5"
+                )}
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16" style={{ backgroundColor: isLight ? 'rgba(101,90,124,0.05)' : 'rgba(255,255,255,0.05)' }} />
+                <div className="relative z-10">
+                  {/* Answer status */}
+                  <div className="flex items-center justify-between mb-4 md:mb-6">
+                    <div className="flex items-center gap-3 md:gap-4">
+                      <div className={cn("w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center", isCorrectResult ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500")} data-cursor="card">
+                        {isCorrectResult
+                          ? <AnimeIcon Icon={CheckCircle} className="w-6 h-6 md:w-7 md:h-7" animation="jump" hoverParent={true} />
+                          : <AnimeIcon Icon={XCircle} className="w-6 h-6 md:w-7 md:h-7" animation="wiggle" hoverParent={true} />
+                        }
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textMuted }}>Answer</p>
+                        <h4 className={cn("font-syne text-lg md:text-2xl font-bold", isCorrectResult ? "text-green-500" : "text-red-500")}>
+                          {isCorrectResult ? "Right" : "Wrong"}
+                        </h4>
+                      </div>
                     </div>
-                    <h4 className="text-lg font-bold text-persona-ink">AI Insights</h4>
+                    {lastGainedScore > 0 && (
+                      <Badge className="text-white px-3 md:px-4 py-1 md:py-1.5 rounded-full font-bold shadow-lg text-xs md:text-sm" style={{ backgroundColor: t.primary }}>+{lastGainedScore} XP</Badge>
+                    )}
                   </div>
-                  <Badge className="bg-persona-purple text-white">+{lastGainedScore} XP</Badge>
-                </div>
-                <p className="text-persona-ink/80 text-base leading-relaxed mb-6">
-                  {feedback}
-                </p>
-                <div className="flex gap-3">
-                  <Button onClick={() => resetQuiz()} className="flex-1 bg-persona-purple hover:bg-persona-purple/90 h-12 rounded-xl font-bold">
-                    <Play className="w-5 h-5 mr-2" /> Next Challenge
-                  </Button>
-                </div>
-              </Card>
-            )}
 
-            {!showResult && !isListening && !isAnswering && currentQuestion && (
-              <div className="flex justify-center">
-                <Button variant="ghost" onClick={() => resetQuiz()} className="text-muted-foreground hover:text-persona-ink">
-                  <RotateCcw className="w-4 h-4 mr-2" />
-                  Skip this question
-                </Button>
-              </div>
+                  {/* Explanation */}
+                  <div className="mt-2">
+                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: t.textMuted }}>Explanation</p>
+                    <p className="text-sm md:text-lg leading-relaxed whitespace-pre-wrap" style={{ color: isLight ? 'rgba(45,38,64,0.8)' : 'rgba(255,255,255,0.8)' }}>{feedback}</p>
+                  </div>
+
+                  {/* Real Answer (if wrong) */}
+                  {!isCorrectResult && (
+                    <div className="mt-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                      <p className="text-xs font-bold uppercase tracking-wider mb-1 text-green-600 dark:text-green-400">Correct Answer</p>
+                      <p className="text-sm md:text-base font-bold text-green-700 dark:text-green-300">{correctAnswer}</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
             )}
           </div>
+
+          {/* ════ RIGHT: Control Sidebar (4 cols) ════ */}
+          <aside className="xl:col-span-4 flex flex-col gap-4 md:gap-6 md:sticky md:top-28">
+
+            {/* ── Quiz Controls Card ── */}
+            <div
+              className="rounded-xl p-5 md:p-6 flex flex-col gap-5 md:gap-6 transition-colors duration-500"
+              style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}
+            >
+              <div>
+                <h3 className="font-bold mb-3 md:mb-4 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
+                  <AnimeIcon Icon={Zap} className="w-5 h-5" style={{ color: t.primary }} animation="jump" selfHover={true} />
+                  Quiz Controls
+                </h3>
+                <div className="space-y-4">
+                  {/* Difficulty selector */}
+                  <div>
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-2 block" style={{ color: t.textMuted }}>Difficulty</label>
+                    <div className="flex p-1 rounded-lg" style={{ background: t.diffBg, border: `1px solid ${t.diffBorder}` }}>
+                      {["easy", "medium", "hard"].map((level) => (
+                        <button
+                          key={level}
+                          data-cursor="button"
+                          onClick={() => { setSelectedDifficulty(level); if (!isLoading) resetQuiz(level); }}
+                          className="flex-1 py-2 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize"
+                          style={selectedDifficulty === level
+                            ? { backgroundColor: t.primary, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }
+                            : { color: t.diffInactive }
+                          }
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+
+                </div>
+              </div>
+
+              <hr style={{ borderColor: t.separator }} />
+
+              {/* Export actions */}
+              <div className="flex flex-col gap-2 md:gap-3">
+                <button
+                  data-cursor="button"
+                  onClick={downloadPDF}
+                  className="flex items-center justify-between w-full p-3 md:p-4 rounded-lg group transition-all"
+                  style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}
+                >
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg] transition-colors" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
+                    <span className="text-xs md:text-sm font-medium" style={{ color: t.exportText }}>Export Results PDF</span>
+                  </div>
+                </button>
+                <button
+                  data-cursor="button"
+                  onClick={downloadCSV}
+                  className="flex items-center justify-between w-full p-3 md:p-4 rounded-lg group transition-all"
+                  style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}
+                >
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg] transition-colors" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
+                    <span className="text-xs md:text-sm font-medium" style={{ color: t.exportText }}>Download CSV</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* ── Session Statistics Card ── */}
+            <div
+              className="rounded-xl p-5 md:p-6 transition-colors duration-500"
+              style={{ background: isLight ? 'linear-gradient(135deg, rgba(206,249,242,0.15), rgba(255,255,255,0.8))' : 'linear-gradient(135deg, rgba(147,76,240,0.08), transparent)', backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}
+            >
+              <h4 className="font-bold mb-3 md:mb-4 text-xs md:text-sm" style={{ color: t.textSecondary }}>Your Session</h4>
+              <div className="grid grid-cols-2 gap-3 md:gap-4">
+                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Timer</p>
+                  <p className={cn("text-lg md:text-xl font-bold tabular-nums font-display", timer <= 10 && isListening && "text-red-500")} style={!(timer <= 10 && isListening) ? { color: t.statValue } : undefined}>
+                    {isListening ? `0:${timer < 10 ? `0${timer}` : timer}` : "--:--"}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Score</p>
+                  <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statAccent }}>{score}</p>
+                </div>
+                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Answered</p>
+                  <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statValue }}>{questionsAnswered}/{SESSION_LENGTH}</p>
+                </div>
+                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Accuracy</p>
+                  <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statAccent }}>
+                    {questionsAnswered > 0 ? Math.round((correctCount / questionsAnswered) * 100) : 0}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </main>
 
-      {!showSessionEnd && (
-        <Card className="fixed bottom-6 right-6 z-50 p-4 border border-border shadow-2xl rounded-2xl bg-card/95 backdrop-blur-md hidden md:block">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 mb-1">
-              <BarChart3 className="w-4 h-4 text-persona-purple" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Difficulty</span>
-            </div>
-            {["easy", "medium", "hard"].map((level) => (
-              <Button
-                key={level}
-                onClick={() => {
-                  setSelectedDifficulty(level);
-                  if (!isLoading) resetQuiz(level);
-                }}
-                variant={selectedDifficulty === level ? "default" : "outline"}
-                size="sm"
-                className={cn(
-                  "h-8 rounded-lg text-[10px] font-bold uppercase w-24",
-                  selectedDifficulty === level 
-                    ? level === "easy" ? "bg-green-500 hover:bg-green-600" : level === "medium" ? "bg-yellow-500 hover:bg-yellow-600" : "bg-red-500 hover:bg-red-600"
-                    : "border-muted text-muted-foreground"
-                )}
-              >
-                {level}
-              </Button>
-            ))}
-            <div className="h-px bg-muted mt-2 mb-1" />
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={downloadPDF} className="h-8 text-[10px] px-2 flex-1">
-                <Shield className="w-3 h-3 mr-1" /> PDF
-              </Button>
-              <Button variant="outline" size="sm" onClick={downloadCSV} className="h-8 text-[10px] px-2 flex-1">
-                <History className="w-3 h-3 mr-1" /> CSV
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
+      {/* ── Session End Overlay ────────────────────── */}
       {showSessionEnd && (
-        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="w-full max-w-md rounded-3xl p-10 border-2 border-persona-purple/20 shadow-2xl text-center bg-card relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-persona-purple via-blue-500 to-persona-purple" />
-            <div className="w-20 h-20 bg-persona-purple/10 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">🏆</div>
-            <h3 className="text-3xl font-bold text-persona-ink mb-2">Practice Complete!</h3>
-            <p className="text-muted-foreground mb-8 text-lg">You've mastered {SESSION_LENGTH} random topics</p>
-            <div className="grid grid-cols-2 gap-4 mb-10">
-              <div className="p-4 rounded-2xl bg-muted/30 border border-muted text-center">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Score</p>
-                <p className="text-3xl font-black text-persona-ink">{sessionScore}</p>
+        <div className="fixed inset-0 z-[100] backdrop-blur-xl flex items-center justify-center p-4 overflow-hidden" style={{ backgroundColor: t.overlayBg }}>
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] blur-[120px] rounded-full" style={{ backgroundColor: isLight ? 'rgba(171,146,191,0.15)' : 'rgba(147,76,240,0.2)' }} />
+          <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-xl relative px-4">
+            <div
+              className="relative rounded-2xl md:rounded-3xl p-6 md:p-12 overflow-hidden text-center shadow-2xl"
+              style={{ background: t.overlayCardBg, backdropFilter: 'blur(24px)', border: `1px solid ${t.overlayBorder}` }}
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5" style={{ background: isLight ? `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` : `linear-gradient(to right, #934cf0, #4338ca)` }} />
+              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center mx-auto mb-6 md:mb-8 shadow-2xl animate-pulse overflow-hidden" style={{ backgroundColor: isLight ? 'rgba(214,202,152,0.3)' : 'rgba(147,76,240,0.2)' }}>
+                <img src="/Session complete badge.png" alt="Session Complete Badge" className="w-full h-full object-cover" />
               </div>
-              <div className="p-4 rounded-2xl bg-muted/30 border border-muted text-center">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">XP Gained</p>
-                <p className="text-3xl font-black text-persona-ink">{score}</p>
+              <h3 className="font-syne text-2xl sm:text-3xl md:text-5xl font-extrabold mb-3 md:mb-4" style={{ color: t.textPrimary }}>SESSION COMPLETE</h3>
+              <p className="text-sm md:text-xl mb-6 md:mb-10 uppercase tracking-widest" style={{ color: t.textMuted }}>Completed {SESSION_LENGTH} questions</p>
+              <div className="grid grid-cols-2 gap-3 md:gap-6 mb-6 md:mb-10">
+                <div className="p-4 md:p-8 rounded-xl md:rounded-2xl" style={{ backgroundColor: t.overlayStatBg, border: `1px solid ${t.overlayBorder}` }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: t.statLabel }}>Final Score</p>
+                  <p className="font-display text-2xl sm:text-3xl md:text-5xl font-bold" style={{ color: t.textPrimary }}>{sessionScore}</p>
+                </div>
+                <div className="p-4 md:p-8 rounded-xl md:rounded-2xl" style={{ backgroundColor: t.overlayStatBg, border: `1px solid ${t.overlayBorder}` }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: t.statLabel }}>Total XP</p>
+                  <p className="font-display text-2xl sm:text-3xl md:text-5xl font-bold" style={{ color: t.primary }}>{score}</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 md:gap-4">
+                <button
+                  data-cursor="button"
+                  onClick={startNewSession}
+                  className="h-12 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-sm md:text-lg shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+                  style={{ backgroundColor: t.primary, boxShadow: `0 10px 25px ${t.micShadow}` }}
+                >
+                  START NEW SESSION
+                </button>
+                <button
+                  data-cursor="button"
+                  onClick={() => window.location.href = '/inquizzo'}
+                  className="h-12 md:h-16 rounded-xl md:rounded-2xl font-bold text-sm md:text-lg transition-all"
+                  style={{ background: t.btnSecondaryBg, border: `1px solid ${t.btnSecondaryBorder}`, color: t.textPrimary }}
+                >
+                  BACK TO DASHBOARD
+                </button>
               </div>
             </div>
-            <div className="flex flex-col gap-3">
-              <Button onClick={startNewSession} className="h-12 bg-persona-purple hover:bg-persona-purple/90 rounded-xl font-bold">Start New Session</Button>
-              <Button variant="ghost" onClick={() => window.location.href='/inquizzo'} className="text-muted-foreground">Return to InQuizzo</Button>
-            </div>
-          </Card>
+          </motion.div>
         </div>
       )}
-
-      <style jsx global>{`
-        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
+      <Toaster richColors position="top-center" />
     </div>
   );
 };
