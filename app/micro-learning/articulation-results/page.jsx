@@ -9,8 +9,7 @@ export default function ArticulationResults() {
   const [diagnosticAnswers, setDiagnosticAnswers] = useState({});
   const [diagnosticSubmitted, setDiagnosticSubmitted] = useState(false);
 
-  // Read main MCQ points saved from the previous quiz page
-  const mainMcqPoints = Number(localStorage.getItem('mainMcqPoints') || '0');
+  const mainMcqPoints = typeof window !== 'undefined' ? Number(localStorage.getItem('mainMcqPoints') || '0') : 0;
 
   // Define theme inside the component (same as previous pages)
   const theme = {
@@ -493,8 +492,8 @@ export default function ArticulationResults() {
                                 ? `${theme.accent}15`
                                 : "rgba(255,255,255,0.02)",
                             border: `1px solid ${diagnosticAnswers[qIdx] === key
-                                ? theme.accent
-                                : "rgba(255,255,255,0.08)"
+                              ? theme.accent
+                              : "rgba(255,255,255,0.08)"
                               }`,
                             color: diagnosticAnswers[qIdx] === key ? "#fff" : "#aaa",
                             cursor: "pointer",

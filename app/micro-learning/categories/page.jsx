@@ -124,7 +124,9 @@ const academicSections = [
   },
 ];
 
-export default function CategoriesPage() {
+import { Suspense } from 'react';
+
+function CategoriesContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -423,3 +425,11 @@ const styles = {
     padding: '20px',
   },
 };
+
+export default function CategoriesPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '100px', textAlign: 'center', color: '#fff' }}>Loading categories...</div>}>
+      <CategoriesContent />
+    </Suspense>
+  );
+}

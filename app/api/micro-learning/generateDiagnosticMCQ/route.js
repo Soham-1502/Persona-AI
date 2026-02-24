@@ -1,7 +1,7 @@
 import Groq from 'groq-sdk'
 
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY_3
+  apiKey: process.env.GROQ_API_KEY_3 || process.env.GROQ_API_KEY || 'dummy-key-for-build'
 })
 
 function divideIntoSegments(transcript, numSegments = 8) {
@@ -82,16 +82,16 @@ Requirements:
       throw new Error(`Expected 3 diagnostic MCQs, got ${mcqs.length}`)
     }
 
-    return Response.json({ 
+    return Response.json({
       success: true,
       mcqs: mcqs
     })
 
   } catch (error) {
     console.error('Diagnostic MCQ Error:', error.message)
-    return Response.json({ 
-      success: false, 
-      error: error.message 
+    return Response.json({
+      success: false,
+      error: error.message
     }, { status: 500 })
   }
 }

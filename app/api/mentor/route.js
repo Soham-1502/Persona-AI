@@ -20,7 +20,7 @@ function getUserFromToken(req) {
 export async function POST(req) {
     try {
         const groq = new Groq({
-            apiKey: process.env.GROQ_API_KEY
+            apiKey: process.env.GROQ_API_KEY || 'dummy-key-for-build'
         });
 
         // Parse request body

@@ -3,16 +3,16 @@ import Groq from 'groq-sdk'
 export async function POST(request) {
   try {
     const groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY_3
+      apiKey: process.env.GROQ_API_KEY_3 || process.env.GROQ_API_KEY || 'dummy-key-for-build'
     })
 
     const formData = await request.formData()
     const audioFile = formData.get('audio')
 
     if (!audioFile) {
-      return Response.json({ 
-        success: false, 
-        error: 'No audio file provided' 
+      return Response.json({
+        success: false,
+        error: 'No audio file provided'
       }, { status: 400 })
     }
 
@@ -27,16 +27,16 @@ export async function POST(request) {
 
     console.log('Transcribed text:', transcription.text)
 
-    return Response.json({ 
+    return Response.json({
       success: true,
       text: transcription.text
     })
-    
+
   } catch (error) {
     console.error('Transcription Error:', error.message)
-    return Response.json({ 
-      success: false, 
-      error: error.message 
+    return Response.json({
+      success: false,
+      error: error.message
     }, { status: 500 })
   }
 }
