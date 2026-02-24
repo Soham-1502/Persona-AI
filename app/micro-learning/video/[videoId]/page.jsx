@@ -62,7 +62,7 @@ export default function VideoPlayerPage() {
           if (progress >= 70 && !hasTriggeredGladia.current && transcriptStatus === 'not_started') {
             hasTriggeredGladia.current = true;
             setTranscriptStatus('generating');
-            console.log("70% reached → Starting Gladia transcript");
+            console.log("70% reached → Starting transcript extraction");
 
             try {
               const response = await fetch('/api/micro-learning/generate-transcript', {
@@ -71,18 +71,25 @@ export default function VideoPlayerPage() {
                 body: JSON.stringify({ videoId }),
               });
 
-              if (!response.ok) throw new Error(`Gladia failed: ${response.status}`);
+              // 422 = no captions available for this video — not an error, just unavailable
+              if (response.status === 422) {
+                console.log("Transcript unavailable: video has no captions");
+                setTranscriptStatus('unavailable');
+                return;
+              }
+
+              if (!response.ok) throw new Error(`Transcript fetch failed: ${response.status}`);
 
               const data = await response.json();
               if (data.transcript) {
                 localStorage.setItem(`transcript_${videoId}`, data.transcript);
                 setTranscriptStatus('ready');
-                console.log("Gladia transcript ready");
+                console.log("Transcript ready");
               } else {
                 throw new Error('No transcript data');
               }
             } catch (err) {
-              console.error("Gladia error:", err);
+              console.error("Transcript error:", err);
               setTranscriptStatus('error');
             }
           }
