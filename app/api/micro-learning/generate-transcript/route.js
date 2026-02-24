@@ -2,6 +2,7 @@
 // For App Router (Next.js 13+)
 
 import { NextResponse } from 'next/server';
+import { YoutubeTranscript } from 'youtube-transcript-plus';
 
 export async function POST(req) {
   try {
@@ -25,11 +26,42 @@ export async function POST(req) {
       );
     }
 
-    console.log(`[Gladia] Starting transcription for video: ${videoId}`);
+    console.log(`[Transcript] Starting extraction/transcription for video: ${videoId}`);
 
     // ────────────────────────────────────────────────
-    // 1. Initiate the pre-recorded transcription job
+    // 1. Try fetching transcript quickly directly from YouTube
     // ────────────────────────────────────────────────
+    try {
+      const transcriptData = await YoutubeTranscript.fetchTranscript(videoId);
+      if (transcriptData && transcriptData.length > 0) {
+        let transcript = transcriptData.map(t => t.text).join(' ');
+
+        // Decode common HTML entities and clean up
+        transcript = transcript
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&#34;/g, '"')
+          .replace(/\s+/g, ' ')
+          .replace(/\[(?:inaudible|music|applause)\]/gi, '')
+          .replace(/\b(um|uh|ah)\b/gi, '')
+          .replace(/\s*,\s*/g, ', ')
+          .replace(/\s*\.\s*/g, '. ')
+          .trim();
+
+        console.log(`[Transcript Success] Fast extracted for ${videoId} (${transcript.length} chars)`);
+        return NextResponse.json({ transcript });
+      }
+    } catch (ytError) {
+      console.warn(`[Transcript] Fast extraction failed: ${ytError.message}. Falling back to Gladia...`);
+    }
+
+    // ────────────────────────────────────────────────
+    // 2. Fallback: Initiate the pre-recorded transcription job with Gladia
+    // ────────────────────────────────────────────────
+    console.log(`[Gladia] Starting fallback transcription for video: ${videoId}`);
     const initResponse = await fetch('https://api.gladia.io/v2/pre-recorded', {
       method: 'POST',
       headers: {
@@ -39,10 +71,7 @@ export async function POST(req) {
       body: JSON.stringify({
         audio_url: videoUrl,
         detect_language: true,           // auto-detect spoken language
-        diarization: true,               // separate speakers (very useful)
-        // translation: true,            // uncomment if you want auto-translation
-        // translation_config: { target_languages: ['en'] },
-        // context_prompt: "Educational programming tutorial video",
+        diarization: true,               // separate speakers
       }),
     });
 
@@ -56,7 +85,7 @@ export async function POST(req) {
     console.log(`[Gladia] Job created - ID: ${id} | Polling: ${result_url}`);
 
     // ────────────────────────────────────────────────
-    // 2. Poll for completion with exponential backoff
+    // 3. Poll for completion with exponential backoff
     // ────────────────────────────────────────────────
     let transcript = null;
     let attempts = 0;
@@ -89,18 +118,15 @@ export async function POST(req) {
           throw new Error('Gladia returned empty transcript');
         }
 
-        // ────────────────────────────────────────────────
         // CLEAN THE TRANSCRIPT HERE
-        // ────────────────────────────────────────────────
         transcript = transcript
-          .replace(/\s+/g, ' ')                     // collapse all whitespace
-          .replace(/\[inaudible\]|\[music\]|\[applause\]/gi, '')  // remove common noise tags
-          .replace(/\b(um|uh|ah|like)\b/gi, '')     // remove common fillers (optional)
-          .replace(/\s*,\s*/g, ', ')                // normalize commas
-          .replace(/\s*\.\s*/g, '. ')               // normalize periods
+          .replace(/\s+/g, ' ')
+          .replace(/\[inaudible\]|\[music\]|\[applause\]/gi, '')
+          .replace(/\b(um|uh|ah|like)\b/gi, '')
+          .replace(/\s*,\s*/g, ', ')
+          .replace(/\s*\.\s*/g, '. ')
           .trim();
 
-        // Optional: nicer formatting if diarization is enabled
         if (data.result?.transcription?.utterances) {
           transcript = data.result.transcription.utterances
             .map(u => `Speaker ${u.speaker || '?'}: ${u.text}`)
