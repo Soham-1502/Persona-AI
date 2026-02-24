@@ -1,280 +1,496 @@
-// location : app/inquizzo/page.jsx
-'use client'
+'use client';
 
-import React, { useMemo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useRef, useEffect, useState } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
+import CursorAura from '@/app/components/inquizzo/CursorAura';
+import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
+import {
+  Medal, FileCheck, Target, Award,
+  Shuffle, LayoutGrid, ArrowRight, List,
+  Brain, Code, Palette, ExternalLink,
+  Rocket, TrendingUp, Loader2
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import Header from '@/app/components/shared/header/Header.jsx';
-import MetricCard from '../components/dashboard/Card/MetricCard';
-import {
-  Brain,
-  Trophy,
-  Target,
-  Zap,
-  Shuffle,
-  Mic,
-  BookOpen,
-  ChevronRight,
-  Play
-} from "lucide-react";
-import InsightsCard from '../components/dashboard/Card/InsightsCard';
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { mockSessions } from '../mockData';
 import { cn } from "@/lib/utils";
-import {
-  getTotalSessions,
-  getTotalSessionsBadge,
-  getCurrentStreak,
-  getCurrentStreakBadge
-} from '../components/dashboard/Card/Metrics';
+import { getAuthToken } from "@/lib/auth-client";
+import { toast } from "sonner";
+import { useTheme } from "next-themes";
 
-import CursorGlow from '../components/inquizzo/effects/CursorGlow';
-import MagneticCard from '../components/inquizzo/effects/MagneticCard';
-import SpotlightCard from '../components/inquizzo/effects/SpotlightCard';
+/* ────────────────────────────────────────────
+   DATA (Mapped from provided blueprint)
+   ──────────────────────────────────────────── */
+
+const stats = [
+  {
+    label: 'Total Score',
+    value: '12,450',
+    change: '+1.2k this week',
+    changeType: 'positive',
+    Icon: Medal,
+    iconColor: '#934def',
+    anim: 'bounce',
+  },
+  {
+    label: 'Quests Answered',
+    value: '842',
+    progress: 84,
+    Icon: FileCheck,
+    iconColor: '#934def',
+    anim: 'wiggle',
+  },
+  {
+    label: 'Accuracy Rate',
+    value: '94%',
+    tag: 'Top 2% of players',
+    Icon: Target,
+    iconColor: '#934def',
+    anim: 'pulse',
+  },
+  {
+    label: 'Highest Score',
+    value: '2,840',
+    tag: 'New Record!',
+    Icon: Award,
+    iconColor: '#934def',
+    anim: 'spin',
+  },
+];
+
+const activity = [
+  {
+    name: 'Advanced Quantum Theory',
+    Icon: Brain,
+    iconBg: 'bg-orange-500/20',
+    iconColor: '#f97316',
+    date: 'Oct 24, 2023',
+    score: '2,450 pts',
+    level: 'Level Gold',
+    status: 'Completed',
+    statusClass: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  },
+  {
+    name: 'Full-stack React Master',
+    Icon: Code,
+    iconBg: 'bg-blue-500/20',
+    iconColor: '#3b82f6',
+    date: 'Oct 23, 2023',
+    score: '1,820 pts',
+    level: 'Level Silver',
+    status: 'Completed',
+    statusClass: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+  },
+  {
+    name: 'Modern UI/UX Principles',
+    Icon: Palette,
+    iconBg: 'bg-purple-500/20',
+    iconColor: '#934def',
+    date: 'Oct 21, 2023',
+    score: '-- pts',
+    level: 'In Progress',
+    status: 'Active',
+    statusClass: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+    showResume: true,
+  },
+];
+
+/* ────────────────────────────────────────────
+   COMPONENTS
+   ──────────────────────────────────────────── */
+
+const GlassPanel = ({ children, className, t, ...props }) => (
+  <div
+    className={cn(
+      "backdrop-blur-[12px] border rounded-2xl",
+      className
+    )}
+    style={{
+      backgroundColor: t.glassBg,
+      borderColor: t.glassBorder
+    }}
+    {...props}
+  >
+    {children}
+  </div>
+);
+
+const StatCard = ({ stat, t, isLight }) => (
+  <motion.div
+    whileHover={{ y: -5, borderColor: t.primary }}
+    className="backdrop-blur-[12px] border p-6 rounded-2xl flex flex-col gap-3 group transition-all duration-300 cursor-pointer shadow-xl"
+    style={{
+      backgroundColor: t.cardBg,
+      borderColor: t.cardBorder,
+      boxShadow: `0 10px 30px -15px ${isLight ? 'rgba(0,0,0,0.1)' : t.primary + '22'}`
+    }}
+    data-cursor="card"
+  >
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: t.textMuted }}>{stat.label}</span>
+      <AnimeIcon
+        Icon={stat.Icon}
+        className="size-5"
+        animation={stat.anim}
+        hoverParent={true}
+        color={t.primary}
+      />
+    </div>
+    <div className="text-2xl sm:text-3xl md:text-4xl font-display font-black tracking-tight" style={{ color: t.textPrimary }}>{stat.value}</div>
+    {stat.progress ? (
+      <div className="w-full h-1.5 rounded-full overflow-hidden mt-1" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${stat.progress}%` }}
+          className="h-full"
+          style={{ backgroundImage: `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` }}
+        />
+      </div>
+    ) : stat.change ? (
+      <div className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: '#10b981' }}>
+        <TrendingUp className="size-3" /> {stat.change}
+      </div>
+    ) : stat.tag ? (
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: stat.tag === 'New Record!' ? t.primary : t.textMuted }}>
+        {stat.tag}
+      </div>
+    ) : null}
+  </motion.div>
+);
+
+const ActivityRow = ({ item, t }) => (
+  <tr className="group hover:bg-white/[0.02] transition-colors border-b last:border-0" style={{ borderColor: t.separator }} data-cursor="card">
+    <td className="py-5 px-2">
+      <div className="flex items-center gap-4">
+        <div className="size-10 rounded-xl flex items-center justify-center border" style={{ backgroundColor: item.iconBg, borderColor: 'rgba(255,255,255,0.05)' }}>
+          <AnimeIcon Icon={item.Icon} className="size-5" animation="bounce" hoverParent={true} color={item.iconColor} />
+        </div>
+        <span className="text-sm font-bold" style={{ color: t.textPrimary }}>{item.name}</span>
+      </div>
+    </td>
+    <td className="py-5 text-sm" style={{ color: t.textMuted }}>{item.date}</td>
+    <td className="py-5">
+      <span className="text-sm font-display font-black" style={{ color: t.textPrimary }}>{item.score}</span>
+    </td>
+    <td className="py-5">
+      <span className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.1em] border", item.statusClass)}>
+        {item.status}
+      </span>
+    </td>
+  </tr >
+);
+
+/* ────────────────────────────────────────────
+   MAIN PAGE
+   ──────────────────────────────────────────── */
 
 export default function InQuizzoDashboard() {
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
   const [selectedDate, onDateChange] = useState('last7');
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({
+    stats: {
+      totalScore: 0,
+      questsAnswered: 0,
+      accuracyRate: 0,
+      highestScore: 0
+    },
+    recentActivity: []
+  });
+
+  // Premium Theme Tokens (Synced with RandomQuiz)
+  const t = isLight ? {
+    pageBg: '#E8E0F0',
+    primary: '#9067C6',
+    primaryLight: '#8D86C9',
+    accent: '#D6CA98',
+    mint: '#CEF9F2',
+    steel: '#AFC1D6',
+    glassBg: 'rgba(171, 146, 191, 0.12)',
+    glassBorder: 'rgba(101, 90, 124, 0.22)',
+    glassHoverBg: 'rgba(144, 103, 198, 0.1)',
+    cardBg: 'rgba(175, 193, 214, 0.2)',
+    cardBorder: 'rgba(101, 90, 124, 0.2)',
+    cardInnerBg: 'rgba(206, 249, 242, 0.3)',
+    textPrimary: '#242038',
+    textSecondary: '#655A7C',
+    textMuted: '#655A7C',
+    textSubtle: '#8D86C9',
+    btnPrimaryBg: '#9067C6',
+    btnPrimaryHover: '#7B56B3',
+    btnSecondaryBg: 'rgba(171, 146, 191, 0.18)',
+    btnSecondaryBorder: 'rgba(101, 90, 124, 0.3)',
+    btnSecondaryText: '#242038',
+    orb1: 'rgba(171, 146, 191, 0.4)',
+    orb2: 'rgba(175, 193, 214, 0.45)',
+    orb3: 'rgba(206, 249, 242, 0.5)',
+    statBg: 'rgba(206, 249, 242, 0.35)',
+    separator: 'rgba(101, 90, 124, 0.15)',
+  } : {
+    pageBg: null,
+    primary: '#934cf0',
+    primaryLight: '#934cf0',
+    accent: '#934cf0',
+    mint: '#934cf0',
+    steel: '#934cf0',
+    glassBg: 'rgba(147, 76, 240, 0.05)',
+    glassBorder: 'rgba(255, 255, 255, 0.1)',
+    glassHoverBg: 'rgba(255, 255, 255, 0.05)',
+    cardBg: 'rgba(147, 76, 240, 0.05)',
+    cardBorder: 'rgba(255, 255, 255, 0.1)',
+    cardInnerBg: 'rgba(24, 16, 34, 0.3)',
+    textPrimary: '#ffffff',
+    textSecondary: '#ffffff',
+    textMuted: '#94A3B8',
+    textSubtle: '#94A3B8',
+    btnPrimaryBg: '#934cf0',
+    btnPrimaryHover: 'rgba(147, 76, 240, 0.9)',
+    btnSecondaryBg: 'rgba(147, 76, 240, 0.05)',
+    btnSecondaryBorder: 'rgba(255, 255, 255, 0.1)',
+    btnSecondaryText: '#CBD5E1',
+    orb1: 'rgba(147, 76, 240, 0.4)',
+    orb2: 'rgba(79, 70, 229, 0.4)',
+    orb3: 'rgba(88, 28, 135, 0.2)',
+    statBg: 'rgba(24, 16, 34, 0.3)',
+    separator: 'rgba(255, 255, 255, 0.05)',
+  };
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const today = new Date().toLocaleDateString('en-GB', {
+  useEffect(() => {
+    if (mounted) fetchDashboardStats(selectedDate);
+  }, [selectedDate, mounted]);
+
+  const fetchDashboardStats = async (range) => {
+    try {
+      setLoading(true);
+      const token = getAuthToken();
+      const response = await fetch(`/api/inquizzo/dashboard-stats?range=${range}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch stats');
+
+      const result = await response.json();
+      setData(result);
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      toast.error("Failed to load your latest stats.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!mounted) return null;
+
+  const dashboardStats = [
+    {
+      label: 'Total Score',
+      value: data.stats.totalScore.toLocaleString(),
+      change: data.stats.scoreChangeTag,
+      changeType: 'positive',
+      Icon: Medal,
+      anim: 'bounce',
+    },
+    {
+      label: 'Quests Answered',
+      value: data.stats.questsAnswered.toString(),
+      change: data.stats.questsChangeTag,
+      changeType: 'positive',
+      progress: data.stats.questsAnswered > 0 ? (data.stats.questsAnswered > 100 ? 100 : data.stats.questsAnswered) : 0,
+      Icon: FileCheck,
+      anim: 'wiggle',
+    },
+    {
+      label: 'Accuracy Rate',
+      value: `${data.stats.accuracyRate}%`,
+      tag: data.stats.accuracyTag,
+      Icon: Target,
+      anim: 'pulse',
+    },
+    {
+      label: 'Highest Score',
+      value: data.stats.highestScore.toLocaleString(),
+      tag: data.stats.highestTag,
+      Icon: Award,
+      anim: 'spin',
+    },
+  ];
+
+  const todayStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'short',
     day: '2-digit',
     month: 'short',
-    year: 'numeric'
+    year: 'numeric',
   });
 
-  // Filter sessions for InQuizzo module specifically
-  const inQuizzoSessions = useMemo(() =>
-    mockSessions.filter(s => s.moduleId === 'inquizzo' || s.module === 'inQuizzo'),
-    []
-  );
-
-  const { currentData, previousData } = useMemo(() => {
-    const result = filterByDateRange(inQuizzoSessions, selectedDate);
-    return {
-      currentData: result?.currentPeriodData || [],
-      previousData: result?.previousPeriodData || []
-    };
-  }, [selectedDate, inQuizzoSessions]);
-
-  // Metrics specifically for InQuizzo
-  const totalQuizzes = currentData.length;
-  const totalQuizzesBadge = getTotalSessionsBadge(currentData.length, previousData.length);
-
-  const accuracy = useMemo(() => {
-    if (currentData.length === 0) return 85; // Mock fallback
-    // In a real app, this would be based on actual score data
-    return 78;
-  }, [currentData]);
-
-  const streak = getCurrentStreak(inQuizzoSessions);
-  const streakBadge = getCurrentStreakBadge(streak);
-
-  const voiceMastery = useMemo(() => {
-    const voiceCount = currentData.filter(s => s.isVoiceQuiz).length;
-    return currentData.length > 0 ? Math.round((voiceCount / currentData.length) * 100) : 65;
-  }, [currentData]);
-
-  function filterByDateRange(data, range) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const currentStart = new Date(today);
-    const prevStart = new Date(today);
-    const prevEnd = new Date(today);
-
-    if (range === "today") {
-      currentStart.setDate(today.getDate());
-      prevStart.setDate(today.getDate() - 1);
-      prevEnd.setDate(today.getDate() - 1);
-    } else if (range === "last7") {
-      currentStart.setDate(today.getDate() - 6);
-      prevStart.setDate(today.getDate() - 13);
-      prevEnd.setDate(today.getDate() - 7);
-    } else if (range === "last30") {
-      currentStart.setDate(today.getDate() - 29);
-      prevStart.setDate(today.getDate() - 59);
-      prevEnd.setDate(today.getDate() - 30);
-    }
-
-    const currentPeriodData = data.filter(item => {
-      const d = new Date(item.date);
-      return d >= currentStart && d <= today;
-    });
-
-    const previousPeriodData = data.filter(item => {
-      const d = new Date(item.date);
-      return d >= prevStart && d <= prevEnd;
-    });
-
-    return { currentPeriodData, previousPeriodData };
-  }
-
-  const handleStartQuiz = (path) => {
-    router.push(path);
-  };
-
   return (
-    <div className="relative w-full flex flex-col min-h-screen bg-gradient-to-br from-[#03001E] via-[#7303C0]/[0.03] to-[#03001E] text-foreground overflow-hidden">
-      <CursorGlow />
+    <div className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")} style={isLight ? { backgroundColor: t.pageBg } : undefined}>
+      <NoiseMesh />
+      <CursorAura />
 
-      <div className="relative z-10">
+      {/* Ambient background orbs */}
+      {isLight ? (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden text-center">
+          <div className="absolute -top-24 -left-24 w-[500px] h-[500px] blur-[100px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: '#AB92BF', opacity: 0.55 }} />
+          <div className="absolute -bottom-16 -right-16 w-[450px] h-[450px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#AFC1D6', opacity: 0.6 }} />
+          <div className="absolute top-[25%] right-[5%] w-[400px] h-[400px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#CEF9F2', opacity: 0.7 }} />
+        </div>
+      ) : (
+        <>
+          <div className="absolute -top-20 -left-20 w-[400px] h-[400px] blur-[80px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: t.orb1 }} />
+          <div className="absolute bottom-10 right-10 w-[300px] h-[300px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb2 }} />
+          <div className="absolute top-1/2 left-1/3 w-[250px] h-[250px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb3 }} />
+        </>
+      )}
+
+      <main className="relative z-10 flex flex-col min-h-screen">
+        {/* Header Component */}
         <Header
           DateValue={selectedDate}
           onDateChange={onDateChange}
-          tempDate={today}
+          tempDate={todayStr}
         />
 
-        <div className="p-4 grid grid-cols-4 gap-4">
-          {/* Metrics Section — commented out by user
-          <div className="col-span-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-            ...
-          </div> */}
+        <div className="p-4 md:p-8 space-y-8 pt-10 md:pt-16 max-w-7xl mx-auto w-full">
+          {/* Hero Section */}
+          <section className="flex flex-col gap-6">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex flex-col gap-1"
+            >
+              <h1
+                className="text-4xl sm:text-6xl md:text-7xl font-syne font-[800] tracking-tighter bg-clip-text text-transparent bg-gradient-to-r leading-tight"
+                style={{ backgroundImage: `linear-gradient(to right, ${t.primary}, ${isLight ? t.accent : '#4338CA'})` }}
+              >
+                InQuizzo
+              </h1>
+              <p className="text-lg" style={{ color: t.textMuted }}>Your knowledge conquest is 94% complete today.</p>
+            </motion.div>
 
-          {/* Main Actions Section */}
-          <div className="col-span-3 space-y-4">
-            <SpotlightCard className="rounded-2xl">
-              <Card className="p-6 border border-[#1a0533] bg-[#08011a]/80 backdrop-blur-sm rounded-2xl relative overflow-hidden">
-                {/* Decorative gradient blob */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#7303C0]/10 to-transparent rounded-full -translate-y-32 translate-x-32 pointer-events-none" />
-                {/* Gradient accent line at top */}
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#7303C0] via-[#EC38BC] to-transparent rounded-t-2xl" />
-                <div className="relative z-10 flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-xl font-medium text-persona-ink">Active Assignments</h3>
-                    <p className="text-sm text-muted-foreground">Pick a mode to start your daily practice</p>
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+              {loading ? (
+                Array(4).fill(0).map((_, i) => (
+                  <div key={i} className="h-40 bg-white/5 animate-pulse rounded-2xl border border-white/5" />
+                ))
+              ) : (
+                dashboardStats.map((stat, i) => (
+                  <StatCard key={i} stat={stat} t={t} isLight={isLight} />
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* Mission Hub */}
+          <section className="space-y-4">
+            <h3 className="text-xl font-bold flex items-center gap-2" style={{ color: t.textPrimary }}>
+              <Rocket className="size-5" style={{ color: t.primary }} />
+              Mission Hub
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Random Quiz Card */}
+              <motion.div
+                whileHover={{ y: -5, scale: 1.01 }}
+                onClick={() => router.push('/inquizzo/RandomQuiz')}
+                className="relative overflow-hidden rounded-3xl p-8 h-64 flex flex-col justify-end group cursor-pointer bg-gradient-to-br from-purple-600 to-pink-500 shadow-2xl shadow-purple-500/20"
+                data-cursor="card"
+              >
+                <div className="absolute top-[-20px] right-[-20px] opacity-10 rotate-12 transition-transform group-hover:scale-110 pointer-events-none">
+                  <Shuffle className="size-[180px]" />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Random Quiz Card */}
-                  <MagneticCard
-                    className="flex items-center justify-between rounded-xl px-5 py-5 border border-[#1a0533] bg-gradient-to-br from-[#08011a] to-[#7303C0]/5 hover:border-[#7303C0]/40 hover:shadow-lg hover:shadow-[#7303C0]/10 hover:from-[#7303C0]/10 hover:to-[#9b10a8]/5 transition-all duration-300 cursor-pointer group"
-                    onClick={() => handleStartQuiz("/inquizzo/RandomQuiz")}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7303C0]/20 to-[#9b10a8]/10 flex items-center justify-center text-[#EC38BC] ring-1 ring-[#7303C0]/20 group-hover:ring-[#7303C0]/50 group-hover:scale-110 transition-all duration-200">
-                        <Shuffle className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-persona-ink text-base">Random Quiz</h4>
-                        <p className="text-xs text-muted-foreground">Mixed topics for variety</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className="bg-[#7303C0]/20 text-[#EC38BC] border-[#7303C0]/30">Fresh</Badge>
-                      <Button size="icon" variant="ghost" className="rounded-full">
-                        <ChevronRight className="w-5 h-5" />
-                      </Button>
-                    </div>
-                  </MagneticCard>
-
-                  {/* Subject Quiz Card */}
-                  <MagneticCard
-                    className="flex items-center justify-between rounded-xl px-5 py-5 border border-[#1a0533] bg-gradient-to-br from-[#08011a] to-[#7303C0]/5 hover:border-[#7303C0]/40 hover:shadow-lg hover:shadow-[#7303C0]/10 hover:from-[#7303C0]/10 hover:to-[#9b10a8]/5 transition-all duration-300 cursor-pointer group"
-                    onClick={() => handleStartQuiz("/inquizzo/QuizDomainSelection")}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7303C0]/20 to-[#9b10a8]/10 flex items-center justify-center text-[#EC38BC] ring-1 ring-[#7303C0]/20 group-hover:ring-[#7303C0]/50 group-hover:scale-110 transition-all duration-200">
-                        <BookOpen className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-persona-ink text-base">Subject Quiz</h4>
-                        <p className="text-xs text-muted-foreground">Focus on specific areas</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className="bg-[#7303C0]/20 text-[#EC38BC] border-[#7303C0]/30">Targeted</Badge>
-                      <Button size="icon" variant="ghost" className="rounded-full">
-                        <ChevronRight className="w-5 h-5" />
-                      </Button>
-                    </div>
-                  </MagneticCard>
+                <div className="relative z-10">
+                  <span className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-widest mb-3 border border-white/10">Daily Challenge</span>
+                  <h4 className="text-3xl font-black text-white mb-2">Random Quiz</h4>
+                  <p className="text-white/80 text-sm font-medium max-w-[240px] mb-4">Test your knowledge across all categories in a single blast.</p>
+                  <button className="flex items-center gap-2 bg-white text-purple-600 px-6 py-2.5 rounded-xl font-bold text-sm shadow-xl hover:scale-105 transition-transform">
+                    Start Mission <ArrowRight className="size-4" />
+                  </button>
                 </div>
+              </motion.div>
 
-                <div className="mt-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Recent Activity</h4>
-                    <Button variant="link" size="sm" className="text-[#EC38BC] p-0" onClick={() => handleStartQuiz("/inquizzo/Quiz")}>View All Quizzes</Button>
-                  </div>
+              {/* Subject Quiz Card */}
+              <motion.div
+                whileHover={{ y: -5, scale: 1.01 }}
+                onClick={() => router.push('/inquizzo/QuizDomainSelection')}
+                className="relative overflow-hidden rounded-3xl p-8 h-64 flex flex-col justify-end group cursor-pointer bg-gradient-to-br from-indigo-700 to-purple-900 shadow-2xl shadow-indigo-500/20"
+                data-cursor="card"
+              >
+                <div className="absolute top-[-20px] right-[-20px] opacity-10 -rotate-12 transition-transform group-hover:scale-110 pointer-events-none">
+                  <LayoutGrid className="size-[180px]" />
+                </div>
+                <div className="relative z-10">
+                  <span className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-white text-[10px] font-bold uppercase tracking-widest mb-3 border border-white/10">Specialized</span>
+                  <h4 className="text-3xl font-black text-white mb-2">Subject Quiz</h4>
+                  <p className="text-white/80 text-sm font-medium max-w-[240px] mb-4">Deep dive into specific modules and master your niche.</p>
+                  <button className="flex items-center gap-2 bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-xl hover:scale-105 transition-transform border border-indigo-400/30">
+                    Choose Subject <List className="size-4" />
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          </section>
 
-                  <div className="space-y-3">
-                    {[
-                      { name: "Global Awareness", progress: 100, status: "Completed", icon: "Brain" },
-                      { name: "Science & Tech", progress: 45, status: "In Progress", icon: "Shuffle" },
-                      { name: "History Trivia", progress: 0, status: "Pending", icon: "BookOpen" }
-                    ].map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between rounded-xl px-4 py-4 border border-[#1a0533]/60 bg-gradient-to-r from-[#08011a] to-transparent hover:border-[#7303C0]/30 hover:from-[#7303C0]/5 hover:to-transparent transition-all duration-200 cursor-pointer">
-                        <div className="flex items-center gap-4 w-[220px]">
-                          <div className="w-8 h-8 rounded-lg bg-[#1a0533] flex items-center justify-center text-muted-foreground">
-                            {item.icon === "Brain" ? <Brain className="w-4 h-4" /> : item.icon === "Shuffle" ? <Shuffle className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{item.name}</p>
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">InQuizzo Module</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center w-[200px] gap-2">
-                          <Progress value={item.progress} className="h-1.5 rounded-full" />
-                          <span className="text-xs text-muted-foreground min-w-[30px]">{item.progress}%</span>
-                        </div>
-                        <Badge
-                          variant={item.status === "Completed" ? "default" : item.status === "Pending" ? "outline" : "secondary"}
-                          className={cn(
-                            "text-[10px] px-2 py-0.5",
-                            item.status === "Completed" && "bg-green-500/20 text-green-500 border-green-800",
-                            item.status === "In Progress" && "bg-[#7303C0]/20 text-[#EC38BC] border-[#7303C0]/50",
-                            item.status === "Pending" && "bg-yellow-500/20 text-yellow-400 border-yellow-800"
-                          )}
-                        >
-                          {item.status}
-                        </Badge>
-                        <Button variant="outline" size="sm" className="h-8 px-3 text-xs font-medium">
-                          {item.status === "Completed" ? "Review" : item.status === "Pending" ? "Start" : "Continue"}
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            </SpotlightCard>
-          </div>
+          {/* Recent Activity */}
+          <section className="backdrop-blur-[12px] rounded-[32px] p-6 md:p-10 border shadow-2xl relative overflow-hidden" style={{ backgroundColor: t.glassBg, borderColor: t.glassBorder }}>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/10 blur-[100px] -mr-32 -mt-32 pointer-events-none" />
 
-          {/* Sidebar Section */}
-          <div className="space-y-4">
-            {/* <InsightsCard /> */}
-            <SpotlightCard className="rounded-2xl">
-              <Card className="p-5 border border-[#1a0533] bg-[#08011a]/80 backdrop-blur-sm rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#7303C0] via-[#EC38BC] to-transparent rounded-t-2xl" />
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">Daily Insight</h4>
-                <div className="bg-gradient-to-br from-[#7303C0]/10 via-[#9b10a8]/5 to-transparent border border-[#7303C0]/20 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap className="w-4 h-4 text-[#EC38BC]" />
-                    <span className="text-sm font-semibold text-[#EC38BC]">Tip of the day</span>
-                  </div>
-                  <p className="text-xs text-persona-ink/80 leading-relaxed">
-                    Try practicing with the microphone in silent environments to improve AI speech recognition accuracy.
-                  </p>
-                </div>
-                <div className="mt-4 pt-4 border-t border-[#1a0533]">
-                  <div className="flex justify-between items-center text-[11px] text-muted-foreground font-medium uppercase tracking-widest">
-                    <span>Quiz Accuracy</span>
-                    <span className="text-[#EC38BC]">Excellent</span>
-                  </div>
-                  <Progress value={accuracy} className="h-1.5 mt-2 rounded-full" />
-                </div>
-              </Card>
-            </SpotlightCard>
-          </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 px-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: t.primary }}>Synchronization Log</span>
+                <h3 className="text-3xl font-syne font-black" style={{ color: t.textPrimary }}>Recent Activity</h3>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="pb-4 text-slate-400 font-medium text-xs uppercase tracking-wider px-2">Quiz Topic</th>
+                    <th className="pb-4 text-slate-400 font-medium text-xs uppercase tracking-wider">Date</th>
+                    <th className="pb-4 text-slate-400 font-medium text-xs uppercase tracking-wider">Score</th>
+                    <th className="pb-4 text-slate-400 font-medium text-xs uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {loading ? (
+                    Array(3).fill(0).map((_, i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td colSpan={4} className="py-8 bg-white/5 rounded-xl mb-2" />
+                      </tr>
+                    ))
+                  ) : data.recentActivity.length > 0 ? (
+                    data.recentActivity.map((item, i) => (
+                      <ActivityRow key={i} item={{
+                        ...item,
+                        Icon: item.type === 'mcq' ? Code : item.type === 'voice' ? Brain : Palette,
+                        iconBg: item.type === 'mcq' ? 'rgba(59, 130, 246, 0.1)' : item.type === 'voice' ? 'rgba(249, 115, 22, 0.1)' : 'rgba(147, 76, 240, 0.1)',
+                        iconColor: item.type === 'mcq' ? '#3b82f6' : item.type === 'voice' ? '#f97316' : t.primary,
+                        statusClass: item.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/10' :
+                          item.status === 'Skipped' ? 'bg-red-500/10 text-red-500 border-red-500/10' :
+                            'bg-yellow-500/10 text-yellow-500 border-yellow-500/10'
+                      }} t={t} />
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-12 text-center text-slate-500">
+                        No recent activity found. Start a quiz to see results here!
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
-      </div>
-    </div>
+      </main >
+    </div >
   );
 }

@@ -151,5 +151,5 @@ userAttemptSchema.statics.getSessionAttempts = function (sessionId) {
 
 userAttemptSchema.set('toJSON', { virtuals: true });
 
-const UserAttempt = mongoose.model("UserAttempt", userAttemptSchema);
+const UserAttempt = mongoose.models.UserAttempt || mongoose.model("UserAttempt", userAttemptSchema);
 export default UserAttempt;

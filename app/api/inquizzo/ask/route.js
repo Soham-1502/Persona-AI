@@ -64,10 +64,10 @@ export async function POST(req) {
     };
     const difficultyLabel = difficultyDescriptions[difficultyLevel.toLowerCase()] || difficultyDescriptions.medium;
 
-    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-50) : [];
+    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-150) : [];
     let avoidClause = "";
     if (recentSeen.length > 0) {
-      avoidClause = `\n\nDO NOT repeat these questions:\n${recentSeen.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
+      avoidClause = `\n\nCRITICAL: DO NOT repeat any of these previously asked questions:\n${recentSeen.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
     }
 
     const prompt = `You are a professional quiz examiner. Generate ONE unique quiz question for the topic: "${selectedTopic}".
