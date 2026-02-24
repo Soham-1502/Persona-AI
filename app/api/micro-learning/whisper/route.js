@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 // Initialize Groq client with your API Key
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY_3,
+  apiKey: process.env.GROQ_API_KEY_3 || process.env.GROQ_API_KEY || 'dummy-key-for-build',
 });
 
 /**
@@ -43,10 +43,10 @@ export async function POST(req) {
 
   } catch (error) {
     console.error("Transcription Error:", error);
-    
+
     // Handle specific Groq API errors
     const errorMessage = error.response?.data?.error?.message || "Internal server error during transcription.";
-    
+
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }
