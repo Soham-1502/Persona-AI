@@ -59,101 +59,14 @@ export async function POST(req) {
     }
 
     // ────────────────────────────────────────────────
-    // 2. Fallback: Initiate the pre-recorded transcription job with Gladia
+    // 2. No fallback available — YouTube URLs can't be sent to Gladia
+    //    (Gladia requires a direct audio/video file URL, not a YouTube page)
     // ────────────────────────────────────────────────
-    console.log(`[Gladia] Starting fallback transcription for video: ${videoId}`);
-    const initResponse = await fetch('https://api.gladia.io/v2/pre-recorded', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-gladia-key': gladiaKey,
-      },
-      body: JSON.stringify({
-        audio_url: videoUrl,
-        detect_language: true,           // auto-detect spoken language
-        diarization: true,               // separate speakers
-      }),
-    });
-
-    if (!initResponse.ok) {
-      const errorText = await initResponse.text();
-      console.error(`[Gladia Init Failed] ${initResponse.status}: ${errorText}`);
-      throw new Error(`Gladia job initiation failed (${initResponse.status}): ${errorText}`);
-    }
-
-    const { id, result_url } = await initResponse.json();
-    console.log(`[Gladia] Job created - ID: ${id} | Polling: ${result_url}`);
-
-    // ────────────────────────────────────────────────
-    // 3. Poll for completion with exponential backoff
-    // ────────────────────────────────────────────────
-    let transcript = null;
-    let attempts = 0;
-    const maxAttempts = 360;           // ~36 minutes max (6s × 360)
-    let delayMs = 6000;                // start with 6 seconds
-
-    while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, delayMs));
-
-      const pollResponse = await fetch(result_url, {
-        headers: {
-          'x-gladia-key': gladiaKey,
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!pollResponse.ok) {
-        console.warn(`[Gladia Poll] Non-200 status: ${pollResponse.status}`);
-        attempts++;
-        delayMs = Math.min(delayMs * 1.5, 30000); // backoff, max 30s
-        continue;
-      }
-
-      const data = await pollResponse.json();
-
-      if (data.status === 'done') {
-        transcript = data.result?.transcription?.full_transcript;
-
-        if (!transcript || transcript.trim() === '') {
-          throw new Error('Gladia returned empty transcript');
-        }
-
-        // CLEAN THE TRANSCRIPT HERE
-        transcript = transcript
-          .replace(/\s+/g, ' ')
-          .replace(/\[inaudible\]|\[music\]|\[applause\]/gi, '')
-          .replace(/\b(um|uh|ah|like)\b/gi, '')
-          .replace(/\s*,\s*/g, ', ')
-          .replace(/\s*\.\s*/g, '. ')
-          .trim();
-
-        if (data.result?.transcription?.utterances) {
-          transcript = data.result.transcription.utterances
-            .map(u => `Speaker ${u.speaker || '?'}: ${u.text}`)
-            .join('\n\n');
-        }
-
-        console.log(`[Gladia Success] Transcript ready for ${videoId} (${transcript.length} chars)`);
-        break;
-      }
-
-      if (data.status === 'error') {
-        const errMsg = data.error?.message || 'Unknown error';
-        console.error(`[Gladia Error] Job ${id}: ${errMsg}`);
-        throw new Error(`Transcription failed: ${errMsg}`);
-      }
-
-      attempts++;
-      delayMs = Math.min(delayMs * 1.2, 30000); // gentle backoff
-    }
-
-    if (!transcript) {
-      throw new Error(
-        `Timeout after ${maxAttempts} attempts. Job ID: ${id}. Check status manually at ${result_url}`
-      );
-    }
-
-    return NextResponse.json({ transcript });
+    console.warn(`[Transcript] No captions available for ${videoId}. Gladia fallback not supported for YouTube URLs.`);
+    return NextResponse.json(
+      { error: 'Transcript unavailable: This video does not have captions. Please try a video with auto-generated or manual captions.' },
+      { status: 422 }
+    );
 
   } catch (error) {
     console.error('[Gladia API Route Error]:', error.message, error.stack);
