@@ -1,25 +1,63 @@
 'use client'
 
-import { Card } from '@/components/ui/card'
+import { motion } from 'framer-motion'
+import { useTheme } from 'next-themes'
 import { ProgressStatusFilter, CategoryFilter, SortSelect } from './ModuleProgressFilters.jsx'
 import ModuleProgressList from './ModuleProgressList.jsx'
 import { modulesData } from './ModulesData.js'
 import { useState } from 'react'
-import { cn } from '@/lib/utils.js'
+import { LayoutList } from 'lucide-react'
 
 export default function ModuleProgressSection() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOption, setSortOption] = useState('recent');
 
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  const t = isLight ? {
+    cardBg: 'var(--card)',
+    cardBorder: 'var(--border)',
+    primary: '#9067C6',
+    textPrimary: '#242038',
+    textMuted: '#655A7C',
+    separator: 'var(--border)',
+  } : {
+    cardBg: 'var(--card)',
+    cardBorder: 'var(--border)',
+    primary: '#934cf0',
+    textPrimary: '#ffffff',
+    textMuted: '#94A3B8',
+    separator: 'var(--border)',
+  };
+
   return (
-    <Card className={cn("col-span-full lg:col-span-3 h-fit p-4 w-full", "hover:shadow-md")}>
-      <div className='flex -mb-2 items-center'>
-        <p className='text-xl font-medium'>Module Progress List</p>
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      className="col-span-full lg:col-span-3 h-[500px] backdrop-blur-[12px] border rounded-2xl p-5 shadow-xl w-full flex flex-col"
+      style={{
+        backgroundColor: t.cardBg,
+        borderColor: t.cardBorder,
+        boxShadow: `0 10px 30px -15px ${isLight ? 'rgba(0,0,0,0.1)' : t.primary + '22'}`,
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ backgroundColor: t.primary + '1A', border: `1px solid ${t.primary}33` }}
+        >
+          <LayoutList className="size-3.5" style={{ color: t.primary }} />
+        </div>
+        <span className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: t.textMuted }}>
+          Module Progress
+        </span>
       </div>
 
-      {/* Filters */}
-      <div className='flex flex-col justify-between h-fit w-full gap-4'>
+      {/* Filters & Content Area */}
+      <div className='flex flex-col flex-1 w-full gap-4 min-h-0'>
         <div className='flex flex-col md:flex-row justify-between h-fit items-start md:items-center gap-2'>
           <div className="min-w-0 w-full">
             <ProgressStatusFilter
@@ -48,12 +86,17 @@ export default function ModuleProgressSection() {
                 }} />
             </div>
           </div>
-
         </div>
-        <div className='max-h-90 md:h-90 overflow-y-auto custom-scroll pr-2'>
-          <ModuleProgressList modules={modulesData} selectedCategory={selectedCategory} statusFilter={statusFilter} sortOption={sortOption} />
+
+        <div className='flex-1 overflow-y-auto custom-scroll pr-2 min-h-0'>
+          <ModuleProgressList
+            modules={modulesData}
+            selectedCategory={selectedCategory}
+            statusFilter={statusFilter}
+            sortOption={sortOption}
+          />
         </div>
       </div>
-    </Card>
-  )
+    </motion.div>
+  );
 }

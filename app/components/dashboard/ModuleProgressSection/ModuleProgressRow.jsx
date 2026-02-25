@@ -43,7 +43,7 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
       <div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1 md:w-[220px]">
         <div className="flex items-center gap-3">
           <Icon className="w-6 h-6 text-muted-foreground shrink-0" />
-          <p className="font-medium text-sm">{submodule.name}</p>
+          <p className="font-medium text-sm truncate">{submodule.name}</p>
         </div>
         <span className="text-xs text-muted-foreground md:pl-9 hidden md:block">
           {parentModule.name}

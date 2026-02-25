@@ -25,11 +25,8 @@ export default function Header({ DateValue, onDateChange, tempDate, showDateFilt
     return (
         <div className="sticky top-0 z-50 w-full">
             <header
-                className='w-full text-foreground px-4'
+                className='w-full text-foreground px-4 bg-background/80 backdrop-blur-[6px]'
                 style={{
-                    backgroundColor: isLight ? 'rgba(255, 255, 255, 0.05)' : 'rgba(10, 8, 16, 0.1)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
                     borderBottom: isLight ? '1px solid rgba(0, 0, 0, 0.05)' : '1px solid rgba(255, 255, 255, 0.06)',
                 }}
             >

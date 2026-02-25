@@ -60,7 +60,7 @@ import { toast } from "sonner";
 
 export default function AppSidebar() {
   const pathname = usePathname();
-  const { toggleSidebar, state } = useSidebar();
+  const { toggleSidebar, state, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -347,13 +347,13 @@ export default function AppSidebar() {
           background: 'transparent',
         }}
       >
-        <SidebarMenu>
+        <SidebarMenu className="group-data-[collapsible=icon]:ml-1">
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="flex items-center h-auto hover:bg-primary/10 dark:hover:bg-white/10 text-sidebar-foreground active:bg-primary/15 dark:active:bg-white/15 rounded-lg transition-colors"
+              className="flex items-center h-auto hover:bg-primary/10 dark:hover:bg-white/10 text-sidebar-foreground active:bg-primary/15 dark:active:bg-white/15 rounded-lg transition-colors group-data-[collapsible=icon]:justify-center"
             >
-              <div className="relative flex items-center w-full rounded-lg cursor-pointer">
+              <div className="relative flex items-center w-full rounded-lg cursor-pointer group-data-[collapsible=icon]:justify-center">
 
                 {/* LEFT: Avatar + text */}
                 <div className="flex items-center gap-3 flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
@@ -398,27 +398,27 @@ export default function AppSidebar() {
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent
-                    className="w-56 dark:bg-persona-dark border dark:border-white/10 dark:text-persona-cream shadow-persona-purple"
-                    side="right"
-                    align="end"
-                    sideOffset={isCollapsed ? 17 : 23}
-                    alignOffset={isCollapsed ? 2 : -12}
+                    className="w-56 border dark:border-white/10 dark:text-persona-cream shadow-xl backdrop-blur-[12px] bg-background/80"
+                    side={isMobile ? "top" : "right"}
+                    align={isMobile ? "center" : "end"}
+                    sideOffset={isMobile ? 26 : (isCollapsed ? 23 : 29)}
+                    alignOffset={isMobile ? 0 : (isCollapsed ? 0 : -12)}
                   >
                     <DropdownMenuLabel className="font-semibold text-foreground dark:text-persona-cream/90">
                       My Account
                     </DropdownMenuLabel>
 
                     <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={handleOpenProfile} className="text-foreground dark:text-persona-cream/80 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer focus:bg-black/5 dark:focus:bg-white/10 transition-colors">
-                        <UserPen className="text-foreground dark:text-white" /> Profile
+                      <DropdownMenuItem onClick={handleOpenProfile} className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                        <UserPen className="size-4" /> Profile
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer focus:bg-black/5 dark:focus:bg-white/10 transition-colors">
-                        <Settings className="text-foreground dark:text-white" /> Settings
+                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                        <Settings className="size-4" /> Settings
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer focus:bg-black/5 dark:focus:bg-white/10 transition-colors">
-                        <MessageCircleQuestionMark className="text-foreground dark:text-white" />
+                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                        <MessageCircleQuestionMark className="size-4" />
                         Help & Support
                       </DropdownMenuItem>
                     </DropdownMenuGroup>

@@ -2,13 +2,12 @@
 
 'use client';
 
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ReminderFilters } from "./ReminderFilters.jsx";
 import ReminderList from "./RemindersList.jsx";
-
+import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
-import { Plus, Loader2, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Plus, Loader2, RefreshCw, Bell } from "lucide-react";
 import { NewReminderDialog } from "./NewReminderDialog.jsx";
 import { isAuthenticated, clearAuth } from "@/lib/auth-client";
 
@@ -131,46 +130,81 @@ export default function ReminderSection() {
         }
     };
 
+    const { resolvedTheme } = useTheme();
+    const isLight = resolvedTheme === 'light';
+
+    const t = isLight ? {
+        cardBg: 'var(--card)',
+        cardBorder: 'var(--border)',
+        primary: '#9067C6',
+        textMuted: '#655A7C',
+        separator: 'var(--border)',
+    } : {
+        cardBg: 'var(--card)',
+        cardBorder: 'var(--border)',
+        primary: '#934cf0',
+        textMuted: '#94A3B8',
+        separator: 'var(--border)',
+    };
+
     return (
-        <Card className="col-span-full lg:col-span-1 max-h-122 flex flex-col justify-between border border-border bg-card/95 pr-2">
-            <CardHeader className="flex flex-col">
-                <div className="flex items-center justify-between w-full mb-2">
-                    <div className="flex items-center gap-1">
-                        <p className="text-lg font-medium">Reminders</p>
-                        <Button
-                            variant="ghost"
-                            size="icon"
+        <motion.div
+            whileHover={{ y: -2 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+            className="col-span-full lg:col-span-1 h-[500px] flex flex-col backdrop-blur-[12px] border rounded-2xl shadow-xl overflow-hidden"
+            style={{
+                backgroundColor: t.cardBg,
+                borderColor: t.cardBorder,
+                boxShadow: `0 10px 30px -15px ${isLight ? 'rgba(0,0,0,0.1)' : t.primary + '22'}`,
+            }}
+        >
+            {/* Header */}
+            <div className="px-5 pt-5 pb-3 flex flex-col gap-3" style={{ borderBottom: `1px solid ${t.separator}` }}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center"
+                            style={{ backgroundColor: t.primary + '1A', border: `1px solid ${t.primary}33` }}
+                        >
+                            <Bell className="size-3.5" style={{ color: t.primary }} />
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: t.textMuted }}>Reminders</span>
+                        <button
                             onClick={handleRefresh}
                             disabled={refreshing}
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors"
+                            style={{ color: t.textMuted }}
                         >
-                            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                        </Button>
+                            <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                        </button>
                     </div>
                     <NewReminderDialog onReminderCreated={handleReminderCreated}>
-                        <Button className="cursor-pointer shrink-0 flex items-center gap-1">
-                            <Plus size={18} />
-                            <span className="hidden lg:inline 2xl:hidden">Add</span>
-                            <span className="inline lg:hidden 2xl:inline">Add Reminder</span>
-                        </Button>
+                        <button
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full text-white transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: t.primary }}
+                        >
+                            <Plus className="size-3" />
+                            <span className="hidden lg:inline xl:hidden">Add</span>
+                            <span className="hidden 2xl:inline">Add Reminder</span>
+                        </button>
                     </NewReminderDialog>
                 </div>
-                <div className="flex flex-wrap w-full">
-                    <ReminderFilters
-                        value={selectedFilter}
-                        onValueChange={(value) => {
-                            if (!value) return;
-                            setSelectedFilter(value);
-                        }}
-                    />
-                </div>
-            </CardHeader>
-            <CardContent className="flex-1 h-20 overflow-y-auto pr-2">
+                <ReminderFilters
+                    value={selectedFilter}
+                    onValueChange={(value) => {
+                        if (!value) return;
+                        setSelectedFilter(value);
+                    }}
+                />
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 min-h-0">
                 {loading || refreshing ? (
                     <div className="flex flex-col items-center justify-center h-full gap-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <p className="text-sm text-muted-foreground">
-                            {refreshing ? 'Refreshing reminders...' : 'Loading reminders...'}
+                        <Loader2 className="h-7 w-7 animate-spin" style={{ color: t.primary }} />
+                        <p className="text-xs" style={{ color: t.textMuted }}>
+                            {refreshing ? 'Refreshing...' : 'Loading reminders...'}
                         </p>
                     </div>
                 ) : (
@@ -182,7 +216,7 @@ export default function ReminderSection() {
                         onReminderUpdated={handleReminderUpdated}
                     />
                 )}
-            </CardContent>
-        </Card>
-    )
+            </div>
+        </motion.div>
+    );
 }

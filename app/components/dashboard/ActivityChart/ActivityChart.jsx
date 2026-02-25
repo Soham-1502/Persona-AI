@@ -2,24 +2,14 @@
 
 import * as React from "react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-import { mockSessions } from "@/app/mockData";
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-
-export const description = "An interactive bar chart";
-
-import { cn } from "@/lib/utils";
 
 const chartConfig = {
   views: {
@@ -46,94 +36,139 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
 
   const tickFormatter = React.useCallback((value) => {
     const date = new Date(value);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }, []);
 
   const tooltipLabelFormatter = React.useCallback((value) => {
-    return new Date(value).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }, []);
 
-  console.log("ActivityChart Rendered");
-  console.log("Selected Date in ActivityChart:", selectedDate);
-  console.log("Data in ActivityChart:", data);
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  const t = isLight ? {
+    cardBg: 'var(--card)',
+    cardBorder: 'var(--border)',
+    primary: '#9067C6',
+    tabActiveBg: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+    tabActiveColor: '#9067C6',
+    tabBorder: 'var(--border)',
+    textPrimary: '#242038',
+    textMuted: '#655A7C',
+    gridColor: 'color-mix(in srgb, var(--border) 10%, transparent)',
+  } : {
+    cardBg: 'var(--card)',
+    cardBorder: 'var(--border)',
+    primary: '#934cf0',
+    tabActiveBg: 'color-mix(in srgb, var(--primary) 12%, transparent)',
+    tabActiveColor: '#934cf0',
+    tabBorder: 'var(--border)',
+    textPrimary: '#ffffff',
+    textMuted: '#94A3B8',
+    gridColor: 'color-mix(in srgb, var(--border) 10%, transparent)',
+  };
 
   return (
-    <Card className="py-0 h-full">
-      <CardHeader className="flex flex-col items-stretch border-b p-0! sm:flex-row">
-        <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:py-0!">
-          <CardTitle>Activity Chart</CardTitle>
-          <CardDescription>
-            {`Showing total sessions from the last 7 days`}
-          </CardDescription>
-        </div>
-        <div className="flex overflow-x-auto flex-nowrap">
-          {["confidenceCoach", "socialMentor", "microLearning", "inQuizzo"].map((key) => {
-            const chart = key;
-            return (
-              <button
-                key={chart}
-                data-active={activeChart === chart}
-                className={cn(
-                  "data-[active=true]:bg-muted/50 relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-3 py-3 text-center font-medium even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6 cursor-pointer hover:bg-muted/30 min-w-[5rem] sm:min-w-0",
-                  { "data-[active=true]:rounded-tr-lg": activeChart === "inQuizzo" }
-                )}
-                onClick={() => setActiveChart(chart)}
-              >
-                <span className="text-muted-foreground text-[10px] sm:text-xs truncate">
-                  {chartConfig[chart].label}
-                </span>
-                <span className="text-base leading-none font-bold sm:text-3xl">
-                  {total[chart].toLocaleString()}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </CardHeader>
+    <>
+      <style>{`
+        @keyframes marquee-scroll {
+          0%   { transform: translateX(0); }
+          30%  { transform: translateX(0); }
+          70%  { transform: translateX(var(--marquee-offset, -30%)); }
+          100% { transform: translateX(var(--marquee-offset, -30%)); }
+        }
+        .tab-label-wrap:hover .tab-label-text,
+        .tab-label-active .tab-label-text {
+          animation: marquee-scroll 3s ease-in-out infinite alternate;
+        }
+      `}</style>
+      <motion.div
+        whileHover={{ y: -2 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        className="backdrop-blur-[12px] border rounded-2xl overflow-hidden shadow-xl h-full flex flex-col"
+        style={{
+          backgroundColor: t.cardBg,
+          borderColor: t.cardBorder,
+          boxShadow: `0 10px 30px -15px ${isLight ? 'rgba(0,0,0,0.1)' : t.primary + '22'}`,
+        }}
+      >
+        {/* Header row */}
+        <div className="flex flex-col sm:flex-row" style={{ borderBottom: `1px solid ${t.tabBorder}` }}>
+          <div className="flex flex-col justify-center gap-1 px-6 py-4">
+            <span className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: t.textMuted }}>Activity Chart</span>
+            <p className="text-[11px]" style={{ color: t.textMuted + 'aa' }}>{`Showing total sessions from the last 7 days`}</p>
+          </div>
 
-      <CardContent className="px-2 sm:p-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <BarChart
-            accessibilityLayer
-            data={data}
-            margin={{
-              left: 12,
-              right: 12,
-            }}
-          >
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={tickFormatter}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  className="w-[150px]"
-                  nameKey={chartConfig.activeChart}
-                  labelFormatter={tooltipLabelFormatter}
-                />
-              }
-            />
-            <Bar dataKey={activeChart} fill={`var(--color-${activeChart})`} />
-          </BarChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+          <div className="flex overflow-x-auto flex-nowrap sm:ml-auto">
+            {["confidenceCoach", "socialMentor", "microLearning", "inQuizzo"].map((key) => {
+              const isActive = activeChart === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveChart(key)}
+                  className="relative flex flex-1 flex-col items-center justify-center gap-1 px-4 py-3 sm:px-6 sm:py-4 text-center transition-all duration-200 min-w-[5rem] border-l first:border-l-0"
+                  style={{
+                    borderColor: t.tabBorder,
+                    backgroundColor: isActive ? t.tabActiveBg : 'transparent',
+                  }}
+                >
+                  {isActive && (
+                    <span
+                      className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
+                      style={{ backgroundColor: t.primary }}
+                    />
+                  )}
+                  <div
+                    className={`tab-label-wrap w-full overflow-hidden${isActive ? ' tab-label-active' : ''}`}
+                  >
+                    <span
+                      className="tab-label-text inline-block whitespace-nowrap text-[10px] sm:text-xs font-bold uppercase tracking-wide"
+                      style={{ color: isActive ? t.tabActiveColor : t.textMuted }}
+                    >
+                      {chartConfig[key].label}
+                    </span>
+                  </div>
+                  <span
+                    className="text-base sm:text-2xl font-black leading-none"
+                    style={{ color: isActive ? t.textPrimary : t.textMuted }}
+                  >
+                    {total[key].toLocaleString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Chart */}
+        <div className="px-2 sm:px-4 py-4 flex-1">
+          <ChartContainer config={chartConfig} className="aspect-auto h-full w-full">
+            <BarChart data={data} margin={{ left: 12, right: 12 }}>
+              <CartesianGrid vertical={false} stroke={t.gridColor} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+                tickFormatter={tickFormatter}
+                tick={{ fill: t.textMuted, fontSize: 11 }}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    className="w-[150px]"
+                    nameKey={chartConfig.activeChart}
+                    labelFormatter={tooltipLabelFormatter}
+                  />
+                }
+              />
+              <Bar dataKey={activeChart} fill={`var(--color-${activeChart})`} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ChartContainer>
+        </div>
+      </motion.div>
+    </>
   );
 });
 
@@ -147,7 +182,6 @@ export function getActivityChartData(sessions = []) {
 
   sessions.forEach((session) => {
     const date = session.date;
-
     if (!dailyMap[date]) {
       dailyMap[date] = {
         date,
@@ -155,8 +189,7 @@ export function getActivityChartData(sessions = []) {
         socialMentor: 0,
         microLearning: 0,
         inQuizzo: 0,
-      }
-
+      };
     }
     dailyMap[date][session.module] += 1;
   });

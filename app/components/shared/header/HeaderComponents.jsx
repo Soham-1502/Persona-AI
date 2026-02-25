@@ -25,9 +25,8 @@ export function DateFilter({ value, onValueChange }) {
         <div className='w-24 md:w-32 h-10 md:h-20 flex items-center justify-center rounded-lg'>
             <Select value={value} onValueChange={onValueChange} modal={false}>
                 <SelectTrigger className={cn(
-                    "h-10 md:h-20 w-full bg-background text-foreground border-ring/5 py-2 border-2 cursor-pointer transition-all duration-200 ease-in-out",
-                    "hover:border-ring hover:border-2",
-                    "dark:bg-background dark:text-foreground"
+                    "h-10 md:h-20 w-full bg-transparent text-foreground border-ring/5 py-2 border-2 cursor-pointer transition-all duration-200 ease-in-out",
+                    "hover:border-ring hover:border-2"
                 )}>
                     <SelectValue placeholder="Date Filter" />
                 </SelectTrigger>
@@ -42,6 +41,8 @@ export function DateFilter({ value, onValueChange }) {
 }
 
 export function Notifications() {
+    const { resolvedTheme } = useTheme();
+    const isLight = resolvedTheme === 'light';
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -157,10 +158,10 @@ export function Notifications() {
                     align="end"
                     sideOffset={15}
                     alignOffset={-5}
-                    className="notification-dropdown w-[calc(100vw-2rem)] sm:w-96 max-h-[80vh] flex flex-col p-0 overflow-hidden"
+                    className="notification-dropdown w-[calc(100vw-2rem)] sm:w-96 max-h-[80vh] flex flex-col p-0 overflow-hidden border dark:border-white/10 backdrop-blur-[12px] bg-background/80"
                 >
                     {/* Header — sticky, never scrolls */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b sticky top-0 bg-popover z-10 shrink-0">
+                    <div className="flex items-center justify-between px-4 py-3 border-b sticky top-0 bg-transparent z-10 shrink-0">
                         <h3 className="font-semibold text-base">Notifications</h3>
                         {unreadCount > 0 && (
                             <button
@@ -227,7 +228,8 @@ export function Notifications() {
 }
 
 export function Theme() {
-    const { theme, setTheme } = useTheme();
+    const { theme, setTheme, resolvedTheme } = useTheme();
+    const isLight = resolvedTheme === 'light';
     return (
         <div className={cn("h-10 w-10 border-0 border-ring flex items-center justify-center rounded-lg transition-all duration-100 ease-in-out cursor-pointer",
             "hover:border-ring hover:border-2"
@@ -239,7 +241,12 @@ export function Theme() {
                         <Moon className='absolute -translate-y-6 scale-0 dark:scale-100' />
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={15} alignOffset={-5}>
+                <DropdownMenuContent
+                    align="end"
+                    sideOffset={15}
+                    alignOffset={-5}
+                    className="border dark:border-white/10 backdrop-blur-[12px] bg-background/80"
+                >
                     <DropdownMenuItem onClick={() => setTheme('light')} className="cursor-pointer">
                         <Sun /> Light
                     </DropdownMenuItem>
