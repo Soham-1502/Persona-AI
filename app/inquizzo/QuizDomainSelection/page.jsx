@@ -938,7 +938,7 @@ const QuizDomainSelection = () => {
   // ─── MAIN RENDER ───────────────────────────────────────────────────────────
   return (
     <div
-      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
+      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500", !isLight && "iq-mesh-bg")}
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
@@ -955,11 +955,11 @@ const QuizDomainSelection = () => {
           <div className="absolute top-[10%] left-[45%] w-[300px] h-[300px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#655A7C', opacity: 0.35 }} />
         </>
       ) : (
-        <>
+        <div className="fixed inset-0 pointer-events-none overflow-hidden text-center z-0">
           <div className="absolute -top-20 -left-20 w-[400px] h-[400px] blur-[80px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: t.orb1 }} />
           <div className="absolute bottom-10 right-10 w-[300px] h-[300px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb2 }} />
           <div className="absolute top-1/2 left-1/3 w-[250px] h-[250px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb3 }} />
-        </>
+        </div>
       )}
 
       <Header DateValue="practice" onDateChange={() => { }} tempDate={new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })} showDateFilter={false} />

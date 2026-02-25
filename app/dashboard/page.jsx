@@ -140,8 +140,8 @@ export default function Home() {
   console.log("insightsData:", insightsData.insights);
 
   return (
-    <div className="w-full flex flex-col min-h-screen">
-      <div>
+    <div className="w-full">
+      <div className="sticky top-0 z-50 w-full">
         <Header DateValue={selectedDate} onDateChange={onDateChange} tempDate={today} />
       </div>
       {/* Mobile: swiper shows 1 card at a time; Desktop: unchanged 4-col grid */}
