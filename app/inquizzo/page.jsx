@@ -3,7 +3,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import {
   Medal, FileCheck, Target, Award,
@@ -335,7 +334,6 @@ export default function InQuizzoDashboard() {
   return (
     <div className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500", !isLight && "iq-mesh-bg")} style={isLight ? { backgroundColor: t.pageBg } : undefined}>
       <NoiseMesh />
-      <CursorAura />
 
       {/* Ambient background orbs */}
       {isLight ? (

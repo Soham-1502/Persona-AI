@@ -463,6 +463,11 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Aggressively hide default browser cursor globally */
+  * {
+    cursor: none !important;
+  }
 }
 
 /* ========================================
@@ -721,4 +726,15 @@ body[data-scroll-locked] {
   .auth-container * {
     transition: all 0.3s ease-in-out;
   }
+}
+
+/* Redundant global override to ensure cursor is hidden */
+html, body, * {
+  cursor: none !important;
+}
+
+/* Re-enable cursor when custom cursor is specifically disabled */
+body.custom-cursor-disabled,
+body.custom-cursor-disabled * {
+  cursor: auto !important;
 }

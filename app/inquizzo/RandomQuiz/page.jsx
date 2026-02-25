@@ -12,7 +12,6 @@ import { motion } from 'framer-motion';
 import Lottie from 'lottie-react';
 import Header from '@/app/components/shared/header/Header.jsx';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { jsPDF } from "jspdf";
@@ -601,7 +600,6 @@ const Quiz = () => {
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
-      <CursorAura />
 
       {/* ── Ambient orbs ── */}
       {isLight ? (
