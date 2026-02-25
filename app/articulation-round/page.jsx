@@ -22,16 +22,6 @@ export default function ArticulationRound() {
     ? localStorage.getItem('quizTranscript') || '' 
     : '';
 
-  const theme = {
-    accent: '#a855f7',
-    bg: '#0a0a0a',
-    card: '#111111',
-    border: '#262626',
-    textMuted: '#94a3b8',
-    error: '#f43f5e',
-    success: '#10b981'
-  };
-
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -156,108 +146,345 @@ export default function ArticulationRound() {
     }
   };
 
+  const displayText = text + (interimText ? (text ? ' ' : '') + interimText : '');
+  const charCount = displayText.length;
+  const isSubmitEnabled = charCount >= 20 && !isAnalyzing && !isRecording;
+
+  // Status text & LED state
+  let statusText = 'READY FOR INPUT';
+  let ledColor = '#10b981';
+  let ledClass = 'pulse-green';
+  if (isRecording) {
+    statusText = 'LIVE RECORDING...';
+    ledColor = '#f43f5e';
+    ledClass = 'pulse-red';
+  } else if (isTranscribing) {
+    statusText = 'FINALIZING TEXT...';
+    ledColor = '#934CF0';
+    ledClass = '';
+  }
+
   return (
-    <div style={{ animation: 'fadeIn 0.6s ease', width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-      
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h2 style={{ fontSize: '2.5rem', fontWeight: '900' }}>
-          Neural <span style={{ color: theme.accent }}>Articulation</span>
-        </h2>
-        <p style={{ color: theme.textMuted, marginTop: '10px', fontSize: '1.1rem' }}>
-          Explain the concept in your own words.
-        </p>
-      </div>
+    <div style={{
+      backgroundColor: '#181022',
+      color: '#fff',
+      width: '100vw',
+      height: '100vh',
+      display: 'flex',
+      alignItems: 'stretch',
+      justifyContent: 'center',
+      position: 'relative',
+      overflow: 'hidden',
+      margin: 0,
+      padding: '16px',
+    }}>
+      {/* Theme overlays */}
+      <div className="scanline" />
+      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -100, left: -100 }} />
+      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -50, right: -50 }} />
 
-      {/* ERROR ALERT BANNER */}
-      {error && (
-        <div style={{ 
-          backgroundColor: `${theme.error}15`, 
-          border: `1px solid ${theme.error}44`, 
-          color: theme.error, 
-          padding: '15px 20px', 
-          borderRadius: '12px', 
-          marginBottom: '20px',
-          fontSize: '0.9rem',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          animation: 'shake 0.4s ease'
-        }}>
-          <span><strong>⚠️ Connection Alert:</strong> {error}</span>
-          <button 
-            onClick={() => setError(null)} 
-            style={{ background: 'transparent', border: 'none', color: theme.error, cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            ✕
-          </button>
+      {/* Main content */}
+      <main style={{
+        position: 'relative',
+        zIndex: 10,
+        width: '100%',
+        maxWidth: '900px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px 32px',
+        flex: 1,
+        minHeight: 0,
+        animation: 'fadeSlideIn 1s ease-out forwards',
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <h1 style={{
+            fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+            fontWeight: '800',
+            letterSpacing: '-0.02em',
+            marginBottom: '10px',
+            lineHeight: 1.1,
+          }}>
+            Neural <span style={{ color: '#934CF0' }}>Articulation</span>
+          </h1>
+          <p style={{
+            color: '#94A3B8',
+            fontSize: '1.15rem',
+            fontWeight: '500',
+          }}>
+            Explain the concept in your own words.
+          </p>
         </div>
-      )}
 
-      <div style={{ backgroundColor: theme.card, borderRadius: '24px', border: `1px solid ${theme.border}`, padding: '30px', position: 'relative' }}>
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-             <div style={{ 
-               width: '10px', height: '10px', borderRadius: '50%', 
-               backgroundColor: isRecording ? theme.error : theme.success,
-               boxShadow: isRecording ? `0 0 10px ${theme.error}` : 'none'
-             }} />
-             <label style={{ fontSize: '0.75rem', fontWeight: '800', color: theme.textMuted, letterSpacing: '1px' }}>
-              {isRecording ? 'LIVE RECORDING...' : isTranscribing ? 'FINALIZING TEXT...' : 'READY FOR INPUT'}
-            </label>
+        {/* Error Banner */}
+        {error && (
+          <div style={{
+            width: '100%',
+            marginBottom: '24px',
+            background: 'rgba(244, 63, 94, 0.1)',
+            border: '1px solid rgba(244, 63, 94, 0.3)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            borderRadius: '16px',
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            color: '#f43f5e',
+            animation: 'shakeIn 0.4s ease',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+              <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{error}</span>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#f43f5e',
+                cursor: 'pointer',
+                fontSize: '1.2rem',
+                opacity: 0.7,
+                transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+            >
+              ✕
+            </button>
           </div>
-          
-          <button 
-            onClick={isRecording ? stopRecording : startRecording}
+        )}
+
+        {/* Main Card */}
+        <div style={{
+          width: '100%',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'rgba(147, 76, 240, 0.05)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '40px',
+          padding: 'clamp(20px, 3vw, 40px)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          minHeight: 0,
+        }}>
+          {/* Status Bar + Mic Button */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '32px',
+          }}>
+            {/* Status Pill */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '999px',
+              padding: '10px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <div
+                className={ledClass}
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  backgroundColor: ledColor,
+                  transition: 'background-color 0.3s',
+                }}
+              />
+              <span style={{
+                color: '#94A3B8',
+                fontSize: '10px',
+                fontWeight: '700',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+              }}>
+                {statusText}
+              </span>
+            </div>
+
+            {/* Mic Button */}
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              style={{
+                background: isRecording
+                  ? '#f43f5e'
+                  : 'linear-gradient(135deg, #934CF0, #4338CA)',
+                color: '#fff',
+                border: 'none',
+                padding: '14px 32px',
+                borderRadius: '999px',
+                cursor: 'pointer',
+                fontWeight: '700',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
+              <span>{isRecording ? '⏹' : '🎤'}</span>
+              <span>{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
+            </button>
+          </div>
+
+          {/* Textarea */}
+          <div style={{ position: 'relative', marginBottom: '24px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <textarea
+              value={displayText}
+              onChange={(e) => setText(e.target.value)}
+              disabled={isAnalyzing}
+              placeholder="Your explanation will appear here as you speak..."
+              className="articulation-textarea"
+              style={{
+                width: '100%',
+                height: '100%',
+                minHeight: '150px',
+                background: '#050505',
+                border: `1px solid ${isRecording ? 'rgba(244, 63, 94, 0.5)' : error ? 'rgba(244, 63, 94, 0.3)' : 'rgba(147, 76, 240, 0.2)'}`,
+                borderRadius: '24px',
+                padding: '32px',
+                color: '#fff',
+                fontSize: '1.15rem',
+                lineHeight: '1.7',
+                outline: 'none',
+                resize: 'none',
+                fontFamily: 'inherit',
+                transition: 'all 0.3s ease',
+                boxShadow: isRecording
+                  ? '0 0 25px rgba(244, 63, 94, 0.2)'
+                  : 'none',
+              }}
+              onFocus={e => {
+                if (!isRecording) {
+                  e.currentTarget.style.borderColor = '#934CF0';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(147, 76, 240, 0.15)';
+                }
+              }}
+              onBlur={e => {
+                if (!isRecording) {
+                  e.currentTarget.style.borderColor = 'rgba(147, 76, 240, 0.2)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }
+              }}
+            />
+            {/* Character count */}
+            <div style={{
+              position: 'absolute',
+              bottom: '24px',
+              right: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '12px',
+              color: '#52525b',
+              fontWeight: '500',
+            }}>
+              <span style={{ color: charCount >= 20 ? '#934CF0' : '#52525b' }}>{charCount}</span>
+              <span>/ 20 min characters</span>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            onClick={handleFinalSubmit}
+            disabled={!isSubmitEnabled}
             style={{
-              padding: '10px 24px', borderRadius: '50px', border: 'none', cursor: 'pointer',
-              backgroundColor: isRecording ? theme.error : '#222', color: '#fff',
-              fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px',
-              transition: 'all 0.3s ease'
+              width: '100%',
+              padding: '24px',
+              borderRadius: '16px',
+              background: isSubmitEnabled
+                ? (error ? '#f43f5e' : 'linear-gradient(135deg, #934CF0, #4338CA)')
+                : 'linear-gradient(135deg, #934CF0, #4338CA)',
+              color: '#fff',
+              fontWeight: '800',
+              border: 'none',
+              cursor: isSubmitEnabled ? 'pointer' : 'not-allowed',
+              fontSize: '1.15rem',
+              opacity: isSubmitEnabled ? 1 : 0.3,
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '12px',
+            }}
+            onMouseEnter={e => {
+              if (isSubmitEnabled) {
+                e.currentTarget.style.transform = 'scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 0 30px rgba(147, 76, 240, 0.4)';
+              }
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+            onMouseDown={e => {
+              if (isSubmitEnabled) e.currentTarget.style.transform = 'scale(0.98)';
+            }}
+            onMouseUp={e => {
+              if (isSubmitEnabled) e.currentTarget.style.transform = 'scale(1.02)';
             }}
           >
-            <span>{isRecording ? '●' : '🎤'}</span>
-            {isRecording ? 'Stop Recording' : 'Start Mic'}
+            <span>
+              {isAnalyzing ? 'Processing Neural Audit...' : error ? 'Retry Audit' : 'Analyze My Explanation'}
+            </span>
+            {!isAnalyzing && <span>✨</span>}
           </button>
         </div>
+      </main>
 
-        <div style={{ position: 'relative' }}>
-          <textarea
-            value={text + (interimText ? (text ? ' ' : '') + interimText : '')}
-            onChange={(e) => setText(e.target.value)}
-            disabled={isAnalyzing}
-            placeholder="Your explanation will appear here..."
-            style={{
-              width: '100%', height: '320px', backgroundColor: '#050505', color: '#fff',
-              border: `1px solid ${error ? theme.error : isRecording ? theme.error : theme.border}`, 
-              borderRadius: '16px', padding: '25px', fontSize: '1.1rem', lineHeight: '1.7', outline: 'none', resize: 'none',
-              transition: 'border 0.3s ease'
-            }}
-          />
-        </div>
-
-        <button
-          onClick={handleFinalSubmit}
-          disabled={text.length < 20 || isAnalyzing || isRecording}
-          style={{
-            width: '100%', marginTop: '25px', padding: '20px', borderRadius: '14px',
-            background: error ? theme.error : theme.accent, 
-            color: '#fff', fontWeight: '800', border: 'none',
-            cursor: 'pointer', fontSize: '1rem',
-            opacity: (text.length < 20 || isAnalyzing || isRecording) ? 0.3 : 1,
-            transition: 'all 0.3s ease'
-          }}
-        >
-          {isAnalyzing ? 'Processing Audit...' : error ? 'Retry Audit' : 'Analyze My Explanation'}
-        </button>
-      </div>
-
+      {/* Scoped CSS */}
       <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes shake {
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(40px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shakeIn {
           0%, 100% { transform: translateX(0); }
           25% { transform: translateX(-5px); }
           75% { transform: translateX(5px); }
+        }
+        @keyframes pulse-red {
+          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.7); }
+          70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
+          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+        }
+        @keyframes pulse-green {
+          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+          70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .pulse-red {
+          animation: pulse-red 2s infinite;
+        }
+        .pulse-green {
+          animation: pulse-green 2s infinite;
+        }
+        textarea::-webkit-scrollbar {
+          width: 6px;
+        }
+        textarea::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        textarea::-webkit-scrollbar-thumb {
+          background: rgba(147, 76, 240, 0.3);
+          border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+          background: rgba(147, 76, 240, 0.5);
+        }
+        textarea {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(147, 76, 240, 0.3) transparent;
         }
       `}</style>
     </div>

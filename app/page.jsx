@@ -6,7 +6,6 @@ export default function SplashPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // 3-second timer to redirect to the separate categories page
     const timer = setTimeout(() => {
       router.push('/categories');
     }, 3000);
@@ -15,41 +14,30 @@ export default function SplashPage() {
   }, [router]);
 
   return (
-    <div style={styles.splashWrapper}>
-      <style>
-        {`
-          @keyframes scanLight {
-            0% { background-position: -200% center; }
-            100% { background-position: 200% center; }
-          }
-          .purple-feature-name {
-            font-size: 5rem;
-            font-weight: 800;
-            letter-spacing: 4px;
-            background: linear-gradient(
-              90deg, 
-              #6b21a8 0%, 
-              #a855f7 25%, 
-              #ffffff 50%, 
-              #a855f7 75%, 
-              #6b21a8 100%
-            );
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            /* Animation set to 3s to match the redirect timer */
-            animation: scanLight 3s linear forwards;
-            text-shadow: 0 0 30px rgba(168, 85, 247, 0.4);
-          }
-        `}
-      </style>
-      
-      <div className="container">
-        <h1 className="purple-feature-name">AI-Led Microlearning</h1>
-        <div style={styles.descriptionBox}>
-          <p style={styles.descriptionText}>
-            LEARN. TEST. EXPLAIN.<br/>
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-(--bg-dark)] text-white">
+      <div className="scanline" />
+
+      <div className="orb orb-purple" />
+      <div className="orb orb-indigo" />
+
+      <div className="relative z-10 text-center px-4 max-w-5xl">
+        <h1
+          className="
+            text-6xl md:text-8xl lg:text-9xl 
+            font-black tracking-tighter 
+            gradient-text leading-tight mb-8
+          "
+        >
+          AI-Led<br />Microlearning
+        </h1>
+
+        <div className="glass-card rounded-2xl p-6 md:p-8 max-w-3xl mx-auto border-white/10">
+          <p className="text-lg md:text-xl font-medium tracking-wide text-gray-300 uppercase leading-relaxed">
+            <span className="text-white">LEARN.</span>
+            <span className="text-white/60 mx-1">TEST.</span>
+            <span className="text-white">EXPLAIN.</span>
+          </p>
+          <p className="mt-4 text-gray-400 text-sm md:text-base font-light tracking-widest uppercase">
             Watch, Validate, and Articulate your Understanding
           </p>
         </div>
@@ -57,28 +45,3 @@ export default function SplashPage() {
     </div>
   );
 }
-
-const styles = {
-  splashWrapper: {
-    height: '100vh',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    textAlign: 'center',
-    width: '100vw',
-    backgroundColor: '#000'
-  },
-  descriptionBox: {
-    maxWidth: '700px',
-    margin: '30px auto',
-    padding: '20px',
-    borderLeft: '4px solid #a855f7',
-    background: 'rgba(168, 85, 247, 0.05)',
-  },
-  descriptionText: {
-    fontSize: '1.4rem',
-    lineHeight: '1.6',
-    color: '#e9d5ff',
-  
-  }
-};

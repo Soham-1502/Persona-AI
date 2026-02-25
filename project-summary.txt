@@ -1,0 +1,267 @@
+# PersonaAI — Full Project Summary
+
+> **AI-Led Microlearning Platform** for personality development & academic learning.  
+> Stack: **Next.js 16** · **React 19** · **Tailwind CSS 4** · **Groq (Llama 3.3 70B)** · **Gladia** · **Whisper** · **YouTube Data API v3**
+
+---
+
+## Architecture Overview
+
+```mermaid
+graph TD
+    A["🏠 Splash Page /"] -->|3s redirect| B["📂 Categories /categories"]
+    B -->|Select category| C["📋 Playlists /category/slug"]
+    C -->|Select playlist| D["🎬 Videos /playlist/id"]
+    D -->|Select video| E["▶️ Video Player /video/id"]
+    
+    E -->|"70% watched"| F["🔄 Auto-Transcript via Gladia"]
+    F -->|"Transcript ready"| G["🤖 Auto-MCQ Generation via Groq"]
+    E -->|"Video ends + MCQs ready"| H["📝 Quiz /quiz"]
+    
+    H -->|Submit| I["🎤 Articulation Round /articulation-round"]
+    I -->|Submit explanation| J["📊 Results /articulation-results"]
+    J -->|"accuracy < 60%"| K["🧠 Deep Synthesis Diagnostic MCQs"]
+    J -->|Done| B
+
+    E -->|Sidebar| L["📒 Digital Smart Notes"]
+    E -->|View| M["📜 Transcript /transcript/id"]
+
+    style A fill:#1a1a2e,stroke:#a855f7,color:#fff
+    style E fill:#1a1a2e,stroke:#a855f7,color:#fff
+    style H fill:#1a1a2e,stroke:#a855f7,color:#fff
+    style J fill:#1a1a2e,stroke:#a855f7,color:#fff
+```
+
+---
+
+## Pages
+
+| # | Route | File | Type | Purpose |
+|---|-------|------|------|---------|
+| 1 | `/` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/page.jsx) | Client | Animated splash screen with purple gradient text, auto-redirects to `/categories` after 3s |
+| 2 | `/categories` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/categories/page.jsx) | Client | Dual-mode category selector (Personality / Academic) with search filtering |
+| 3 | `/category/[slug]` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/category/%5Bslug%5D/page.jsx) | Client | Fetches & displays YouTube playlists for the selected category via `/api/playlists` |
+| 4 | `/playlist/[playlistId]` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/playlist/%5BplaylistId%5D/page.jsx) | **Server** | SSR page — fetches playlist items, video stats, channel logos directly from YouTube API |
+| 5 | `/video/[videoId]` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/video/%5BvideoId%5D/page.jsx) | Client | Core video player with sidebar (course content + notes), auto-transcript + auto-MCQ pipeline |
+| 6 | `/transcript/[videoId]` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/transcript/%5BvideoId%5D/page.jsx) | Client | Displays transcript from `localStorage` |
+| 7 | `/quiz` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/quiz/page.jsx) | Client | 8-question MCQ assessment with sidebar progress, XP scoring, detailed review |
+| 8 | `/mcq` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/mcq/page.jsx) | Client | Standalone MCQ page — paste any text to generate a quiz (manual mode) |
+| 9 | `/articulation-round` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/articulation-round/page.jsx) | Client | Speech recording interface — mic capture + live Web Speech API preview + Whisper transcription |
+| 10 | `/articulation-results` | [page.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/articulation-results/page.jsx) | Client | Full results dashboard: accuracy %, speech map, audit, recommendations, diagnostic MCQs, XP |
+
+---
+
+## API Routes (Backend)
+
+| # | Endpoint | Method | File | AI Service | Purpose |
+|---|----------|--------|------|------------|---------|
+| 1 | `/api/playlists` | GET | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/playlists/route.js) | YouTube API | Batch-fetch playlist metadata by comma-separated IDs |
+| 2 | `/api/generate-transcript` | POST | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/generate-transcript/route.js) | **Gladia** | Sends YouTube URL to Gladia for pre-recorded transcription with polling & backoff |
+| 3 | `/api/mcq` | GET/POST | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/mcq/route.js) | **Groq (Llama 3.3 70B)** | POST: generates 8 MCQs from transcript segments, caches in-memory. GET: retrieves cached MCQs |
+| 4 | `/api/analyze-explanation` | POST | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/analyze-explanation/route.js) | **Groq (Llama 3.3 70B)** | Semantic & rhetorical audit comparing user's spoken explanation against source transcript |
+| 5 | `/api/whisper` | POST | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/whisper/route.js) | **Groq (Whisper Large v3)** | Transcribes user's audio recording, preserving filler words for disfluency analysis |
+| 6 | `/api/transcribeAudio` | POST | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/transcribeAudio/route.js) | **Groq (Whisper Large v3)** | Alternative audio transcription endpoint (simpler variant) |
+| 7 | `/api/generateDiagnosticMCQ` | POST | [route.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/api/generateDiagnosticMCQ/route.js) | **Groq (Llama 3.3 70B)** | Generates 3 expert-level diagnostic MCQs for users with low articulation scores |
+
+---
+
+## Components & Libraries
+
+| File | Purpose |
+|------|---------|
+| [DigitalSmartNotesTab.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/components/DigitalSmartNotesTab.jsx) | Timestamped note-taking in video sidebar — add/edit/delete notes, seek to timestamp on click, export to **PDF** (jsPDF) and **DOCX** (docx + file-saver). Hotkey: `Ctrl+N` |
+| [DiagnosticTest.jsx](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/app/quiz/DiagnosticTest.jsx) | Reusable MCQ component for "Cognitive Validation" — used when articulation accuracy is low |
+| [data.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/lib/data.js) | Maps category slugs → YouTube playlist IDs. Two maps: `CATEGORY_MAP` (9 personality categories) and `ACADEMIC_PLAYLIST_MAP` (24 academic subjects) |
+| [segmenter.js](file:///c:/Users/Mayur/OneDrive/Desktop/MicroLearn/my-microlearning-app/lib/segmenter.js) | Splits transcript into 8 equal buckets, selects 1 sentence per bucket based on attempt number (supports rotation for retries) |
+
+---
+
+## Core Application Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant App as Frontend
+    participant YT as YouTube API
+    participant GL as Gladia API
+    participant GR as Groq API
+    
+    U->>App: Opens app (splash → auto-redirect)
+    U->>App: Selects Category (personality/academic)
+    App->>YT: Fetch playlists for category
+    YT-->>App: Playlist metadata
+    U->>App: Selects Playlist
+    App->>YT: Fetch videos + stats + channel logos
+    YT-->>App: Video details (SSR)
+    U->>App: Selects Video
+    App->>YT: Load YouTube IFrame Player
+    
+    Note over App: At 70% video progress...
+    App->>GL: POST /api/generate-transcript
+    GL-->>App: Full transcript (polled)
+    App->>App: Store transcript in localStorage
+    App->>App: Segment transcript into 8 buckets
+    App->>GR: POST /api/mcq (segments)
+    GR-->>App: 8 MCQs (cached server-side)
+    
+    Note over App: Video ends → "TAKE ASSESSMENT" unlocks
+    U->>App: Takes 8-question MCQ quiz
+    App->>App: Calculate score + XP
+    
+    U->>App: Proceeds to Articulation Round
+    U->>App: Records voice explanation via mic
+    App->>GR: POST /api/whisper (audio blob)
+    GR-->>App: Whisper transcription (with fillers)
+    U->>App: Submits explanation
+    App->>GR: POST /api/analyze-explanation
+    GR-->>App: Semantic audit (accuracy, markers, feedback, MCQs)
+    
+    App->>App: Display results dashboard
+    Note over App: If accuracy < 60% → Diagnostic MCQs appear
+```
+
+---
+
+## Data Schema & State Management
+
+> [!NOTE]
+> The app uses **no database** — all state flows through `localStorage` and server-side in-memory caches.
+
+### localStorage Keys
+
+| Key | Set By | Read By | Shape |
+|-----|--------|---------|-------|
+| `transcript_{videoId}` | Video Player page | Quiz, Transcript page | `string` (raw transcript text) |
+| `video-notes-{videoId}` | DigitalSmartNotesTab | DigitalSmartNotesTab | `Array<{id, timestampSec, timeFormatted, content, createdAt}>` |
+| `quizTranscript` | Quiz page | Articulation Round | `string` (concatenated Q+A text) |
+| `mainMcqPoints` | Quiz page | Articulation Results | `string` (number as string) |
+| `articulationResult` | Articulation Round | Articulation Results | `{analysis: AnalysisObject, userText: string}` |
+
+### Server-Side Cache (In-Memory)
+
+| Cache | Location | TTL | Key | Value |
+|-------|----------|-----|-----|-------|
+| MCQ Quiz Cache | `/api/mcq/route.js` | 1 hour | `videoId` | `{mcqs[], timestamp, sourceLength, generatedAt}` |
+
+### AI Analysis Response Schema (`/api/analyze-explanation`)
+
+```json
+{
+  "accuracy": 0-100,
+  "linguisticMarkers": ["Type: 'exact phrase'"],
+  "missedConcepts": ["string"],
+  "feedback": "string",
+  "diagnosticMCQs": [
+    { "question": "...", "options": {"A":"...","B":"...","C":"...","D":"..."}, "answer": "A" }
+  ],
+  "advancedRecommendations": ["string", "string", "string"]
+}
+```
+
+### MCQ Schema (`/api/mcq`)
+
+```json
+{
+  "question": "string",
+  "options": ["string", "string", "string", "string"],
+  "answer": "exact matching option string",
+  "explanation": "string"
+}
+```
+
+---
+
+## Key Mutations (State Changes)
+
+| Trigger | Action | Side Effect |
+|---------|--------|-------------|
+| Video reaches **70%** progress | `POST /api/generate-transcript` | Transcript saved to `localStorage` |
+| Transcript becomes ready | `POST /api/mcq` with segmented transcript | MCQs cached server-side (1hr TTL) |
+| Quiz submitted | `correctCount` calculated → XP | `mainMcqPoints` saved to `localStorage` |
+| "Proceed to Articulation" clicked | `quizTranscript` assembled from Q+A pairs | Stored in `localStorage`, navigate to `/articulation-round` |
+| Mic recording stopped | Audio blob → `POST /api/whisper` | Whisper transcription replaces textarea text |
+| "Analyze My Explanation" clicked | `POST /api/analyze-explanation` | Result stored in `localStorage` as `articulationResult`, navigate to `/articulation-results` |
+| Articulation results loaded | Read + parse `articulationResult` | `localStorage` entry is **deleted** after reading (one-time use) |
+| "START NEW ANALYSIS" clicked | `window.location.href = '/categories'` | Full page reload to categories |
+
+---
+
+## Theme & UI Layout
+
+### Design System
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| **Primary Accent** | `#a855f7` (Purple 500) | Buttons, borders, headings, highlights, progress bars |
+| **Background** | `#050505` / `#0a0a0a` | Page backgrounds (near-black) |
+| **Card Background** | `#111111` / `#141414` | Cards, sidebars, modals |
+| **Border** | `#262626` | Card borders, dividers |
+| **Text Primary** | `#f9fafb` / `#ffffff` | Main content |
+| **Text Muted** | `#94a3b8` | Secondary text, labels |
+| **Success** | `#10b981` | Correct answers, ready states |
+| **Error** | `#f43f5e` | Wrong answers, recording active |
+| **Warning** | `#f59e0b` | Skipped questions, processing states |
+| **Font** | Geist Sans (Google) | All text via CSS variable `--font-geist-sans` |
+
+### Layout Patterns
+
+- **Splash**: Full-screen centered with CSS scan-light animation
+- **Categories**: Centered grid (`repeat(auto-fit, minmax(280px, 1fr))`) with search bar
+- **Playlist/Videos**: 4-column grid with thumbnail cards
+- **Video Player**: 2-panel layout — video + info (left, flex:1) | sidebar 400px (right)
+- **Quiz**: 2-panel layout — sidebar 280px (left, progress + nav) | main content (right, centered 800px max)
+- **Articulation Round**: Single-column centered (800px max)
+- **Results**: Full-width with stacked sections (score hero, speech map, audit, recommendations, diagnostics)
+
+### Animations
+
+| Animation | CSS | Used In |
+|-----------|-----|---------|
+| `scanLight` | Background gradient sweep (3s) | Splash page title |
+| `slideUp` | `translateY(30px)` → `0` with opacity | Card entries, quiz questions |
+| `fadeIn` | Opacity `0 → 1` | Results sections, transitions |
+| `pulseBorder` | Border color pulse with glow | Recording-active indicator |
+| `spin` | 360° rotation | Loading spinners |
+
+---
+
+## Environment Variables
+
+| Variable | Service | Used In |
+|----------|---------|---------|
+| `YOUTUBE_API_KEY` | YouTube Data API v3 | `/api/playlists`, `/playlist/[id]` (server-side) |
+| `NEXT_PUBLIC_YOUTUBE_API_KEY` | YouTube Data API v3 | `/video/[id]` (client-side) |
+| `GLADIA_API_KEY` | Gladia transcription | `/api/generate-transcript` |
+| `GROQ_API_KEY_3` | Groq (Llama + Whisper) | `/api/mcq`, `/api/analyze-explanation`, `/api/whisper`, `/api/transcribeAudio`, `/api/generateDiagnosticMCQ` |
+
+---
+
+## Category Data
+
+### Personality Categories (9)
+
+| Category | Slug | Playlists |
+|----------|------|-----------|
+| Communication | `communication` | 15 playlist IDs |
+| Posture & Presence | `posture` | 9 playlist IDs |
+| Confidence & Self-Belief | `confidence` | 6 playlist IDs |
+| Charisma & Magnetism | `charisma` | 6 playlist IDs |
+| Emotional Intelligence | `emotional-intelligence` | 7 playlist IDs |
+| Motivation & Mindset | `motivation` | 6 playlist IDs |
+| Resilience & Mental Toughness | `resilience` | 3 playlist IDs |
+| Self-Discipline & Habits | `self-discipline` | 5 playlist IDs |
+| Leadership & Influence | `leadership` | 6 playlist IDs |
+
+### Academic Subjects (24)
+
+Organized into 6 sections: **Technology & Engineering** (5), **Mathematics & Logic** (4), **Natural Sciences** (4), **Business & Management** (4), **Humanities & Social Sciences** (4), **Arts & Design** (4).
+
+---
+
+## XP / Points System
+
+| Source | Points Logic |
+|--------|-------------|
+| **MCQ Quiz** | `XP = number of correct answers` (out of 8) |
+| **Articulation** | `< 50%` accuracy → 4 XP · `50–69%` → 5 XP · `70–89%` → 6 XP · `≥ 90%` → 8 XP |
+| **Total** | `articulationPoints + mainMcqPoints` (displayed on results page) |

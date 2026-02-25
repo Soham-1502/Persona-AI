@@ -1,480 +1,794 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
-export default function MCQRound() {
-  const router = useRouter()
+function QuizContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const videoId = searchParams.get('videoId');
 
-  const [mcqs, setMcqs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [submitted, setSubmitted] = useState(false)
-  const [userAnswers, setUserAnswers] = useState({})
-  const [skippedQuestions, setSkippedQuestions] = useState([])
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [mcqs, setMcqs] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [skipped, setSkipped] = useState(new Set());
+  const [maxReached, setMaxReached] = useState(0);
 
-  const theme = {
-    bg: '#0a0a0a',
-    card: '#141414',
-    cardHover: '#1c1c1c',
-    accent: '#a855f7',
-    accentMuted: 'rgba(168, 85, 247, 0.15)',
-    text: '#f9fafb',
-    textMuted: '#94a3b8',
-    border: '#262626',
+  // Theme constants from HTML
+  const t = {
+    bg: '#181022',
+    accent: '#934CF0',
+    accentEnd: '#4338CA',
+    glass: 'rgba(147, 76, 240, 0.05)',
+    border: 'rgba(255, 255, 255, 0.1)',
     success: '#10b981',
     error: '#f43f5e',
-    warning: '#f59e0b'
-  }
+    warning: '#eab308',
+    textMuted: '#94a3b8',
+  };
 
-  // Fetch pre-generated MCQs
   useEffect(() => {
-    const fetchCachedQuiz = async () => {
-      const urlParams = new URLSearchParams(window.location.search)
-      const videoId = urlParams.get('videoId')
-
+    async function fetchQuiz() {
       if (!videoId) {
-        console.error("No videoId in URL")
-        setLoading(false)
-        return
+        setError('No videoId found in URL');
+        setLoading(false);
+        return;
       }
 
-      setLoading(true)
       try {
-        const response = await fetch(`/api/mcq?videoId=${videoId}`)
-        const data = await response.json()
+        const res = await fetch(`/api/mcq?videoId=${videoId}`);
+        const data = await res.json();
 
-        if (data.success && data.mcqs && data.mcqs.length > 0) {
-          setMcqs(data.mcqs)
-          localStorage.removeItem('quizTranscript')
-          console.log("✅ Loaded", data.mcqs.length, "MCQs from cache")
+        if (data.success && data.mcqs?.length > 0) {
+          setMcqs(data.mcqs);
         } else {
-          console.warn("No cached MCQs found")
+          setError(data.message || 'No quiz data available');
         }
       } catch (err) {
-        console.error("Failed to load MCQs:", err)
+        console.error('Quiz fetch error:', err);
+        setError('Failed to load quiz');
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
-    fetchCachedQuiz()
-  }, [])
+    fetchQuiz();
+  }, [videoId]);
 
-  const totalQuestions = mcqs.length
-  const interactionCount = Object.keys(userAnswers).length + skippedQuestions.filter(i => !userAnswers[i]).length
-  const progressPercent = totalQuestions > 0 ? (interactionCount / totalQuestions) * 100 : 0
+  const handleOptionSelect = (questionIndex, option) => {
+    if (submitted) return;
+    setSelectedAnswers(prev => ({ ...prev, [questionIndex]: option }));
+    setSkipped(prev => {
+      const next = new Set(prev);
+      next.delete(questionIndex);
+      return next;
+    });
+  };
 
-  const attemptedCount = Object.keys(userAnswers).length
-
-  const correctCount = mcqs.filter((m, i) => {
-    const selectedValue = userAnswers[i] !== undefined ? m.options[parseInt(userAnswers[i])] : null
-    return selectedValue === m.answer
-  }).length
-
-  // XP = number of correct answers
-  const xpEarned = submitted ? correctCount : 0
+  const handlePrevious = () => {
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+  };
 
   const handleNext = () => {
-    if (!userAnswers[currentQuestionIndex]) {
-      setSkippedQuestions(prev => [...new Set([...prev, currentQuestionIndex])])
+    if (!selectedAnswers.hasOwnProperty(currentIndex)) {
+      setSkipped(prev => new Set(prev).add(currentIndex));
     }
-    if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex(prev => prev + 1)
+    if (currentIndex < mcqs.length - 1) {
+      const nextIdx = currentIndex + 1;
+      setCurrentIndex(nextIdx);
+      setMaxReached(prev => Math.max(prev, nextIdx));
     }
-  }
+  };
 
-  const handleFinalSubmit = () => {
-    if (!userAnswers[currentQuestionIndex]) {
-      setSkippedQuestions(prev => [...new Set([...prev, currentQuestionIndex])])
-    }
-    setSubmitted(true)
-  }
+  const handleSubmit = () => {
+    // Mark any unanswered as skipped
+    const finalSkipped = new Set(skipped);
+    mcqs.forEach((_, idx) => {
+      if (!selectedAnswers.hasOwnProperty(idx)) {
+        finalSkipped.add(idx);
+      }
+    });
+    setSkipped(finalSkipped);
+    setSubmitted(true);
 
-  const getLetter = (index) => String.fromCharCode(65 + index)
+    // Calculate correct count for XP
+    const correctCount = mcqs.filter(
+      (q, i) => selectedAnswers[i] === q.answer
+    ).length;
 
+    // Save to localStorage for articulation-results page
+    localStorage.setItem('mainMcqPoints', correctCount.toString());
+  };
+
+  // ─── Loading State ───
   if (loading) {
     return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg, color: theme.text }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="spinner" style={{ margin: '0 auto' }} />
-          <p style={{ marginTop: '24px', color: theme.textMuted, fontWeight: '600', letterSpacing: '1px' }}>
-            Loading Neural Assessment...
-          </p>
+      <div style={{
+        display: 'flex',
+        height: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: t.bg,
+        color: '#fff',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
+        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
+        <div style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
+          <div style={{
+            width: '40px', height: '40px', margin: '0 auto 20px',
+            border: `3px solid ${t.border}`, borderTopColor: t.accent,
+            borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+          }} />
+          <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>Initializing Neural Assessment...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  if (mcqs.length === 0) {
+  // ─── Error State ───
+  if (error) {
     return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.bg, color: theme.text }}>
-        <div style={{ textAlign: 'center', maxWidth: '500px', padding: '40px' }}>
-          <h2 style={{ fontSize: '2rem', marginBottom: '16px' }}>No Assessment Available</h2>
-          <p style={{ color: theme.textMuted, marginBottom: '24px' }}>
-            MCQs not generated yet or cache expired.
-          </p>
+      <div style={{
+        display: 'flex',
+        height: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: t.bg,
+        color: '#fff',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
+        <div style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
+          <p style={{ marginBottom: '20px', color: t.error, fontWeight: '700', fontSize: '1.2rem' }}>{error}</p>
           <button
-            onClick={() => window.history.back()}
-            style={{ padding: '16px 32px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
+            onClick={() => router.back()}
+            style={{
+              padding: '14px 28px', borderRadius: '16px',
+              background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
+              color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer',
+              boxShadow: '0 10px 25px rgba(67, 56, 202, 0.3)',
+            }}
           >
-            ← Back to Video
+            Go Back
           </button>
         </div>
       </div>
-    )
+    );
   }
 
-  return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text, fontFamily: '"Inter", sans-serif', overflow: 'hidden' }}>
+  const currentQ = mcqs[currentIndex];
+  const answeredOrSkipped = Object.keys(selectedAnswers).length + skipped.size;
+  const progress = mcqs.length > 0 ? (answeredOrSkipped / mcqs.length) * 100 : 0;
 
-      {/* SIDEBAR */}
-      <aside style={{ width: '280px', borderRight: `1px solid ${theme.border}`, padding: '40px 24px', display: 'flex', flexDirection: 'column', backgroundColor: '#070707' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '50px' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '1px', color: '#fff' }}>Progress Board</h2>
+  // Results calculations
+  const correctCount = mcqs.filter((q, i) => selectedAnswers[i] === q.answer).length;
+  const attemptedCount = Object.keys(selectedAnswers).length;
+  const accuracy = attemptedCount > 0 ? Math.round((correctCount / attemptedCount) * 100) : 0;
+  const skippedCount = skipped.size;
+
+  // ─── Results View ───
+  if (submitted) {
+    return (
+      <div style={{
+        backgroundColor: t.bg,
+        minHeight: '100vh',
+        color: '#fff',
+        padding: '40px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
+        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
+
+        <div style={{ maxWidth: '960px', margin: '0 auto', position: 'relative', zIndex: 10 }}>
+          {/* Results Header */}
+          <h2 style={{
+            fontSize: '2rem',
+            fontWeight: '800',
+            marginBottom: '32px',
+            letterSpacing: '-0.02em',
+            background: `linear-gradient(to right, #fff 30%, ${t.accent} 100%)`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>
+            Neural Performance Stats
+          </h2>
+
+          {/* Stats Grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '20px',
+            marginBottom: '48px',
+          }}>
+            {[
+              { label: 'Correct', value: `${correctCount}/${mcqs.length}`, color: t.success },
+              { label: 'Attempted', value: `${attemptedCount}/${mcqs.length}`, color: t.accent },
+              { label: 'Accuracy', value: `${accuracy}%`, color: '#60a5fa' },
+              { label: 'Skipped', value: skippedCount, color: t.warning },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                style={{
+                  background: t.glass,
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${t.border}`,
+                  borderTop: `4px solid ${stat.color}`,
+                  borderRadius: '16px',
+                  padding: '32px',
+                  textAlign: 'center',
+                  animation: `cardEntrance 0.8s cubic-bezier(0.23, 1, 0.32, 1) ${i * 150}ms forwards`,
+                  opacity: 0,
+                }}
+              >
+                <p style={{
+                  color: t.textMuted,
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.15em',
+                  marginBottom: '8px',
+                }}>{stat.label}</p>
+                <p style={{
+                  fontSize: '2.5rem',
+                  fontWeight: '900',
+                  color: '#fff',
+                  margin: 0,
+                }}>{stat.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* XP Bar */}
+          <div style={{
+            background: t.glass,
+            backdropFilter: 'blur(12px)',
+            border: `1px solid ${t.border}`,
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: t.textMuted }}>XP Earned</span>
+            <span style={{
+              fontSize: '1.5rem',
+              fontWeight: '900',
+              color: t.accent,
+            }}>+{correctCount} XP</span>
+          </div>
+
+          {/* Detailed Review */}
+          <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>Detailed Review</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '40px' }}>
+            {mcqs.map((q, idx) => {
+              const userAnswer = selectedAnswers[idx];
+              const isCorrect = userAnswer === q.answer;
+              const isSkippedQ = skipped.has(idx);
+              let statusLabel, statusColor, statusBg;
+              if (isSkippedQ) {
+                statusLabel = 'SKIPPED'; statusColor = t.warning; statusBg = 'rgba(234, 179, 8, 0.1)';
+              } else if (isCorrect) {
+                statusLabel = 'CORRECT'; statusColor = t.success; statusBg = 'rgba(16, 185, 129, 0.1)';
+              } else {
+                statusLabel = 'INCORRECT'; statusColor = t.error; statusBg = 'rgba(244, 63, 94, 0.1)';
+              }
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    background: t.glass,
+                    backdropFilter: 'blur(12px)',
+                    border: `1px solid ${t.border}`,
+                    borderRadius: '16px',
+                    padding: '24px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    animation: `cardEntrance 0.8s cubic-bezier(0.23, 1, 0.32, 1) ${idx * 100}ms forwards`,
+                    opacity: 0,
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '10px', lineHeight: '1.4' }}>
+                      Q{idx + 1}: {q.question}
+                    </p>
+
+                    {isSkippedQ ? (
+                      <div style={{ fontSize: '0.85rem' }}>
+                        <p style={{ color: t.warning, margin: '0 0 4px 0' }}>⚠ You skipped this question.</p>
+                        <p style={{ color: t.success, margin: 0 }}>
+                          ✓ Correct Answer (Option {String.fromCharCode(65 + q.options.indexOf(q.answer))}): <span style={{ color: '#fff' }}>{q.answer}</span>
+                        </p>
+                      </div>
+                    ) : isCorrect ? (
+                      <div style={{ fontSize: '0.85rem' }}>
+                        <p style={{ color: t.success, margin: '0 0 4px 0' }}>
+                          ✓ Your Answer (Option {String.fromCharCode(65 + q.options.indexOf(userAnswer))}): <span style={{ color: '#fff' }}>{userAnswer}</span>
+                        </p>
+                        {q.explanation && <p style={{ color: t.textMuted, margin: 0 }}>{q.explanation}</p>}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.85rem' }}>
+                        <p style={{ color: t.error, margin: '0 0 4px 0' }}>
+                          ✗ Your Answer (Option {String.fromCharCode(65 + q.options.indexOf(userAnswer))}): <span style={{ color: '#fca5a5' }}>{userAnswer}</span>
+                        </p>
+                        <p style={{ color: t.success, margin: '0 0 4px 0' }}>
+                          ✓ Correct Answer (Option {String.fromCharCode(65 + q.options.indexOf(q.answer))}): <span style={{ color: '#fff' }}>{q.answer}</span>
+                        </p>
+                        {q.explanation && <p style={{ color: t.textMuted, margin: 0, marginTop: '8px' }}>{q.explanation}</p>}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '999px',
+                    fontSize: '10px',
+                    fontWeight: '900',
+                    background: statusBg,
+                    color: statusColor,
+                    border: `1px solid ${statusColor}44`,
+                    textTransform: 'uppercase',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}>
+                    {statusLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Proceed Button */}
+          <button
+            onClick={() => {
+              const transcript = localStorage.getItem(`transcript_${videoId}`) || '';
+              localStorage.setItem('quizTranscript', transcript);
+              router.push('/articulation-round');
+            }}
+            style={{
+              width: '100%',
+              padding: '20px',
+              borderRadius: '16px',
+              background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
+              color: '#fff',
+              border: 'none',
+              fontWeight: '900',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              boxShadow: '0 10px 40px rgba(67, 56, 202, 0.3)',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              letterSpacing: '0.05em',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'scale(1.02)';
+              e.currentTarget.style.boxShadow = '0 15px 50px rgba(67, 56, 202, 0.5)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 10px 40px rgba(67, 56, 202, 0.3)';
+            }}
+          >
+            Proceed to Neural Articulation Round →
+          </button>
         </div>
 
-        {submitted ? (
-          <div style={{ marginBottom: '32px', padding: '20px', borderRadius: '16px', background: theme.card, border: `1px solid ${theme.border}`, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-            <p style={{ color: theme.textMuted, fontSize: '0.65rem', fontWeight: '700', marginBottom: '16px', letterSpacing: '1.5px' }}>PERFORMANCE SUMMARY</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                <span style={{ color: theme.textMuted }}>Accuracy</span>
-                <span style={{ color: theme.success, fontWeight: '700' }}>{totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0}%</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                <span style={{ color: theme.textMuted }}>Attempted</span>
-                <span style={{ color: theme.accent, fontWeight: '700' }}>{attemptedCount}/{totalQuestions}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                <span style={{ color: theme.textMuted }}>Growth Points</span>
-                <span style={{ color: '#fbbf24', fontWeight: '700' }}>{xpEarned} XP</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ marginBottom: '40px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
-              <p style={{ color: theme.textMuted, fontSize: '0.7rem', fontWeight: '600' }}>PROGRESS</p>
-              <span style={{ fontSize: '0.9rem', fontWeight: '700', color: theme.accent }}>{Math.round(progressPercent)}%</span>
-            </div>
-            <div style={{ width: '100%', height: '6px', backgroundColor: '#1a1a1a', borderRadius: '10px', overflow: 'hidden' }}>
-              <div style={{ width: `${progressPercent}%`, height: '100%', backgroundColor: theme.accent, transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: `0 0 10px ${theme.accent}` }} />
-            </div>
-          </div>
-        )}
+        <style>{`
+          @keyframes cardEntrance {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
-        <nav style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
-          {mcqs.map((_, i) => {
-            const isAttempted = userAnswers[i] !== undefined
-            const isSkipped = skippedQuestions.includes(i) && !isAttempted
-            const isActive = currentQuestionIndex === i
+  // ─── Quiz View ───
+  return (
+    <div style={{
+      display: 'flex',
+      height: '100vh',
+      width: '100vw',
+      backgroundColor: t.bg,
+      color: '#fff',
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      {/* Theme overlays */}
+      <div className="scanline" />
+      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
+      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
+
+      {/* ── Sidebar ── */}
+      <aside style={{
+        width: '280px',
+        height: 'calc(100vh - 32px)',
+        margin: '16px',
+        marginRight: 0,
+        background: t.glass,
+        backdropFilter: 'blur(12px)',
+        border: `1px solid ${t.border}`,
+        borderRight: 'none',
+        borderRadius: '16px 0 0 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '24px',
+        position: 'relative',
+        zIndex: 10,
+      }}>
+        {/* Sidebar Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
+          <div style={{
+            width: '40px', height: '40px', borderRadius: '12px',
+            background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.2rem',
+          }}>🧠</div>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: '700', letterSpacing: '-0.01em', margin: 0 }}>
+            Progress Board
+          </h2>
+        </div>
+
+        {/* Progress Bar */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '12px' }}>
+            <p style={{
+              fontSize: '10px', fontWeight: '900', letterSpacing: '0.1em',
+              color: '#a5b4fc', textTransform: 'uppercase', margin: 0,
+            }}>Assessment Neural Path</p>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: t.accent }}>
+              {Math.round(progress)}%
+            </span>
+          </div>
+          <div style={{
+            width: '100%', height: '6px',
+            background: 'rgba(0,0,0,0.3)', borderRadius: '999px', overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: '999px',
+              background: t.accent,
+              boxShadow: `0 0 10px ${t.accent}`,
+              width: `${progress}%`,
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+        </div>
+
+        {/* Segment Nav */}
+        <nav style={{
+          flex: 1, display: 'flex', flexDirection: 'column', gap: '12px',
+          overflowY: 'auto', paddingRight: '8px',
+        }} className="quiz-sidebar-scroll">
+          {mcqs.map((_, idx) => {
+            const isActive = idx === currentIndex;
+            const isAnswered = selectedAnswers.hasOwnProperty(idx);
+            const isSkippedItem = skipped.has(idx);
+            const isAccessible = idx <= maxReached;
 
             return (
               <div
-                key={i}
-                onClick={() => !submitted && setCurrentQuestionIndex(i)}
+                key={idx}
+                onClick={() => { if (isAccessible) setCurrentIndex(idx); }}
+                className={isAccessible ? 'segment-item' : ''}
                 style={{
-                  padding: '14px 16px',
-                  borderRadius: '12px',
-                  fontSize: '0.85rem',
-                  marginBottom: '8px',
-                  cursor: submitted ? 'default' : 'pointer',
-                  backgroundColor: isActive ? theme.accentMuted : 'transparent',
-                  color: isActive ? theme.accent : (isAttempted ? theme.text : theme.textMuted),
-                  border: `1px solid ${isActive ? theme.accent : 'transparent'}`,
+                  background: isActive
+                    ? 'rgba(147, 76, 240, 0.1)'
+                    : t.glass,
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${isActive ? t.accent : t.border}`,
+                  borderRadius: '16px',
+                  padding: '16px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  transition: 'all 0.2s ease'
+                  cursor: isAccessible ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.3s ease',
+                  opacity: !isAccessible ? 0.4 : (!isActive && !isAnswered ? 0.7 : 1),
                 }}
               >
-                <span style={{ fontWeight: isActive ? '700' : '500' }}>Segment {i + 1}</span>
-                {isAttempted && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: theme.success, boxShadow: `0 0 8px ${theme.success}` }} />}
-                {isSkipped && <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: theme.warning, boxShadow: `0 0 8px ${theme.warning}` }} />}
+                <span style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  color: isActive || isAnswered ? '#fff' : t.textMuted,
+                }}>
+                  Segment {String(idx + 1).padStart(2, '0')}
+                </span>
+                {isAnswered ? (
+                  <span style={{ color: t.success, fontSize: '14px' }}>✓</span>
+                ) : isSkippedItem ? (
+                  <span style={{ color: t.warning, fontSize: '10px', fontWeight: '800' }}>SKIP</span>
+                ) : isActive ? (
+                  <div style={{
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    background: t.accent, animation: 'pulse 2s infinite',
+                  }} />
+                ) : (
+                  <span style={{ fontSize: '14px', color: t.textMuted }}>🔒</span>
+                )}
               </div>
-            )
+            );
           })}
         </nav>
       </aside>
 
+      {/* ── Main Content ── */}
       <main style={{
         flex: 1,
-        padding: '60px 40px',
-        overflowY: 'auto',
+        height: '100vh',
+        padding: '32px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-      }}>
-        <div style={{ width: '100%', maxWidth: '800px' }}>
-
-          {/* ACTIVE QUIZ */}
-          {mcqs.length > 0 && !submitted && (
-            <div style={{ animation: 'slideUp 0.5s ease' }}>
-              <div style={{ marginBottom: '40px' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: '800', color: theme.accent, letterSpacing: '2px' }}>
-                  QUESTION {currentQuestionIndex + 1} OF {totalQuestions}
-                </span>
-                <h2 style={{ fontSize: '2rem', marginTop: '12px', lineHeight: '1.3', fontWeight: '700' }}>
-                  {mcqs[currentQuestionIndex].question}
-                </h2>
-              </div>
-
-              <div style={{ display: 'grid', gap: '16px' }}>
-                {mcqs[currentQuestionIndex].options.map((value, index) => {
-                  const letter = getLetter(index)
-                  const isSelected = userAnswers[currentQuestionIndex] === index.toString()
-
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => setUserAnswers({ ...userAnswers, [currentQuestionIndex]: index.toString() })}
-                      style={{
-                        textAlign: 'left',
-                        padding: '24px 30px',
-                        borderRadius: '16px',
-                        backgroundColor: isSelected ? theme.accentMuted : theme.card,
-                        border: `2px solid ${isSelected ? theme.accent : 'transparent'}`,
-                        color: isSelected ? theme.accent : theme.text,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        fontSize: '1.05rem',
-                        display: 'flex',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <span style={{
-                        marginRight: '20px',
-                        width: '30px',
-                        height: '30px',
-                        borderRadius: '8px',
-                        background: isSelected ? theme.accent : '#262626',
-                        color: isSelected ? '#fff' : theme.textMuted,
-                        display: 'grid',
-                        placeItems: 'center',
-                        fontWeight: '800',
-                        fontSize: '0.8rem',
-                        transition: '0.2s'
-                      }}>
-                        {letter}
-                      </span>
-                      {value}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div style={{ marginTop: '60px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button
-                  onClick={() => setCurrentQuestionIndex(p => Math.max(0, p - 1))}
-                  disabled={currentQuestionIndex === 0}
-                  style={{
-                    padding: '16px 32px',
-                    borderRadius: '12px',
-                    background: 'transparent',
-                    border: `1px solid ${theme.border}`,
-                    color: theme.textMuted,
-                    opacity: currentQuestionIndex === 0 ? 0.5 : 1,
-                    cursor: currentQuestionIndex === 0 ? 'not-allowed' : 'pointer',
-                    fontWeight: '600'
-                  }}
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={currentQuestionIndex === totalQuestions - 1 ? handleFinalSubmit : handleNext}
-                  style={{
-                    padding: '16px 48px',
-                    borderRadius: '12px',
-                    background: theme.accent,
-                    color: '#fff',
-                    fontWeight: '800',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: `0 8px 20px ${theme.accent}44`
-                  }}
-                >
-                  {currentQuestionIndex === totalQuestions - 1 ? "Submit & Review" : "Next →"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* RESULTS */}
-          {submitted && (
-            <div style={{ animation: 'fadeIn 0.8s ease' }}>
-              {/* Score Summary Card */}
-              <div style={{ marginBottom: '32px', padding: '24px', borderRadius: '16px', background: theme.card, border: `1px solid ${theme.border}`, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
-                <h4 style={{ fontSize: '1.4rem', marginBottom: '16px', color: '#fff' }}>Your Performance</h4>
-                <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '2.8rem', fontWeight: '800', color: theme.success }}>{correctCount}</div>
-                    <div style={{ fontSize: '0.95rem', color: theme.textMuted }}>Correct</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '2.8rem', fontWeight: '800', color: theme.accent }}>{attemptedCount}</div>
-                    <div style={{ fontSize: '0.95rem', color: theme.textMuted }}>Attempted</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '2.8rem', fontWeight: '800', color: theme.warning }}>
-                      {totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0}%
-                    </div>
-                    <div style={{ fontSize: '0.95rem', color: theme.textMuted }}>Accuracy</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Review & Insights header with small XP badge on the right */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '24px'
+        position: 'relative',
+        overflowY: 'auto',
+        zIndex: 10,
+      }} className="quiz-main-scroll">
+        <div style={{ width: '100%', maxWidth: '900px', paddingTop: '40px', paddingBottom: '80px' }}>
+          {/* Question Header */}
+          <div style={{ marginBottom: '48px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <span style={{
+                padding: '4px 12px',
+                background: t.glass,
+                backdropFilter: 'blur(12px)',
+                border: `1px solid rgba(147, 76, 240, 0.3)`,
+                borderRadius: '16px',
+                fontSize: '10px',
+                fontWeight: '700',
+                color: t.accent,
+              }}>CORE LOGIC</span>
+              <span style={{
+                fontSize: '10px',
+                color: t.textMuted,
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: '0.15em',
               }}>
-                <div>
-                  <h3 style={{ fontSize: '1.5rem', fontWeight: '800', margin: 0 }}>
-                    Detailed Review & <span style={{ color: theme.accent }}>Insights</span>
-                  </h3>
-                  <p style={{ color: theme.textMuted, marginTop: '6px', fontSize: '0.95rem' }}>
-                    See how you performed on each segment.
-                  </p>
-                </div>
+                Question {String(currentIndex + 1).padStart(2, '0')} of {String(mcqs.length).padStart(2, '0')}
+              </span>
+            </div>
+            <h1 style={{
+              fontSize: '1.8rem',
+              fontWeight: '800',
+              lineHeight: '1.3',
+              letterSpacing: '-0.02em',
+              margin: 0,
+            }}>
+              {currentQ?.question}
+            </h1>
+          </div>
 
-                {/* Compact Growth Points display */}
-                <div style={{
-                  background: 'rgba(168, 85, 247, 0.12)',
-                  border: `1px solid ${theme.accentMuted}`,
-                  borderRadius: '12px',
-                  padding: '10px 16px',
+          {/* Options */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr',
+            gap: '16px',
+            marginBottom: '64px',
+          }}>
+            {currentQ?.options?.map((option, optIdx) => {
+              const isSelected = selectedAnswers[currentIndex] === option;
+              const labels = ['A', 'B', 'C', 'D'];
+
+              return (
+                <button
+                  key={optIdx}
+                  onClick={() => handleOptionSelect(currentIndex, option)}
+                  className="option-btn"
+                  style={{
+                    background: isSelected
+                      ? 'rgba(147, 76, 240, 0.15)'
+                      : t.glass,
+                    backdropFilter: 'blur(12px)',
+                    border: `1px solid ${isSelected ? t.accent : t.border}`,
+                    borderRadius: '16px',
+                    padding: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '20px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    color: '#fff',
+                    transition: 'all 0.3s ease',
+                    boxShadow: isSelected
+                      ? '0 0 30px rgba(147, 76, 240, 0.4)'
+                      : 'none',
+                  }}
+                >
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    background: isSelected ? t.accent : t.glass,
+                    backdropFilter: 'blur(12px)',
+                    border: `1px solid ${t.border}`,
+                    borderRadius: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: '700',
+                    fontSize: '0.9rem',
+                    flexShrink: 0,
+                    transition: 'all 0.3s ease',
+                  }}>
+                    {labels[optIdx]}
+                  </div>
+                  <span style={{
+                    fontSize: '1.05rem',
+                    fontWeight: '500',
+                    color: isSelected ? '#fff' : '#cbd5e1',
+                    lineHeight: '1.5',
+                  }}>
+                    {option}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Navigation */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <button
+              onClick={handlePrevious}
+              disabled={currentIndex === 0}
+              style={{
+                padding: '16px 32px',
+                background: t.glass,
+                backdropFilter: 'blur(12px)',
+                border: `1px solid rgba(100, 116, 139, 0.3)`,
+                borderRadius: '16px',
+                color: '#fff',
+                fontWeight: '700',
+                cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+                opacity: currentIndex === 0 ? 0.4 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                fontSize: '0.9rem',
+              }}
+            >
+              ← Previous
+            </button>
+
+            {currentIndex === mcqs.length - 1 ? (
+              <button
+                onClick={handleSubmit}
+                style={{
+                  padding: '16px 40px',
+                  background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
+                  borderRadius: '16px',
+                  color: '#fff',
+                  fontWeight: '900',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 10px 25px rgba(67, 56, 202, 0.3)',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '10px',
-                  fontWeight: '700',
-                  color: '#fbbf24'
-                }}>
-                  <span style={{ fontSize: '1.3rem' }}>★</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.8rem', color: theme.textMuted, lineHeight: '1' }}>GROWTH</div>
-                    <div style={{ fontSize: '1.35rem', lineHeight: '1' }}>{xpEarned} XP</div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {mcqs.map((m, i) => {
-                  const selectedKey = userAnswers[i]
-                  const selectedValue = selectedKey !== undefined ? m.options[parseInt(selectedKey)] : null
-                  const correctValue = m.answer
-                  const isCorrect = selectedValue === correctValue
-                  const selectedLetter = selectedKey !== undefined ? getLetter(parseInt(selectedKey)) : null
-
-                  // Calculate correct letter for VALIDATED ANSWER
-                  const correctIndex = m.options.findIndex(opt => opt === correctValue)
-                  const correctLetter = correctIndex !== -1 ? getLetter(correctIndex) : '?'
-
-                  return (
-                    <div key={i} style={{ padding: '30px', borderRadius: '24px', backgroundColor: theme.card, border: `1px solid ${theme.border}`, transition: 'transform 0.3s ease' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '900', color: theme.textMuted }}>MODULE {i + 1}</span>
-                        <span style={{
-                          fontSize: '0.7rem',
-                          padding: '6px 12px',
-                          borderRadius: '50px',
-                          backgroundColor: isCorrect ? `${theme.success}22` : selectedValue ? `${theme.error}22` : `${theme.warning}22`,
-                          color: isCorrect ? theme.success : selectedValue ? theme.error : theme.warning,
-                          fontWeight: '800',
-                          border: `1px solid ${isCorrect ? theme.success : selectedValue ? theme.error : theme.warning}44`
-                        }}>
-                          {isCorrect ? 'CORRECT' : selectedValue ? 'INCORRECT' : 'SKIPPED'}
-                        </span>
-                      </div>
-
-                      <p style={{ marginBottom: '24px', fontWeight: '700', fontSize: '1.2rem', lineHeight: '1.5' }}>{m.question}</p>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingLeft: '20px', borderLeft: `2px solid ${theme.border}` }}>
-                        <div style={{ fontSize: '0.95rem' }}>
-                          <span style={{ color: theme.textMuted, display: 'block', fontSize: '0.7rem', fontWeight: '800', marginBottom: '4px' }}>YOUR SELECTION</span>
-                          <span style={{ color: isCorrect ? theme.success : theme.error }}>
-                            {selectedValue ? `${selectedLetter}: ${selectedValue}` : "No answer provided"}
-                          </span>
-                        </div>
-
-                        {/* Updated: Show letter + text for correct answer when wrong/skipped */}
-                        {!isCorrect && selectedValue && (
-                          <div style={{ fontSize: '0.95rem' }}>
-                            <span style={{ color: theme.textMuted, display: 'block', fontSize: '0.7rem', fontWeight: '800', marginBottom: '4px' }}>
-                              VALIDATED ANSWER
-                            </span>
-                            <span style={{ color: theme.success }}>
-                              {correctLetter}: {correctValue}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <button
-                onClick={() => {
-                  const transcript = mcqs
-                    .map(m => m.question + " " + m.options[m.answer])
-                    .join("\n\n")
-
-                  localStorage.setItem('quizTranscript', transcript)
-                  localStorage.setItem('mainMcqPoints', xpEarned.toString()) // ← SAVE XP HERE
-
-                  router.push('/articulation-round')
+                  gap: '8px',
+                  fontSize: '0.95rem',
                 }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                Submit Assessment ✓
+              </button>
+            ) : (
+              <button
+                onClick={handleNext}
                 style={{
-                  marginTop: '50px',
-                  width: '100%',
-                  padding: '20px',
+                  padding: '16px 40px',
+                  background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
                   borderRadius: '16px',
-                  background: theme.accent,
                   color: '#fff',
-                  fontWeight: '800',
-                  cursor: 'pointer',
+                  fontWeight: '900',
                   border: 'none',
-                  boxShadow: `0 8px 20px ${theme.accent}44`
+                  cursor: 'pointer',
+                  boxShadow: '0 10px 25px rgba(67, 56, 202, 0.3)',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '0.95rem',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                Proceed to Neural Articulation Round →
+                Next Neural Segment →
               </button>
-
-              <button
-                onClick={() => window.history.back()}
-                style={{
-                  marginTop: '16px',
-                  width: '100%',
-                  padding: '20px',
-                  borderRadius: '16px',
-                  border: `1px solid ${theme.accent}`,
-                  color: theme.accent,
-                  background: 'transparent',
-                  fontWeight: '800',
-                  cursor: 'pointer'
-                }}
-              >
-                ← Back to Video
-              </button>
-            </div>
-          )}
-
+            )}
+          </div>
         </div>
       </main>
 
+      {/* Scoped CSS */}
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
-        .spinner { width: 50px; height: 50px; border: 4px solid #1a1a1a; border-top-color: #a855f7; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        @keyframes cardEntrance {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .quiz-sidebar-scroll::-webkit-scrollbar,
+        .quiz-main-scroll::-webkit-scrollbar {
+          width: 4px;
+        }
+        .quiz-sidebar-scroll::-webkit-scrollbar-track,
+        .quiz-main-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .quiz-sidebar-scroll::-webkit-scrollbar-thumb,
+        .quiz-main-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+        .quiz-sidebar-scroll,
+        .quiz-main-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+        .option-btn:hover {
+          box-shadow: 0 0 20px rgba(147, 76, 240, 0.2);
+          border-color: #934CF0 !important;
+        }
+        .option-btn:hover div:first-child {
+          background: #934CF0 !important;
+        }
+        .segment-item:hover {
+          background: rgba(147, 76, 240, 0.08) !important;
+        }
       `}</style>
     </div>
-  )
+  );
 }
 
-function getLetter(index) {
-  return String.fromCharCode(65 + index)
+export default function QuizPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        display: 'flex',
+        height: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#181022',
+        color: '#fff',
+      }}>
+        <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>Loading Assessment...</p>
+      </div>
+    }>
+      <QuizContent />
+    </Suspense>
+  );
 }

@@ -1,7 +1,13 @@
 'use client';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { Space_Grotesk } from 'next/font/google';
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+});
 
 const personalityCategories = [
   {
@@ -124,7 +130,42 @@ const academicSections = [
   },
 ];
 
+/* ═══ Gradient config per category (visual only — no logic changed) ═══ */
+const gradientConfig = {
+  communication:            { glow: 'linear-gradient(135deg, #a855f7, #3b82f6)', border: 'rgba(168,85,247,0.5)' },
+  posture:                  { glow: 'linear-gradient(135deg, #ec4899, #f97316)', border: 'rgba(236,72,153,0.5)' },
+  confidence:               { glow: 'linear-gradient(135deg, #10b981, #06b6d4)', border: 'rgba(16,185,129,0.5)' },
+  charisma:                 { glow: 'linear-gradient(135deg, #f59e0b, #eab308)', border: 'rgba(245,158,11,0.5)' },
+  'emotional-intelligence': { glow: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'rgba(99,102,241,0.5)' },
+  motivation:               { glow: 'linear-gradient(135deg, #f97316, #e11d48)', border: 'rgba(249,115,22,0.5)' },
+  resilience:               { glow: 'linear-gradient(135deg, #14b8a6, #2563eb)', border: 'rgba(20,184,166,0.5)' },
+  'self-discipline':        { glow: 'linear-gradient(135deg, #f43f5e, #8b5cf6)', border: 'rgba(244,63,94,0.5)' },
+  leadership:               { glow: 'linear-gradient(135deg, #0ea5e9, #6366f1)', border: 'rgba(14,165,233,0.5)' },
+};
+
+const cyclicGradients = [
+  { glow: 'linear-gradient(135deg, #a855f7, #3b82f6)', border: 'rgba(168,85,247,0.5)' },
+  { glow: 'linear-gradient(135deg, #ec4899, #f97316)', border: 'rgba(236,72,153,0.5)' },
+  { glow: 'linear-gradient(135deg, #10b981, #06b6d4)', border: 'rgba(16,185,129,0.5)' },
+  { glow: 'linear-gradient(135deg, #f59e0b, #eab308)', border: 'rgba(245,158,11,0.5)' },
+  { glow: 'linear-gradient(135deg, #6366f1, #8b5cf6)', border: 'rgba(99,102,241,0.5)' },
+  { glow: 'linear-gradient(135deg, #f97316, #e11d48)', border: 'rgba(249,115,22,0.5)' },
+  { glow: 'linear-gradient(135deg, #14b8a6, #2563eb)', border: 'rgba(20,184,166,0.5)' },
+  { glow: 'linear-gradient(135deg, #f43f5e, #8b5cf6)', border: 'rgba(244,63,94,0.5)' },
+];
+
+const getGradient = (slug, index = 0) =>
+  gradientConfig[slug] || cyclicGradients[index % cyclicGradients.length];
+
 export default function CategoriesPage() {
+  return (
+    <Suspense fallback={<div style={{ ...styles.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>}>
+      <CategoriesContent />
+    </Suspense>
+  );
+}
+
+function CategoriesContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -212,21 +253,33 @@ export default function CategoriesPage() {
   }
 
   return (
-    <main className="container" style={styles.page}>
+    <main className={spaceGrotesk.className} style={styles.page}>
+      {/* ── Scanline overlay ── */}
+      <div className="scanline" />
+
+      {/* ── Background orbs ── */}
+      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -80 }} />
+      <div className="orb" style={{ background: '#4F46E5', width: 700, height: 700, bottom: -160, right: -80 }} />
+      <div className="orb" style={{ background: '#934CF0', width: 400, height: 400, top: '50%', left: '33%', transform: 'translate(-50%,-50%)', opacity: 0.1 }} />
+
+      {/* Toggle – EXACT original position */}
       <div style={styles.toggleWrapper}>
         <button
           onClick={() => setMode(isPersonality ? 'academic' : 'personality')}
           style={{
             ...styles.toggleButton,
-            background: isPersonality ? '#a855f7' : 'rgba(168, 85, 247, 0.12)',
-            border: isPersonality ? 'none' : '1px solid #a855f7',
-            color: isPersonality ? '#fff' : '#a855f7',
+            background: isPersonality
+              ? 'linear-gradient(to right, #934CF0, #4338CA)'
+              : 'rgba(147, 76, 240, 0.12)',
+            border: isPersonality ? 'none' : '1px solid #934CF0',
+            color: isPersonality ? '#fff' : '#934CF0',
           }}
         >
           {isPersonality ? 'Switch to Academics' : 'Switch to Personality'}
         </button>
       </div>
 
+      {/* Search – EXACT original size/position */}
       <div style={styles.searchContainer}>
         <input
           type="text"
@@ -237,31 +290,40 @@ export default function CategoriesPage() {
           }
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          className="glass-input"
           style={styles.searchInput}
         />
       </div>
 
+      {/* Title – EXACT original size */}
       <h2 style={styles.title}>
-        Select a <span style={{ color: '#a855f7' }}>{isPersonality ? 'Category' : 'Subject'}</span>
+        Select a <span style={{ color: '#934CF0' }}>{isPersonality ? 'Category' : 'Subject'}</span>
       </h2>
 
+      {/* Content – EXACT original structure */}
       <div style={styles.content}>
         {isPersonality ? (
           <div style={styles.grid}>
             {filteredSubjects.length > 0 ? (
-              filteredSubjects.map((item) => (
-                <Link href={`/category/${item.slug}`} key={item.slug} style={{ textDecoration: 'none' }}>
-                  <div style={styles.card}>
-                    <div style={styles.icon}>{item.icon}</div>
-                    <h3 style={styles.name}>{item.name}</h3>
-                    <p style={styles.desc}>{item.description}</p>
-                  </div>
-                </Link>
-              ))
+              filteredSubjects.map((item, index) => {
+                const g = getGradient(item.slug, index);
+                return (
+                  <Link href={`/category/${item.slug}`} key={item.slug} style={{ textDecoration: 'none' }}>
+                    <div className="glass-card group" style={{ ...styles.card, '--card-border-color': g.border }}>
+                      <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
+                        <div className="icon-glow" style={{ background: g.glow }} />
+                        <span className="icon-symbol" style={styles.icon}>{item.icon}</span>
+                      </div>
+                      <h3 style={styles.name}>{item.name}</h3>
+                      <p style={styles.desc}>{item.description}</p>
+                    </div>
+                  </Link>
+                );
+              })
             ) : (
               searchQuery && (
                 <p style={styles.noResults}>
-                  No categories match "{searchQuery}"
+                  No categories match &quot;{searchQuery}&quot;
                 </p>
               )
             )}
@@ -273,26 +335,32 @@ export default function CategoriesPage() {
                 <h3 style={styles.sectionTitle}>{section.title}</h3>
                 <p style={styles.sectionDesc}>{section.description}</p>
                 <div style={styles.grid}>
-                  {section.items.map((item) => (
-                    <Link
-                      href={`/category/${item.slug}?mode=academic`}
-                      key={item.slug}
-                      style={{ textDecoration: 'none' }}
-                    >
-                      <div style={styles.card}>
-                        <div style={styles.icon}>{item.icon}</div>
-                        <h3 style={styles.name}>{item.name}</h3>
-                        <p style={styles.desc}>{item.description}</p>
-                      </div>
-                    </Link>
-                  ))}
+                  {section.items.map((item, index) => {
+                    const g = getGradient(item.slug, index);
+                    return (
+                      <Link
+                        href={`/category/${item.slug}?mode=academic`}
+                        key={item.slug}
+                        style={{ textDecoration: 'none' }}
+                      >
+                        <div className="glass-card group" style={{ ...styles.card, '--card-border-color': g.border }}>
+                          <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
+                            <div className="icon-glow" style={{ background: g.glow }} />
+                            <span className="icon-symbol" style={styles.icon}>{item.icon}</span>
+                          </div>
+                          <h3 style={styles.name}>{item.name}</h3>
+                          <p style={styles.desc}>{item.description}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             ))
           ) : (
             searchQuery && (
               <p style={styles.noResults}>
-                No subjects or fields match "{searchQuery}"
+                No subjects or fields match &quot;{searchQuery}&quot;
               </p>
             )
           )
@@ -302,6 +370,13 @@ export default function CategoriesPage() {
   );
 }
 
+/*
+ * ═══════════════════════════════════════════════════════════════
+ * STYLES — EXACT same sizes, alignment, margins, padding as
+ * the original page.jsx. Only visual "skin" values changed
+ * (background, border, color, shadow) to match the glass theme.
+ * ═══════════════════════════════════════════════════════════════
+ */
 const styles = {
   page: {
     padding: 'clamp(60px, 10vh, 90px) 5% 80px 5%',
@@ -313,7 +388,8 @@ const styles = {
     maxWidth: '100vw',
     boxSizing: 'border-box',
     position: 'relative',
-    background: '#050505',
+    background: '#181022',               // ← upgraded from #050505
+    overflow: 'hidden',
   },
   toggleWrapper: {
     position: 'absolute',
@@ -328,7 +404,7 @@ const styles = {
     borderRadius: '50px',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
-    boxShadow: '0 4px 20px rgba(168,85,247,0.25)',
+    boxShadow: '0 4px 20px rgba(147,76,240,0.25)',   // ← upgraded glow
   },
   searchContainer: {
     width: '100%',
@@ -340,8 +416,9 @@ const styles = {
     padding: '14px 24px',
     fontSize: '1.1rem',
     borderRadius: '50px',
-    border: '1px solid rgba(168,85,247,0.3)',
-    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(147,76,240,0.2)',         // ← upgraded border
+    background: 'rgba(255,255,255,0.04)',              // ← glass bg
+    backdropFilter: 'blur(12px)',
     color: '#fff',
     outline: 'none',
     transition: 'all 0.3s',
@@ -369,7 +446,7 @@ const styles = {
   sectionTitle: {
     fontSize: '2.2rem',
     fontWeight: '700',
-    color: '#a855f7',
+    color: '#934CF0',                                  // ← upgraded to match theme
     marginBottom: '12px',
   },
   sectionDesc: {
@@ -379,41 +456,31 @@ const styles = {
     lineHeight: '1.5',
   },
   card: {
-    background: 'rgba(255,255,255,0.05)',
     padding: '36px 20px',
     borderRadius: '20px',
-    border: '1px solid #a855f7',          // ← changed to purple border
     cursor: 'pointer',
-    transition: 'all 0.25s ease',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
+    alignItems: 'center',                              // ← KEPT centered
     height: '100%',
-  },
-  // Optional subtle hover effect that keeps purple theme
-  cardHover: {
-    ':hover': {
-      transform: 'translateY(-6px)',
-      boxShadow: '0 12px 32px rgba(168,85,247,0.15)',
-      borderColor: '#c084fc',               // slightly lighter purple on hover
-    },
+    // glass-card CSS class handles: background, border, backdrop-filter, hover effects
   },
   icon: {
     fontSize: '3.8rem',
-    marginBottom: '18px',
+    lineHeight: 1,
   },
   name: {
     fontSize: '1.5rem',
     color: '#fff',
     fontWeight: '700',
     marginBottom: '8px',
-    textAlign: 'center',
+    textAlign: 'center',                               // ← KEPT centered
   },
   desc: {
     color: '#bbb',
     fontSize: '0.95rem',
     lineHeight: '1.45',
-    textAlign: 'center',
+    textAlign: 'center',                               // ← KEPT centered
   },
   noResults: {
     color: '#888',

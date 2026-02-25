@@ -26,8 +26,11 @@ export default async function PlaylistVideos({ params }) {
   if (!apiKey) {
     return (
       <div style={styles.container}>
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
+        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
         <h1 style={styles.pageTitle}>Configuration Error</h1>
-        <p style={{ textAlign: "center" }}>API Key is missing from environment variables.</p>
+        <p style={{ textAlign: "center", color: '#94A3B8' }}>API Key is missing from environment variables.</p>
       </div>
     );
   }
@@ -46,6 +49,9 @@ export default async function PlaylistVideos({ params }) {
     if (items.length === 0) {
       return (
         <div style={styles.container}>
+          <div className="scanline" />
+          <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
+          <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
           <h1 style={styles.pageTitle}>No videos found in this playlist.</h1>
         </div>
       );
@@ -79,23 +85,36 @@ export default async function PlaylistVideos({ params }) {
 
     return (
       <div style={styles.container}>
+        {/* ── Theme overlays ── */}
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
+        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
+
         <h1 style={styles.pageTitle}>Course Content</h1>
         <p style={styles.subtitle}>Select a lesson to begin your self-development journey</p>
 
         <div style={styles.videoGrid}>
-          {videos.map((video) => (
+          {videos.map((video, index) => (
             <a
               key={video.id}
               href={`/video/${video.id}?list=${playlistId}`}
               style={styles.cardLink}
             >
-              <div style={styles.videoCard}>
+              <div
+                className="video-card-item"
+                style={{
+                  ...styles.videoCard,
+                  animationDelay: `${300 + index * 100}ms`,
+                }}
+              >
                 <div style={styles.thumbnailContainer}>
                   <img
                     src={video.snippet.thumbnails.medium?.url}
                     style={styles.thumbnail}
                     alt={video.snippet.title}
                   />
+                  {/* Thumbnail gradient overlay */}
+                  <div style={styles.thumbnailOverlay} />
                   <span style={styles.duration}>
                     {formatYouTubeDuration(video.contentDetails.duration)}
                   </span>
@@ -109,7 +128,7 @@ export default async function PlaylistVideos({ params }) {
                   />
                   <div style={styles.textContainer}>
                     <h3 style={styles.videoTitle}>{video.snippet.title}</h3>
-                    <p style={styles.metaText}>{video.snippet.channelTitle}</p>
+                    <p style={styles.channelText}>{video.snippet.channelTitle}</p>
                     <p style={styles.metaText}>
                       {parseInt(video.statistics.viewCount || 0).toLocaleString()} views •{" "}
                       {formatDistanceToNow(new Date(video.snippet.publishedAt))} ago
@@ -120,14 +139,53 @@ export default async function PlaylistVideos({ params }) {
             </a>
           ))}
         </div>
+
+        {/* CSS-only entrance animations + hover effects */}
+        <style>{`
+          @keyframes cardEntrance {
+            from {
+              opacity: 0;
+              transform: translateY(30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          @keyframes headerEntrance {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          .video-card-item {
+            animation: cardEntrance 1s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+            opacity: 0;
+          }
+          .video-card-item:hover {
+            transform: scale(1.03) translateY(-5px) !important;
+            border-color: #934CF0 !important;
+            box-shadow: 0 10px 40px -10px rgba(147, 76, 240, 0.4) !important;
+          }
+          .video-card-item:hover h3 {
+            color: #934CF0 !important;
+          }
+        `}</style>
       </div>
     );
   } catch (error) {
     console.error("Playlist Page Error:", error);
     return (
       <div style={styles.container}>
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
+        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
         <h1 style={styles.pageTitle}>Error</h1>
-        <p style={{ textAlign: "center" }}>{error.message || "Something went wrong while loading the playlist."}</p>
+        <p style={{ textAlign: "center", color: '#94A3B8' }}>{error.message || "Something went wrong while loading the playlist."}</p>
       </div>
     );
   }
@@ -135,82 +193,140 @@ export default async function PlaylistVideos({ params }) {
 
 const styles = {
   container: {
-    backgroundColor: "#050505", // Deep black for professional look
+    backgroundColor: "#181022",
     minHeight: "100vh",
     padding: "80px 4% 40px 4%",
     color: "#fff",
+    position: "relative",
+    overflow: "hidden",
   },
   pageTitle: {
     textAlign: "center",
     fontSize: "2.5rem",
     marginBottom: "10px",
-    color: "#a855f7",
     fontWeight: "800",
+    letterSpacing: "-0.02em",
+    background: "linear-gradient(to right, #FFFFFF 30%, #934CF0 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+    position: "relative",
+    zIndex: 10,
+    animation: "headerEntrance 0.8s ease-out forwards",
   },
   subtitle: {
     textAlign: "center",
-    color: "#888",
+    color: "#94A3B8",
     marginBottom: "50px",
     fontSize: "1.1rem",
+    fontWeight: "500",
+    position: "relative",
+    zIndex: 10,
+    animation: "headerEntrance 0.8s ease-out 0.15s forwards",
+    opacity: 0,
   },
   videoGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)', 
+    gridTemplateColumns: 'repeat(4, 1fr)',
     gap: '20px',
     width: '100%',
     maxWidth: '1400px',
     margin: '0 auto',
+    position: "relative",
+    zIndex: 10,
   },
-  cardLink: { 
-    textDecoration: "none", 
-    color: "inherit", 
+  cardLink: {
+    textDecoration: "none",
+    color: "inherit",
     display: "block",
-    transition: "transform 0.2s ease",
   },
-  videoCard: { 
+  videoCard: {
     width: "100%",
     cursor: "pointer",
+    background: "rgba(147, 76, 240, 0.05)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    borderRadius: "16px",
+    padding: "12px",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    transition: "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
   },
   thumbnailContainer: {
     position: "relative",
     width: "100%",
+    aspectRatio: "16/9",
     borderRadius: "12px",
     overflow: "hidden",
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #a855f7",
+    marginBottom: "16px",
+    backgroundColor: "#1a1a2e",
   },
-  thumbnail: { width: "100%", aspectRatio: "16/9", objectFit: "cover" },
+  thumbnail: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    transition: "transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
+  },
+  thumbnailOverlay: {
+    position: "absolute",
+    inset: 0,
+    background: "linear-gradient(to top, rgba(24, 16, 34, 0.6), transparent 50%)",
+    pointerEvents: "none",
+    borderRadius: "inherit",
+  },
   duration: {
     position: "absolute",
     bottom: "8px",
     right: "8px",
-    backgroundColor: "rgba(0,0,0,0.8)",
+    background: "rgba(0, 0, 0, 0.7)",
+    backdropFilter: "blur(4px)",
+    WebkitBackdropFilter: "blur(4px)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
     color: "#fff",
     padding: "4px 8px",
     borderRadius: "6px",
     fontSize: "12px",
-    fontWeight: "600",
+    fontWeight: "700",
   },
-  details: { display: "flex", marginTop: "14px", gap: "12px" },
+  details: {
+    display: "flex",
+    gap: "12px",
+  },
   avatar: {
     width: "40px",
     height: "40px",
     borderRadius: "50%",
     objectFit: "cover",
     flexShrink: 0,
-    border: "1px solid #444",
+    border: "2px solid #934CF0",
   },
-  textContainer: { flex: 1 },
+  textContainer: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+  },
   videoTitle: {
-    fontSize: "16px",
+    fontSize: "14px",
     fontWeight: "600",
-    lineHeight: "1.3",
+    lineHeight: "1.4",
     display: "-webkit-box",
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
-    marginBottom: "6px",
-    color: "#f1f1f1",
+    marginBottom: "4px",
+    color: "#fff",
+    transition: "color 0.3s ease",
   },
-  metaText: { color: "#909090", fontSize: "13px", margin: "1px 0" },
+  channelText: {
+    color: "#94A3B8",
+    fontSize: "12px",
+    margin: "0 0 2px 0",
+  },
+  metaText: {
+    color: "#94A3B8",
+    fontSize: "11px",
+    margin: 0,
+  },
 };

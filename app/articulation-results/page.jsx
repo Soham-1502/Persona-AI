@@ -8,23 +8,25 @@ export default function ArticulationResults() {
   const [loading, setLoading] = useState(true);
   const [diagnosticAnswers, setDiagnosticAnswers] = useState({});
   const [diagnosticSubmitted, setDiagnosticSubmitted] = useState(false);
+  const [mainMcqPoints, setMainMcqPoints] = useState(0);
 
-  // Read main MCQ points saved from the previous quiz page
-  const mainMcqPoints = Number(localStorage.getItem('mainMcqPoints') || '0');
+  // Read main MCQ points saved from the previous quiz page (SSR-safe)
+  useEffect(() => {
+    setMainMcqPoints(Number(localStorage.getItem('mainMcqPoints') || '0'));
+  }, []);
 
-  // Define theme inside the component (same as previous pages)
-  const theme = {
-    bg: '#0a0a0a',
-    card: '#141414',
-    cardHover: '#1c1c1c',
-    accent: '#a855f7',
-    accentMuted: 'rgba(168, 85, 247, 0.15)',
-    text: '#f9fafb',
-    textMuted: '#94a3b8',
-    border: '#262626',
+  // Theme constants from HTML
+  const t = {
+    bg: '#181022',
+    accent: '#934CF0',
+    accentGlow: 'rgba(147, 76, 240, 0.3)',
+    glass: 'rgba(147, 76, 240, 0.05)',
+    glassBorder: 'rgba(147, 76, 240, 0.1)',
+    border: 'rgba(255, 255, 255, 0.1)',
+    textMuted: '#94A3B8',
     success: '#10b981',
     error: '#f43f5e',
-    warning: '#f59e0b'
+    warning: '#fbbf24',
   };
 
   useEffect(() => {
@@ -54,10 +56,14 @@ export default function ArticulationResults() {
         height: '100vh',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.bg,
-        color: theme.text
+        backgroundColor: t.bg,
+        color: '#fff',
+        position: 'relative',
+        overflow: 'hidden',
       }}>
-        Loading results...
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -100, right: -100 }} />
+        <p style={{ position: 'relative', zIndex: 10, fontWeight: '600', fontSize: '1.1rem' }}>Loading results...</p>
       </div>
     );
   }
@@ -69,14 +75,18 @@ export default function ArticulationResults() {
         height: '100vh',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: theme.bg,
-        color: theme.text,
+        backgroundColor: t.bg,
+        color: '#fff',
         textAlign: 'center',
-        padding: '40px'
+        padding: '40px',
+        position: 'relative',
+        overflow: 'hidden',
       }}>
-        <div>
-          <h2>No Results Available</h2>
-          <p style={{ color: theme.textMuted, marginTop: '16px' }}>
+        <div className="scanline" />
+        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -100, right: -100 }} />
+        <div style={{ position: 'relative', zIndex: 10 }}>
+          <h2 style={{ fontWeight: '800', fontSize: '1.5rem' }}>No Results Available</h2>
+          <p style={{ color: t.textMuted, marginTop: '16px' }}>
             Please complete an articulation round first.
           </p>
           <button
@@ -84,12 +94,13 @@ export default function ArticulationResults() {
             style={{
               marginTop: '24px',
               padding: '16px 32px',
-              background: theme.accent,
+              background: `linear-gradient(135deg, ${t.accent}, #4338CA)`,
               color: '#fff',
               border: 'none',
-              borderRadius: '12px',
+              borderRadius: '16px',
               fontWeight: '800',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              boxShadow: `0 10px 25px ${t.accentGlow}`,
             }}
           >
             Go Back
@@ -108,9 +119,9 @@ export default function ArticulationResults() {
   } = analysisData;
 
   const getStatus = () => {
-    if (accuracy < 50) return { label: "Articulation Deficit", color: theme.error };
-    if (accuracy >= 90) return { label: "Explanatory Mastery", color: theme.success };
-    return { label: "Linguistic Alignment Stable", color: theme.accent };
+    if (accuracy < 50) return { label: "Articulation Deficit", color: t.error };
+    if (accuracy >= 90) return { label: "Explanatory Mastery", color: t.success };
+    return { label: "Linguistic Alignment Stable", color: t.accent };
   };
 
   const status = getStatus();
@@ -119,7 +130,7 @@ export default function ArticulationResults() {
 
   const highlightWords = linguisticMarkers
     .map((item) => {
-      const quotedMatch = item.match(/['"]([^'"]+)['"]/);
+      const quotedMatch = item.match(/['""]([^'""]+)['"]/);
       if (quotedMatch) return quotedMatch[1];
 
       const afterColon = item.split(/:\s*/)[1]?.trim();
@@ -159,363 +170,536 @@ export default function ArticulationResults() {
   };
 
   return (
-    <div
-      style={{
-        animation: "fadeIn 1s ease",
-        width: "98dvw",
-        position: "relative",
-        left: "50%",
-        right: "50%",
-        marginLeft: "-50dvw",
-        marginRight: "-50dvw",
-        padding: "40px 10% 80px 10%",
-        boxSizing: "border-box",
-      }}
-    >
-      {/* 1. HERO SCORE SECTION */}
-      <div style={{ textAlign: "center", marginBottom: "60px", position: "relative" }}>
-        <h1
-          style={{
-            fontSize: "6rem",
-            fontWeight: "900",
-            color: status.color,
-            textShadow: `0 0 40px ${status.color}33`,
-            margin: 0,
-            letterSpacing: "-4px",
-          }}
-        >
-          {accuracy}%
-        </h1>
+    <div style={{
+      backgroundColor: t.bg,
+      color: '#fff',
+      minHeight: '100vh',
+      position: 'relative',
+      overflowX: 'hidden',
+    }}>
+      {/* Theme overlays */}
+      <div className="scanline" />
+      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -100, right: -100 }} />
+      <div className="orb" style={{ background: '#4F46E5', width: 800, height: 800, bottom: -200, left: -200 }} />
 
-        {/* Points display — right side of accuracy % */}
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            right: "5%",
-            transform: "translateY(-50%)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: "8px",
-          }}
-        >
-          {/* Articulation Points */}
-          <div
-            style={{
-              background: "rgba(168,85,247,0.10)",
-              border: `1px solid #9333ea`,
-              borderRadius: "10px",
-              padding: "6px 14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "1rem",
-              fontWeight: "700",
-              color: theme.accent,
-            }}
-          >
-            <span style={{ fontSize: "1.2rem", opacity: 0.9 }}>✦</span>
-            {articulationPoints} XP
-            <span style={{ fontSize: "0.8rem", opacity: 0.75, color: theme.textMuted }}>Articulation</span>
-          </div>
+      <main style={{
+        position: 'relative',
+        zIndex: 20,
+        padding: '48px 5% 80px 5%',
+        maxWidth: '1600px',
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        animation: 'fadeSlideIn 1s ease forwards',
+      }}>
 
-          {/* MCQ Points (from previous quiz) */}
-          <div
-            style={{
-              background: "rgba(251,191,36,0.10)",
-              border: "1px solid rgba(251,191,36,0.25)",
-              borderRadius: "10px",
-              padding: "6px 14px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "1rem",
-              fontWeight: "700",
-              color: "#fbbf24",
-            }}
-          >
-            <span style={{ fontSize: "1.2rem", opacity: 0.9 }}>★</span>
-            {mainMcqPoints} XP
-            <span style={{ fontSize: "0.8rem", opacity: 0.75, color: theme.textMuted }}>MCQ</span>
-          </div>
-        </div>
-
-        <div style={{ marginTop: "10px" }}>
-          <span
-            style={{
-              padding: "8px 24px",
-              borderRadius: "4px",
-              fontSize: "0.85rem",
-              fontWeight: "900",
-              letterSpacing: "3px",
-              textTransform: "uppercase",
-              border: `1px solid ${status.color}33`,
-              color: status.color,
-              background: `${status.color}10`,
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            {status.label}
-          </span>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gap: "30px",
-          width: "100%",
-          maxWidth: "1200px",
-          margin: "0 auto",
-        }}
-      >
-        {/* 2. SPEECH MAP */}
-        <div
-          style={{
-            backgroundColor: "rgba(255,255,255,0.02)",
-            padding: "40px",
-            borderRadius: "32px",
-            border: `1px solid ${theme.border}`,
-            backdropFilter: "blur(20px)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: "25px",
-              alignItems: "center",
-            }}
-          >
-            <h4
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: "900",
-                color: theme.textMuted,
-                letterSpacing: "2px",
-              }}
-            >
-              SPEECH & LOGIC MAP
-            </h4>
-            <span
-              style={{
-                padding: "6px 16px",
-                background: disfluencyCount > 0 ? theme.error : theme.success,
-                color: "#fff",
-                borderRadius: "4px",
-                fontSize: "0.75rem",
-                fontWeight: "900",
-              }}
-            >
-              {disfluencyCount} MARKERS DETECTED
-            </span>
-          </div>
-
-          <div
-            style={{
-              lineHeight: "1.8",
-              color: "#eee",
-              fontSize: "1.2rem",
-              backgroundColor: "rgba(0,0,0,0.4)",
-              padding: "35px",
-              borderRadius: "20px",
-              border: `1px solid rgba(255,255,255,0.05)`,
-            }}
-          >
-            <Highlighter
-              searchWords={highlightWords}
-              autoEscape={true}
-              textToHighlight={userText || ""}
-              highlightStyle={{
-                backgroundColor: "transparent",
-                color: theme.error,
-                borderBottom: `2px solid ${theme.error}`,
-                fontWeight: "600",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* 3. STACKED ANALYSIS SECTION */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "30px" }}>
-          <div
-            style={{
-              backgroundColor: theme.card,
-              padding: "40px",
-              borderRadius: "32px",
-              border: `1px solid ${theme.border}`,
-            }}
-          >
-            <h4
-              style={{
-                fontSize: "0.75rem",
-                fontWeight: "900",
-                color: theme.textMuted,
-                letterSpacing: "2px",
-                marginBottom: "20px",
-              }}
-            >
-              EXPLANATORY AUDIT
-            </h4>
-            <p
-              style={{
-                color: "#fff",
-                fontSize: "1.1rem",
-                lineHeight: "1.7",
-                margin: 0,
-              }}
-            >
-              {feedback || "No detailed feedback available."}
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: "40px",
-              background: `linear-gradient(145deg, ${theme.card}, transparent)`,
-              borderRadius: "32px",
-              border: `1px solid ${theme.accent}22`,
-            }}
-          >
-            <p
-              style={{
-                color: theme.accent,
-                fontWeight: "900",
-                fontSize: "0.75rem",
-                marginBottom: "25px",
-                letterSpacing: "1px",
-              }}
-            >
-              ENHANCEMENTS:
-            </p>
-            {advancedRecommendations.slice(0, 3).map((rec, i) => (
-              <div
-                key={i}
-                style={{
-                  color: "#ccc",
-                  fontSize: "1rem",
-                  marginBottom: "15px",
-                  display: "flex",
-                  gap: "15px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <span style={{ color: theme.accent, fontWeight: "900" }}>
-                  0{i + 1}
-                </span>
-                <span style={{ lineHeight: "1.5" }}>{rec}</span>
+        {/* ═══ 1. HERO SCORE SECTION ═══ */}
+        <section style={{
+          position: 'relative',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '64px',
+          paddingTop: '32px',
+        }}>
+          {/* Left XP badge: Articulation */}
+          <div style={{
+            position: 'absolute',
+            left: '15%',
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}>
+            <div style={{
+              background: t.glass,
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${t.glassBorder}`,
+              borderLeft: `4px solid ${t.accent}`,
+              borderRadius: '24px',
+              padding: '16px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+            }}>
+              <span style={{ fontSize: '1.5rem', animation: 'pulse 2s infinite' }}>✦</span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{
+                  fontSize: '1.5rem',
+                  fontWeight: '800',
+                  fontFamily: 'monospace',
+                  color: t.accent,
+                }}>{articulationPoints} XP</span>
+                <span style={{
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.15em',
+                  color: t.textMuted,
+                  fontWeight: '700',
+                }}>Articulation</span>
               </div>
-            ))}
+            </div>
           </div>
+
+          {/* Center score */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <h1 style={{
+              fontSize: 'clamp(5rem, 12vw, 10rem)',
+              fontWeight: '900',
+              lineHeight: 1,
+              letterSpacing: '-0.04em',
+              color: t.accent,
+              margin: 0,
+              filter: `drop-shadow(0 0 45px ${t.accentGlow})`,
+            }}>
+              {accuracy}%
+            </h1>
+            <div style={{ marginTop: '24px' }}>
+              <span style={{
+                background: t.glass,
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${t.accentGlow}`,
+                borderRadius: '24px',
+                padding: '8px 32px',
+                fontSize: '11px',
+                fontWeight: '900',
+                letterSpacing: '0.35em',
+                textTransform: 'uppercase',
+                color: t.accent,
+              }}>
+                {status.label}
+              </span>
+            </div>
+          </div>
+
+          {/* Right XP badge: MCQ */}
+          <div style={{
+            position: 'absolute',
+            right: '15%',
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}>
+            <div style={{
+              background: t.glass,
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${t.glassBorder}`,
+              borderLeft: `4px solid ${t.warning}`,
+              borderRadius: '24px',
+              padding: '16px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+            }}>
+              <span style={{ fontSize: '1.5rem', color: t.warning, animation: 'pulse 2s infinite' }}>★</span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{
+                  fontSize: '1.5rem',
+                  fontWeight: '800',
+                  fontFamily: 'monospace',
+                  color: t.warning,
+                }}>{mainMcqPoints} XP</span>
+                <span style={{
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.15em',
+                  color: t.textMuted,
+                  fontWeight: '700',
+                }}>MCQ Logic</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ═══ GRID LAYOUT ═══ */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '7fr 5fr',
+          gap: '32px',
+          width: '100%',
+          maxWidth: '1400px',
+        }}>
+
+          {/* ═══ 2. SPEECH MAP (left, spans full height) ═══ */}
+          <div style={{
+            background: t.glass,
+            backdropFilter: 'blur(12px)',
+            border: `1px solid ${t.glassBorder}`,
+            borderRadius: '24px',
+            padding: '40px',
+            display: 'flex',
+            flexDirection: 'column',
+            gridRow: '1 / 2',
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '32px',
+            }}>
+              <h4 style={{
+                fontSize: '10px',
+                fontWeight: '900',
+                color: t.textMuted,
+                letterSpacing: '0.3em',
+                textTransform: 'uppercase',
+                margin: 0,
+              }}>
+                Speech & Logic Map
+              </h4>
+              <span style={{
+                background: disfluencyCount > 0 ? t.error : t.success,
+                color: '#fff',
+                fontSize: '10px',
+                fontWeight: '900',
+                padding: '6px 16px',
+                borderRadius: '999px',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                boxShadow: disfluencyCount > 0 ? '0 4px 15px rgba(244, 63, 94, 0.2)' : undefined,
+              }}>
+                {disfluencyCount} Markers Detected
+              </span>
+            </div>
+
+            <div style={{
+              background: '#050505',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.05)',
+              borderRadius: '16px',
+              padding: '32px',
+              flex: 1,
+            }}>
+              <div style={{
+                fontSize: '1.2rem',
+                lineHeight: '1.8',
+                color: '#cbd5e1',
+                fontWeight: '500',
+              }}>
+                <Highlighter
+                  searchWords={highlightWords}
+                  autoEscape={true}
+                  textToHighlight={userText || ""}
+                  highlightStyle={{
+                    backgroundColor: "transparent",
+                    color: t.error,
+                    borderBottom: `2px solid ${t.error}`,
+                    fontWeight: "600",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ═══ RIGHT COLUMN (Feedback + Recommendations stacked) ═══ */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '32px',
+          }}>
+            {/* 3. EXPLANATORY AUDIT */}
+            <div style={{
+              background: t.glass,
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${t.glassBorder}`,
+              borderRadius: '24px',
+              padding: '32px',
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '24px',
+              }}>
+                <span style={{ color: t.accent, fontSize: '14px' }}>📊</span>
+                <h4 style={{
+                  fontSize: '10px',
+                  fontWeight: '900',
+                  color: t.textMuted,
+                  letterSpacing: '0.3em',
+                  textTransform: 'uppercase',
+                  margin: 0,
+                }}>
+                  Explanatory Audit
+                </h4>
+              </div>
+              <p style={{
+                color: '#fff',
+                fontSize: '1.05rem',
+                lineHeight: '1.7',
+                fontWeight: '500',
+                margin: 0,
+              }}>
+                {feedback || "No detailed feedback available."}
+              </p>
+            </div>
+
+            {/* 4. NEURAL ENHANCEMENTS */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(147, 76, 240, 0.08), transparent)',
+              backdropFilter: 'blur(12px)',
+              border: `1px solid ${t.glassBorder}`,
+              borderLeft: `4px solid ${t.accent}`,
+              borderRadius: '24px',
+              padding: '32px',
+            }}>
+              <h4 style={{
+                fontSize: '10px',
+                fontWeight: '900',
+                color: t.accent,
+                letterSpacing: '0.3em',
+                textTransform: 'uppercase',
+                marginBottom: '24px',
+              }}>
+                Neural Enhancements
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {advancedRecommendations.slice(0, 3).map((rec, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      gap: '20px',
+                      alignItems: 'flex-start',
+                    }}
+                  >
+                    <span style={{
+                      color: t.accent,
+                      fontWeight: '900',
+                      fontSize: '1.2rem',
+                      fontFamily: 'monospace',
+                      flexShrink: 0,
+                    }}>
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <p style={{
+                      color: t.textMuted,
+                      fontSize: '0.875rem',
+                      lineHeight: '1.6',
+                      margin: 0,
+                    }}>
+                      {rec}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ═══ 5. VERDICT BANNER (full width) ═══ */}
+          <div style={{
+            gridColumn: '1 / -1',
+            background: t.glass,
+            backdropFilter: 'blur(12px)',
+            border: `2px solid ${t.accent}`,
+            borderRadius: '24px',
+            padding: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '48px',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: 1, minWidth: '300px' }}>
+              <h2 style={{
+                fontSize: '1.6rem',
+                fontWeight: '800',
+                marginBottom: '12px',
+                lineHeight: '1.3',
+              }}>
+                {!diagnosticSubmitted && accuracy < 60 && diagnosticMCQs.length > 0
+                  ? "Complete diagnostic below for full verdict."
+                  : diagnosticSubmitted ? getVerdict() : getVerdict()}
+              </h2>
+              <p style={{
+                color: t.textMuted,
+                fontSize: '11px',
+                fontWeight: '700',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+              }}>
+                Linguistic Verification Status: {diagnosticSubmitted || accuracy >= 60 ? 'Verified' : 'Pending'}
+              </p>
+            </div>
+            <div style={{
+              display: 'flex',
+              gap: '1px',
+              background: 'rgba(0,0,0,0.4)',
+              borderRadius: '16px',
+              padding: '8px',
+            }}>
+              <div style={{
+                padding: '24px 48px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}>
+                <span style={{
+                  fontSize: '10px',
+                  color: t.textMuted,
+                  letterSpacing: '0.15em',
+                  fontWeight: '900',
+                  marginBottom: '4px',
+                  textTransform: 'uppercase',
+                }}>Synthesis</span>
+                <span style={{
+                  fontSize: '2.8rem',
+                  fontWeight: '900',
+                  fontFamily: 'monospace',
+                  color: t.accent,
+                }}>
+                  {diagnosticSubmitted ? `${Math.round(diagnosticScore)}%` : '—'}
+                </span>
+              </div>
+              <div style={{
+                width: '1px',
+                background: 'rgba(255,255,255,0.1)',
+                margin: '16px 0',
+              }} />
+              <div style={{
+                padding: '24px 48px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}>
+                <span style={{
+                  fontSize: '10px',
+                  color: t.textMuted,
+                  letterSpacing: '0.15em',
+                  fontWeight: '900',
+                  marginBottom: '4px',
+                  textTransform: 'uppercase',
+                }}>Articulation</span>
+                <span style={{
+                  fontSize: '2.8rem',
+                  fontWeight: '900',
+                  fontFamily: 'monospace',
+                  color: t.accent,
+                }}>{accuracy}%</span>
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        {/* 4. DEEP SYNTHESIS DIAGNOSTIC */}
+        {/* ═══ 6. DIAGNOSTIC MCQs (conditional) ═══ */}
         {accuracy < 60 && diagnosticMCQs.length > 0 && (
-          <div style={{ marginTop: "40px" }}>
-            <div style={{ textAlign: "center", marginBottom: "30px" }}>
-              <h3
-                style={{
-                  fontSize: "2rem",
-                  fontWeight: "900",
-                  marginBottom: "10px",
-                }}
-              >
+          <div style={{ width: '100%', maxWidth: '1200px', marginTop: '48px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+              <h3 style={{
+                fontSize: '2rem',
+                fontWeight: '900',
+                marginBottom: '8px',
+                letterSpacing: '-0.02em',
+                textTransform: 'uppercase',
+              }}>
                 Deep Synthesis Diagnostic
               </h3>
-              <p
-                style={{
-                  color: theme.textMuted,
-                  fontSize: "0.8rem",
-                  letterSpacing: "1px",
-                }}
-              >
+              <p style={{
+                color: t.textMuted,
+                fontSize: '11px',
+                letterSpacing: '0.3em',
+                fontWeight: '700',
+              }}>
                 COMPLEXITY LEVEL: EXPERT
               </p>
             </div>
 
             {!diagnosticSubmitted ? (
-              <div style={{ display: "grid", gap: "25px" }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 {diagnosticMCQs.map((q, qIdx) => (
                   <div
                     key={qIdx}
                     style={{
-                      backgroundColor: theme.card,
-                      padding: "45px",
-                      borderRadius: "32px",
-                      border: `1px solid ${theme.border}`,
+                      background: t.glass,
+                      backdropFilter: 'blur(12px)',
+                      border: `1px solid ${t.glassBorder}`,
+                      borderRadius: '24px',
+                      padding: '48px',
+                      position: 'relative',
+                      overflow: 'hidden',
                     }}
                   >
-                    <span
-                      style={{
-                        color: theme.accent,
-                        fontSize: "0.7rem",
-                        fontWeight: "900",
-                        letterSpacing: "2px",
-                      }}
-                    >
-                      CHALLENGE 0{qIdx + 1}
+                    <span style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      background: t.glass,
+                      backdropFilter: 'blur(12px)',
+                      border: `1px solid ${t.glassBorder}`,
+                      borderRadius: '0 0 0 24px',
+                      padding: '8px 16px',
+                      color: t.accent,
+                      fontFamily: 'monospace',
+                      fontWeight: '700',
+                      fontSize: '0.8rem',
+                    }}>
+                      CHALLENGE {String(qIdx + 1).padStart(2, '0')}
                     </span>
-                    <p
-                      style={{
-                        fontSize: "1.4rem",
-                        fontWeight: "700",
-                        marginTop: "10px",
-                        marginBottom: "30px",
-                        lineHeight: "1.4",
-                      }}
-                    >
+                    <p style={{
+                      fontSize: '1.35rem',
+                      fontWeight: '700',
+                      marginTop: '10px',
+                      marginBottom: '32px',
+                      lineHeight: '1.4',
+                    }}>
                       {q.question}
                     </p>
 
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr",
-                        gap: "15px",
-                      }}
-                    >
-                      {Object.entries(q.options).map(([key, value]) => (
-                        <button
-                          key={key}
-                          onClick={() =>
-                            setDiagnosticAnswers((prev) => ({
-                              ...prev,
-                              [qIdx]: key,
-                            }))
-                          }
-                          style={{
-                            textAlign: "left",
-                            padding: "25px",
-                            borderRadius: "16px",
-                            backgroundColor:
-                              diagnosticAnswers[qIdx] === key
-                                ? `${theme.accent}15`
-                                : "rgba(255,255,255,0.02)",
-                            border: `1px solid ${
-                              diagnosticAnswers[qIdx] === key
-                                ? theme.accent
-                                : "rgba(255,255,255,0.08)"
-                            }`,
-                            color: diagnosticAnswers[qIdx] === key ? "#fff" : "#aaa",
-                            cursor: "pointer",
-                            transition: "0.3s",
-                            fontSize: "1.05rem",
-                            lineHeight: "1.5",
-                          }}
-                        >
-                          <span
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '16px',
+                    }}>
+                      {Object.entries(q.options).map(([key, value]) => {
+                        const isSelected = diagnosticAnswers[qIdx] === key;
+                        return (
+                          <button
+                            key={key}
+                            onClick={() =>
+                              setDiagnosticAnswers((prev) => ({
+                                ...prev,
+                                [qIdx]: key,
+                              }))
+                            }
+                            className="diagnostic-option"
                             style={{
-                              fontWeight: "900",
-                              marginRight: "20px",
-                              color: theme.accent,
+                              textAlign: 'left',
+                              padding: '24px',
+                              borderRadius: '24px',
+                              background: isSelected ? t.accentGlow : t.glass,
+                              backdropFilter: 'blur(12px)',
+                              border: `1px solid ${isSelected ? t.accent : 'rgba(255,255,255,0.05)'}`,
+                              color: isSelected ? '#fff' : '#cbd5e1',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '24px',
+                              fontSize: '0.95rem',
+                              lineHeight: '1.5',
                             }}
                           >
-                            {key}
-                          </span>{" "}
-                          {value}
-                        </button>
-                      ))}
+                            <div style={{
+                              width: '48px',
+                              height: '48px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: isSelected ? t.accentGlow : t.glass,
+                              border: `1px solid ${isSelected ? t.accent : 'rgba(255,255,255,0.1)'}`,
+                              borderRadius: '24px',
+                              fontWeight: '900',
+                              fontFamily: 'monospace',
+                              fontSize: '1.1rem',
+                              color: isSelected ? t.accent : t.textMuted,
+                              flexShrink: 0,
+                            }}>
+                              {key}
+                            </div>
+                            <span style={{ fontWeight: '500' }}>{value}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -524,106 +708,97 @@ export default function ArticulationResults() {
                   onClick={() => setDiagnosticSubmitted(true)}
                   disabled={Object.keys(diagnosticAnswers).length < diagnosticMCQs.length}
                   style={{
-                    padding: "30px",
-                    borderRadius: "20px",
-                    background: theme.accent,
-                    color: "#fff",
-                    fontWeight: "900",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "1.1rem",
-                    boxShadow: `0 20px 40px ${theme.accent}33`,
-                    opacity:
-                      Object.keys(diagnosticAnswers).length < diagnosticMCQs.length ? 0.4 : 1,
+                    padding: '24px',
+                    borderRadius: '16px',
+                    background: `linear-gradient(135deg, ${t.accent}, #4338CA)`,
+                    color: '#fff',
+                    fontWeight: '900',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    letterSpacing: '0.3em',
+                    textTransform: 'uppercase',
+                    boxShadow: `0 20px 40px ${t.accentGlow}`,
+                    opacity: Object.keys(diagnosticAnswers).length < diagnosticMCQs.length ? 0.3 : 1,
+                    transition: 'all 0.3s ease',
                   }}
                 >
                   Execute Neural Verification
                 </button>
               </div>
             ) : (
-              <div
-                style={{
-                  backgroundColor: theme.card,
-                  padding: "50px",
-                  borderRadius: "40px",
-                  border: `2px solid ${theme.accent}`,
-                  animation: "fadeIn 0.5s ease",
-                }}
-              >
-                <h4
-                  style={{
-                    color: "#fff",
-                    fontWeight: "800",
-                    fontSize: "1.6rem",
-                    marginBottom: "30px",
-                    lineHeight: "1.4",
-                  }}
-                >
+              <div style={{
+                background: t.glass,
+                backdropFilter: 'blur(12px)',
+                border: `2px solid ${t.accent}`,
+                borderRadius: '40px',
+                padding: '50px',
+                animation: 'fadeSlideIn 0.5s ease',
+              }}>
+                <h4 style={{
+                  color: '#fff',
+                  fontWeight: '800',
+                  fontSize: '1.5rem',
+                  marginBottom: '30px',
+                  lineHeight: '1.4',
+                }}>
                   {getVerdict()}
                 </h4>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "40px",
-                    padding: "30px",
-                    background: "rgba(0,0,0,0.4)",
-                    borderRadius: "20px",
-                  }}
-                >
+                <div style={{
+                  display: 'flex',
+                  gap: '40px',
+                  padding: '30px',
+                  background: 'rgba(0,0,0,0.4)',
+                  borderRadius: '20px',
+                }}>
                   <div style={{ flex: 1 }}>
-                    <p
-                      style={{
-                        fontSize: "0.7rem",
-                        color: theme.textMuted,
-                        letterSpacing: "1px",
-                      }}
-                    >
+                    <p style={{
+                      fontSize: '10px',
+                      color: t.textMuted,
+                      letterSpacing: '0.15em',
+                      fontWeight: '900',
+                      textTransform: 'uppercase',
+                    }}>
                       SYNTHESIS SCORE
                     </p>
-                    <p
-                      style={{
-                        fontSize: "3rem",
-                        fontWeight: "900",
-                        color: theme.accent,
-                        margin: 0,
-                      }}
-                    >
+                    <p style={{
+                      fontSize: '3rem',
+                      fontWeight: '900',
+                      fontFamily: 'monospace',
+                      color: t.accent,
+                      margin: 0,
+                    }}>
                       {Math.round(diagnosticScore)}%
                     </p>
-                    <p
-                      style={{
-                        fontSize: "0.85rem",
-                        fontWeight: "700",
-                        color: theme.textMuted,
-                        marginTop: "5px",
-                      }}
-                    >
+                    <p style={{
+                      fontSize: '0.85rem',
+                      fontWeight: '700',
+                      color: t.textMuted,
+                      marginTop: '5px',
+                    }}>
                       ({diagnosticCorrectCount} / {diagnosticMCQs.length} CORRECT)
                     </p>
                   </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      borderLeft: `1px solid rgba(255,255,255,0.1)`,
-                      paddingLeft: "40px",
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontSize: "0.7rem",
-                        color: theme.textMuted,
-                        letterSpacing: "1px",
-                      }}
-                    >
+                  <div style={{
+                    flex: 1,
+                    borderLeft: '1px solid rgba(255,255,255,0.1)',
+                    paddingLeft: '40px',
+                  }}>
+                    <p style={{
+                      fontSize: '10px',
+                      color: t.textMuted,
+                      letterSpacing: '0.15em',
+                      fontWeight: '900',
+                      textTransform: 'uppercase',
+                    }}>
                       ARTICULATION SCORE
                     </p>
-                    <p
-                      style={{
-                        fontSize: "3rem",
-                        fontWeight: "900",
-                        color: theme.accent,
-                      }}
-                    >
+                    <p style={{
+                      fontSize: '3rem',
+                      fontWeight: '900',
+                      fontFamily: 'monospace',
+                      color: t.accent,
+                    }}>
                       {accuracy}%
                     </p>
                   </div>
@@ -632,44 +807,68 @@ export default function ArticulationResults() {
             )}
           </div>
         )}
-      </div>
 
-      <button
-        onClick={() => {
-          // ────────────────────────────────────────────────
-          // When next page is ready, uncomment and use one of these:
-          // Option A: Query param (simple)
-          // window.location.href = `/next-page?totalPoints=${totalPoints}`;
+        {/* ═══ 7. RESTART BUTTON ═══ */}
+        <button
+          onClick={() => {
+            // ────────────────────────────────────────────────
+            // When next page is ready, uncomment and use one of these:
+            // Option A: Query param (simple)
+            // window.location.href = `/next-page?totalPoints=${totalPoints}`;
 
-          // Option B: Save to localStorage + redirect (cleaner)
-          // localStorage.setItem('sessionTotalPoints', totalPoints.toString());
-          // window.location.href = '/next-page';
+            // Option B: Save to localStorage + redirect (cleaner)
+            // localStorage.setItem('sessionTotalPoints', totalPoints.toString());
+            // window.location.href = '/next-page';
 
-          // For now — going to categories as before
-          window.location.href = '/categories';
-        }}
-        style={{
-          marginTop: "60px",
-          width: "100%",
-          maxWidth: "1200px",
-          display: "block",
-          margin: "60px auto 0 auto",
-          padding: "25px",
-          borderRadius: "20px",
-          border: `1px solid ${theme.border}`,
-          background: "transparent",
-          color: theme.textMuted,
-          cursor: "pointer",
-          fontWeight: "900",
-          fontSize: "0.9rem",
-          letterSpacing: "3px",
-        }}
-      >
-        START NEW ANALYSIS
-      </button>
+            // For now — going to categories as before
+            window.location.href = '/categories';
+          }}
+          className="restart-btn"
+          style={{
+            marginTop: '64px',
+            width: '100%',
+            maxWidth: '1400px',
+            padding: '24px',
+            borderRadius: '16px',
+            background: 'transparent',
+            border: `1px solid ${t.glassBorder}`,
+            color: t.textMuted,
+            cursor: 'pointer',
+            fontWeight: '900',
+            fontSize: '10px',
+            letterSpacing: '0.4em',
+            textTransform: 'uppercase',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '24px',
+          }}
+        >
+          <span style={{ fontSize: '1rem' }}>↻</span>
+          Start New Analysis Session
+        </button>
+      </main>
 
+      {/* Scoped CSS */}
       <style>{`
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(40px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.8; }
+        }
+        .diagnostic-option:hover {
+          background: rgba(147, 76, 240, 0.15) !important;
+          border-color: #934CF0 !important;
+        }
+        .restart-btn:hover {
+          color: #fff !important;
+          border-color: #934CF0 !important;
+        }
       `}</style>
     </div>
   );

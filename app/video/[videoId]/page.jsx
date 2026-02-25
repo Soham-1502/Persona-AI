@@ -31,10 +31,10 @@ export default function VideoPlayerPage() {
   const [mcqStatus, setMcqStatus] = useState('not_started');
 
   const theme = {
-    accent: '#a855f7',
-    bg: '#050505',
-    border: '#262626',
-    sidebar: '#0a0a0a',
+    accent: '#934CF0',
+    bg: '#181022',
+    border: 'rgba(255, 255, 255, 0.1)',
+    sidebar: 'rgba(147, 76, 240, 0.05)',
     textMuted: '#94a3b8',
     success: '#10b981'
   };
@@ -284,10 +284,29 @@ export default function VideoPlayerPage() {
   const isAssessmentEnabled = isVideoEnded && mcqStatus === 'ready';
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: theme.bg, color: '#fff', overflow: 'hidden' }}>
-      
+    <div style={{
+      display: 'flex',
+      height: '100vh',
+      width: '100vw',
+      backgroundColor: theme.bg,
+      color: '#fff',
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      {/* ── Theme Overlays ── */}
+      <div className="scanline" />
+      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -192, left: -192 }} />
+      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -96, right: '25%' }} />
+      <div className="orb" style={{ background: '#934CF0', width: 400, height: 400, top: '50%', right: 0, opacity: 0.15 }} />
+
       {/* Left: Video + Info */}
-      <div style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+      <div style={{
+        flex: 1,
+        padding: '40px',
+        overflowY: 'auto',
+        position: 'relative',
+        zIndex: 10,
+      }} className="custom-scrollbar-area">
         <div style={{ 
           position: 'relative',
           width: '100%', 
@@ -295,91 +314,153 @@ export default function VideoPlayerPage() {
           backgroundColor: '#000', 
           borderRadius: '24px', 
           overflow: 'hidden',
+          background: 'rgba(147, 76, 240, 0.05)',
           border: `1px solid ${theme.border}`,
-          boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         }}>
           <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '20%', zIndex: 10, background: 'transparent' }} />
           <div id="youtube-player" style={{ width: '100%', height: '100%' }} />
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '30px', gap: '20px' }}>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: '800', margin: 0, flex: 1 }}>
-            {videoDetails?.title || "Loading..."}
-          </h1>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {transcriptStatus === 'generating' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b', fontSize: '0.9rem', fontWeight: '600' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <polyline points="23 4 23 10 17 10"></polyline>
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                </svg>
-                <span>Transcript Processing</span>
-              </div>
-            )}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginTop: '32px',
+          gap: '24px',
+        }}>
+          <div style={{ flex: 1 }}>
+            <h1 style={{
+              fontSize: '1.8rem',
+              fontWeight: '800',
+              margin: 0,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.2,
+              color: '#fff',
+            }}>
+              {videoDetails?.title || "Loading..."}
+            </h1>
 
-            {transcriptStatus === 'ready' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: theme.success, fontSize: '0.9rem', fontWeight: '600' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-                <span>Transcript Ready</span>
-              </div>
-            )}
-
-            <button 
-              disabled={!isAssessmentEnabled}
-              onClick={() => router.push(`/quiz?videoId=${videoId}`)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '14px 28px',
-                borderRadius: '16px',
-                whiteSpace: 'nowrap',
-                fontSize: '0.95rem',
-                fontWeight: '800',
-                letterSpacing: '0.5px',
-                cursor: isAssessmentEnabled ? 'pointer' : 'not-allowed',
-                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                backgroundColor: isAssessmentEnabled ? theme.accent : 'rgba(255, 255, 255, 0.03)',
-                color: isAssessmentEnabled ? '#fff' : 'rgba(148, 163, 184, 0.4)',
-                border: isAssessmentEnabled ? `1px solid ${theme.accent}` : '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: isAssessmentEnabled ? `0 10px 25px -5px ${theme.accent}66, inset 0 1px 0 rgba(255,255,255,0.3)` : 'none',
-              }}
-            >
-              {isAssessmentEnabled ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              marginTop: '16px',
+            }}>
+              {transcriptStatus === 'generating' && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#c084fc',
+                  fontSize: '0.9rem',
+                  fontWeight: '600',
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}>
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                  </svg>
+                  <span>Transcript Processing</span>
+                </div>
               )}
-              <span>{isAssessmentEnabled ? "TAKE ASSESSMENT" : "LOCKED"}</span>
-            </button>
+
+              {transcriptStatus === 'ready' && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: theme.success,
+                  fontSize: '0.9rem',
+                  fontWeight: '600',
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  <span>Transcript Ready</span>
+                </div>
+              )}
+            </div>
           </div>
+          
+          <button 
+            disabled={!isAssessmentEnabled}
+            onClick={() => router.push(`/quiz?videoId=${videoId}`)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '16px 32px',
+              borderRadius: '16px',
+              whiteSpace: 'nowrap',
+              fontSize: '0.85rem',
+              fontWeight: '800',
+              letterSpacing: '0.1em',
+              cursor: isAssessmentEnabled ? 'pointer' : 'not-allowed',
+              transition: 'all 0.3s ease',
+              background: isAssessmentEnabled
+                ? 'linear-gradient(135deg, #934CF0 0%, #4338CA 100%)'
+                : 'rgba(255, 255, 255, 0.03)',
+              color: isAssessmentEnabled ? '#fff' : 'rgba(148, 163, 184, 0.4)',
+              border: isAssessmentEnabled
+                ? 'none'
+                : '1px solid rgba(255, 255, 255, 0.08)',
+              boxShadow: isAssessmentEnabled
+                ? '0 0 20px rgba(147, 76, 240, 0.3)'
+                : 'none',
+            }}
+          >
+            {isAssessmentEnabled ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            )}
+            <span>{isAssessmentEnabled ? "TAKE ASSESSMENT" : "LOCKED"}</span>
+          </button>
         </div>
         
-        <p style={{ color: theme.textMuted, marginTop: '16px', fontSize: '1rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-          {videoDetails?.description || "Loading description..."}
-        </p>
+        {/* Description glass panel */}
+        <div style={{
+          marginTop: '32px',
+          padding: '24px',
+          background: 'rgba(147, 76, 240, 0.05)',
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${theme.border}`,
+          borderRadius: '16px',
+          transition: 'all 0.4s ease',
+        }}>
+          <p style={{
+            color: '#cbd5e1',
+            fontSize: '1rem',
+            lineHeight: '1.7',
+            whiteSpace: 'pre-wrap',
+            margin: 0,
+          }}>
+            {videoDetails?.description || "Loading description..."}
+          </p>
+        </div>
       </div>
 
       {/* Right: Sidebar */}
       <div style={{ 
-        width: '400px', 
-        backgroundColor: theme.sidebar, 
-        borderLeft: `1px solid ${theme.border}`, 
+        width: '400px',
+        background: 'rgba(147, 76, 240, 0.05)',
+        backdropFilter: 'blur(12px)',
+        borderLeft: `1px solid ${theme.border}`,
         display: 'flex', 
-        flexDirection: 'column' 
+        flexDirection: 'column',
+        position: 'relative',
+        zIndex: 10,
       }}>
         <div style={{ 
-          padding: '25px', 
+          padding: '24px',
           borderBottom: `1px solid ${theme.border}`,
           display: 'flex',
           justifyContent: 'space-between',
@@ -387,76 +468,96 @@ export default function VideoPlayerPage() {
           flexWrap: 'wrap',
           gap: '12px'
         }}>
-          <h2 style={{ fontSize: '0.9rem', letterSpacing: '2px', color: theme.accent, fontWeight: '900', margin: 0 }}>
+          <h2 style={{
+            fontSize: '10px',
+            letterSpacing: '0.2em',
+            color: theme.accent,
+            fontWeight: '900',
+            margin: 0,
+            textTransform: 'uppercase',
+          }}>
             {activeRightTab === 'course' ? 'COURSE CONTENT' : 'DIGITAL SMART NOTES'}
           </h2>
 
           <button
             onClick={() => setActiveRightTab(activeRightTab === 'course' ? 'notes' : 'course')}
             style={{
-              background: 'transparent',
-              border: `1px solid ${theme.accent}`,
-              color: theme.accent,
-              padding: '8px 16px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: `1px solid rgba(255, 255, 255, 0.05)`,
+              color: '#94a3b8',
+              padding: '6px 12px',
               borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              transition: 'all 0.2s'
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            {activeRightTab === 'course' ? 'Notes' : 'Back to Course'}
+            {activeRightTab === 'course' ? '📝 Notes' : '← Back to Course'}
           </button>
         </div>
         
         <div style={{ 
           flex: 1, 
           overflowY: 'auto', 
-          padding: '15px',
-          scrollbarWidth: 'thin',
-          scrollbarColor: `${theme.accent}80 #1a1a2e`
-        }}>
-          <style jsx global>{`
-            div::-webkit-scrollbar {
-              width: 6px;
-            }
-            div::-webkit-scrollbar-track {
-              background: #1a1a2e;
-              border-radius: 10px;
-            }
-            div::-webkit-scrollbar-thumb {
-              background: ${theme.accent}80;
-              border-radius: 10px;
-              border: 2px solid #1a1a2e;
-            }
-            div::-webkit-scrollbar-thumb:hover {
-              background: ${theme.accent};
-            }
-          `}</style>
+          padding: '16px',
+        }} className="custom-scrollbar-area">
 
           {activeRightTab === 'course' ? (
-            videos.map((v, index) => (
-              <div 
-                key={`${v.id}-${index}`} 
-                onClick={() => switchVideo(v.id)}
-                style={{ 
-                  display: 'flex', 
-                  gap: '12px', 
-                  padding: '12px', 
-                  borderRadius: '14px', 
-                  cursor: 'pointer', 
-                  marginBottom: '8px',
-                  backgroundColor: videoId === v.id ? `${theme.accent}15` : 'transparent',
-                  border: `1px solid ${videoId === v.id ? theme.accent : 'transparent'}`,
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <img src={v.thumbnail} alt="" style={{ width: '120px', borderRadius: '8px', objectFit: 'cover' }} />
-                <div style={{ fontSize: '0.85rem', fontWeight: '600', lineHeight: '1.4', color: videoId === v.id ? '#fff' : '#ccc' }}>
-                  {v.title}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {videos.map((v, index) => (
+                <div 
+                  key={`${v.id}-${index}`} 
+                  onClick={() => switchVideo(v.id)}
+                  className="playlist-item-el"
+                  style={{ 
+                    display: 'flex', 
+                    gap: '16px', 
+                    padding: '12px', 
+                    borderRadius: '12px', 
+                    cursor: 'pointer', 
+                    backgroundColor: videoId === v.id ? 'rgba(147, 76, 240, 0.1)' : 'transparent',
+                    border: `1px solid ${videoId === v.id ? 'rgba(147, 76, 240, 0.2)' : 'rgba(255, 255, 255, 0.03)'}`,
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  <div style={{
+                    width: '120px',
+                    aspectRatio: '16/9',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                  }}>
+                    <img
+                      src={v.thumbnail}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  </div>
+                  <div style={{
+                    flex: 1,
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    lineHeight: '1.4',
+                    color: videoId === v.id ? '#fff' : '#cbd5e1',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    paddingTop: '4px',
+                  }}>
+                    {v.title}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           ) : (
             <DigitalSmartNotesTab 
               player={player} 
@@ -467,6 +568,34 @@ export default function VideoPlayerPage() {
           )}
         </div>
       </div>
+
+      {/* Scoped CSS for scrollbar, hover effects, animations */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .custom-scrollbar-area::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar-area::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scrollbar-area::-webkit-scrollbar-thumb {
+          background: rgba(147, 76, 240, 0.3);
+          border-radius: 10px;
+        }
+        .custom-scrollbar-area::-webkit-scrollbar-thumb:hover {
+          background: rgba(147, 76, 240, 0.6);
+        }
+        .custom-scrollbar-area {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(147, 76, 240, 0.3) rgba(255, 255, 255, 0.02);
+        }
+        .playlist-item-el:hover {
+          background: rgba(147, 76, 240, 0.1) !important;
+          border-color: rgba(147, 76, 240, 0.15) !important;
+        }
+      `}</style>
     </div>
   );
 }
