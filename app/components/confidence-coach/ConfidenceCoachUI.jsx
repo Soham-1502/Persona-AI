@@ -11,6 +11,7 @@ export function ConfidenceCoachUI() {
     // Video state
     const videoRef = useRef(null);
     const [stream, setStream] = useState(null);
+    const streamRef = useRef(null); // Ref to always hold the live stream — avoids stale closure on cleanup
 
     // Session state
     const [sessionStatus, setSessionStatus] = useState("idle"); // idle, analyzing, ended
@@ -40,13 +41,14 @@ export function ConfidenceCoachUI() {
     const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
 
     useEffect(() => {
-        // Initialize camera
+        // Initialize camera for preview when idle
         const initCamera = async () => {
             try {
                 const mediaStream = await navigator.mediaDevices.getUserMedia({
                     video: true,
                     audio: true
                 });
+                streamRef.current = mediaStream; // always keep ref current
                 setStream(mediaStream);
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
@@ -59,15 +61,52 @@ export function ConfidenceCoachUI() {
         if (sessionStatus === "idle") {
             initCamera();
         }
-
-        return () => {
-            // Clean up stream if component unmounts
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionStatus]);
+
+    // Stop camera/analyzers immediately — shared between navigation intercept and unmount
+    const immediateCleanup = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+            setStream(null);
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        if (mediaPipeCleanupRef.current) {
+            mediaPipeCleanupRef.current();
+            mediaPipeCleanupRef.current = null;
+        }
+        if (audioAnalyzerRef.current) {
+            audioAnalyzerRef.current.stop();
+            audioAnalyzerRef.current = null;
+        }
+    };
+
+    // Intercept history.pushState / replaceState so camera stops the INSTANT
+    // the user clicks a sidebar link — before React unmounts the component.
+    useEffect(() => {
+        const origPush = history.pushState.bind(history);
+        const origReplace = history.replaceState.bind(history);
+
+        history.pushState = (...args) => {
+            immediateCleanup();
+            origPush(...args);
+        };
+        history.replaceState = (...args) => {
+            immediateCleanup();
+            origReplace(...args);
+        };
+
+        return () => {
+            // Restore originals and do a final cleanup on unmount
+            history.pushState = origPush;
+            history.replaceState = origReplace;
+            immediateCleanup();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Porcupine Wake Word Engine
     const { keywordDetection, isLoaded: isPorcupineLoaded, isListening: isPorcupineListening, init: initPorcupine, start: startPorcupine } = usePorcupine();

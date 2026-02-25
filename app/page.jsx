@@ -2,16 +2,15 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAuthenticated } from '@/lib/auth-client';
 
 export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
     // Check if user is logged in
-    const token = localStorage.getItem('token');
-
-    if (token) {
-      // User is logged in, redirect to dashboard
+    if (isAuthenticated()) {
+      // User is logged in and token is valid, redirect to dashboard
       router.push('/dashboard');
     } else {
       // User is not logged in, redirect to login

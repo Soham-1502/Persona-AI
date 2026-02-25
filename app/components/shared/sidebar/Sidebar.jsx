@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/avatar"
 import { Assets } from "../../../../assets/assets";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { EllipsisVertical, PanelRightOpen, PanelLeftOpen, UserPen, LogOut, Settings, MessageCircleQuestionMark, Camera, User as UserIcon, AtSign, FileText, Save, X } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -280,7 +281,7 @@ export default function AppSidebar() {
             </div>
 
             {/* Brand text – hide when collapsed */}
-            <span className="text-persona-dark dark:text-foreground text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden">
+            <span className="text-foreground dark:text-foreground text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden">
               Persona
               <span className="font-bold text-sidebar-primary">AI</span>
             </span>
@@ -316,9 +317,9 @@ export default function AppSidebar() {
                       asChild
                       isActive={isActive}
                       tooltip={item.title}
-                      className={`text-foreground dark:text-foreground gap-3 relative rounded-lg hover:bg-primary/50 hover:border-persona-indigo dark:hover:bg-accent/30 dark:active:bg-accent/50 ${isActive ? "bg-primary hover:bg-primary dark:bg-accent dark:hover:bg-accent font-semibold border-persona-indigo dark:text-persona-cream h-10" : "h-10"}`}
+                      className={`gap-3 relative rounded-lg transition-colors ${isActive ? "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-accent dark:text-persona-cream dark:hover:bg-accent/90 font-semibold shadow-md h-10" : "text-sidebar-foreground font-medium hover:bg-primary/10 hover:text-primary dark:text-persona-cream/80 dark:hover:bg-white/5 dark:hover:text-persona-cream h-10"}`}
                     >
-                      <a
+                      <Link
                         href={item.href}
                         className="flex w-fit items-center px-2"
                       >
@@ -328,7 +329,7 @@ export default function AppSidebar() {
                         <span className={`text-[15px] font-medium truncate ${isActive ? "font-semibold" : "font-normal"} ${isCollapsed ? "hidden" : ""}`}>
                           {item.title}
                         </span>
-                      </a>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -350,9 +351,9 @@ export default function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="flex items-center h-auto hover:bg-black/20 text-foreground active:bg-white/10"
+              className="flex items-center h-auto hover:bg-primary/10 dark:hover:bg-white/10 text-sidebar-foreground active:bg-primary/15 dark:active:bg-white/15 rounded-lg transition-colors"
             >
-              <div className="relative flex items-center w-full rounded-lg group-hover/footer:bg-white/10 cursor-pointer">
+              <div className="relative flex items-center w-full rounded-lg cursor-pointer">
 
                 {/* LEFT: Avatar + text */}
                 <div className="flex items-center gap-3 flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
@@ -372,7 +373,7 @@ export default function AppSidebar() {
 
                   {/* Text block (flexible, truncates) */}
                   <div className="flex flex-col flex-1 min-w-0 text-left">
-                    <span className="text-sm font-semibold truncate" title={user.name}>
+                    <span className="text-sm font-semibold truncate text-foreground" title={user.name}>
                       {user.name}
                     </span>
 
@@ -390,7 +391,7 @@ export default function AppSidebar() {
                   <DropdownMenuTrigger asChild>
                     <button
                       aria-label="User options"
-                      className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center hover:bg-black/20 active:bg-black/30 dark:hover:bg-white/5 dark:active:bg-white/10"
+                      className="w-9 h-9 shrink-0 rounded-lg flex items-center text-sidebar-foreground dark:text-persona-cream/70 justify-center hover:bg-primary/10 dark:hover:bg-white/10 active:bg-primary/20 dark:active:bg-white/15 transition-colors"
                     >
                       <EllipsisVertical className="w-5 h-5" />
                     </button>
@@ -403,21 +404,21 @@ export default function AppSidebar() {
                     sideOffset={isCollapsed ? 17 : 23}
                     alignOffset={isCollapsed ? 2 : -12}
                   >
-                    <DropdownMenuLabel className="dark:text-persona-cream/90 font-semibold">
+                    <DropdownMenuLabel className="font-semibold text-foreground dark:text-persona-cream/90">
                       My Account
                     </DropdownMenuLabel>
 
                     <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={handleOpenProfile} className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <UserPen className="dark:text-white" /> Profile
+                      <DropdownMenuItem onClick={handleOpenProfile} className="text-foreground dark:text-persona-cream/80 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer focus:bg-black/5 dark:focus:bg-white/10 transition-colors">
+                        <UserPen className="text-foreground dark:text-white" /> Profile
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <Settings className="dark:text-white" /> Settings
+                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer focus:bg-black/5 dark:focus:bg-white/10 transition-colors">
+                        <Settings className="text-foreground dark:text-white" /> Settings
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <MessageCircleQuestionMark className="dark:text-white" />
+                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer focus:bg-black/5 dark:focus:bg-white/10 transition-colors">
+                        <MessageCircleQuestionMark className="text-foreground dark:text-white" />
                         Help & Support
                       </DropdownMenuItem>
                     </DropdownMenuGroup>

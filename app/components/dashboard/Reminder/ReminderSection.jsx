@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { Plus, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NewReminderDialog } from "./NewReminderDialog.jsx";
+import { isAuthenticated, clearAuth } from "@/lib/auth-client";
 
 export default function ReminderSection() {
     const [selectedFilter, setSelectedFilter] = useState('all');
@@ -19,6 +20,12 @@ export default function ReminderSection() {
 
     // Fetch reminders function
     const fetchReminders = async () => {
+        if (!isAuthenticated()) {
+            clearAuth();
+            window.location.href = '/login';
+            return;
+        }
+
         try {
             setLoading(true);
             const response = await fetch("/api/dashboard/reminders", {
@@ -42,6 +49,12 @@ export default function ReminderSection() {
 
     // Refresh reminders function
     const handleRefresh = async () => {
+        if (!isAuthenticated()) {
+            clearAuth();
+            window.location.href = '/login';
+            return;
+        }
+
         setRefreshing(true);
         try {
             const [response] = await Promise.all([

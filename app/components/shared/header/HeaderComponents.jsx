@@ -14,11 +14,11 @@ import {
     DropdownMenuContent,
     DropdownMenuItem
 } from "@/components/ui/dropdown-menu";
-
 import { cn } from "@/lib/utils";
 import { Bell, Sun, Moon, MonitorCog } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState, useRef } from "react";
+import { isAuthenticated, clearAuth } from "@/lib/auth-client";
 
 export function DateFilter({ value, onValueChange }) {
     return (
@@ -57,6 +57,12 @@ export function Notifications() {
     }, []);
 
     const fetchNotifications = async () => {
+        if (!isAuthenticated()) {
+            clearAuth();
+            window.location.href = '/login';
+            return;
+        }
+
         try {
             setLoading(true);
             const response = await fetch("/api/notifications", {
