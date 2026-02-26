@@ -7,7 +7,7 @@ import { runGroqAction } from "@/lib/ai-handler";
 
 // Initialize OpenAI and Gemini
 console.log("🛠️ Initializing secondary AI clients...");
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "", maxRetries: 0 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 // Helper to extract JSON from potentially markdown-wrapped responses
@@ -64,28 +64,28 @@ export async function POST(req) {
     };
     const difficultyLabel = difficultyDescriptions[difficultyLevel.toLowerCase()] || difficultyDescriptions.medium;
 
-    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-150) : [];
+    // Only send SHORT snippets of recent questions to avoid blowing up the token count.
+    // Groq free tier has 6000 TPM — sending 150 full questions used ~4600 tokens per request!
+    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-15) : [];
     let avoidClause = "";
     if (recentSeen.length > 0) {
-      avoidClause = `\n\nCRITICAL: DO NOT repeat any of these previously asked questions:\n${recentSeen.map((q, i) => `${i + 1}. ${q}`).join("\n")}`;
+      // Truncate each question to first 60 chars to minimize tokens
+      const shortList = recentSeen.map((q, i) => `${i + 1}. ${String(q).substring(0, 60)}`).join("\n");
+      avoidClause = `\nDo NOT repeat these recent questions:\n${shortList}`;
     }
 
-    const prompt = `You are a professional quiz examiner. Generate ONE unique quiz question for the topic: "${selectedTopic}".
-Difficulty Level: ${difficultyLevel} (${difficultyLabel}).
-
-Strict Guidelines:
-1. Return ONLY a valid JSON object.
-2. Format: {"question": "...", "answer": "..."}
-3. Do NOT include any intro or outro text.
+    const rngSeed = Math.floor(Math.random() * 1000000);
+    const prompt = `Generate ONE unique quiz question about "${selectedTopic}". Difficulty: ${difficultyLevel}.
+Rules: Return ONLY valid JSON: {"question":"...","answer":"..."}
+Be creative and original. Seed: ${rngSeed}.
 ${avoidClause}`;
 
-    let content = null;
-    let fallbackUsed = null;
-    let errorChain = [];
+    // Race top AI providers to get the fastest response
+    const aiPromises = [];
 
-    // LAYER 1: GROQ (Multi-Key Chain)
-    try {
-      console.log("🚀 Layer 1: Attempting Groq Multi-Key Chain...");
+    // 1. Groq Promise (Fastest usually)
+    const groqPromise = (async () => {
+      console.log("🏁 Racing: Groq Multi-Key Chain...");
       const completion = await runGroqAction((groq, model) =>
         groq.chat.completions.create({
           messages: [{ role: "user", content: prompt }],
@@ -93,64 +93,67 @@ ${avoidClause}`;
           temperature: 0.7,
         })
       );
-      content = completion.choices[0]?.message?.content;
-      if (content) console.log("✅ Success: Groq Chain (llama-3.3-70b-versatile)");
-    } catch (groqChainError) {
-      errorChain.push(`Groq Chain failed: ${groqChainError.message}`);
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("Groq returned empty content");
+      return { content, source: "Groq (llama)" };
+    })();
+    aiPromises.push(groqPromise);
 
-      // LAYER 2: OPENAI
+    // 2. OpenAI Promise (gpt-4o / gpt-3.5-turbo backup)
+    const openAIPromise = (async () => {
+      console.log("🏁 Racing: OpenAI (gpt-4o)...");
       try {
-        console.log("🚀 Layer 2: Attempting OpenAI (gpt-4o)...");
         const completion = await openai.chat.completions.create({
           messages: [{ role: "user", content: prompt }],
           model: "gpt-4o",
           temperature: 0.7,
           response_format: { type: "json_object" },
         });
-        content = completion.choices[0]?.message?.content;
-        fallbackUsed = "OpenAI (gpt-4o)";
-        if (content) console.log("✅ Success: OpenAI (gpt-4o)");
-      } catch (openaiError) {
-        errorChain.push(`OpenAI(gpt-4o) failed: ${openaiError.message}`);
-
-        try {
-          console.log("🚀 Layer 2b: Attempting OpenAI (gpt-3.5-turbo)...");
-          const completion = await openai.chat.completions.create({
-            messages: [{ role: "user", content: prompt }],
-            model: "gpt-3.5-turbo",
-            temperature: 0.7,
-          });
-          content = completion.choices[0]?.message?.content;
-          fallbackUsed = "OpenAI (gpt-3.5-turbo)";
-          if (content) console.log("✅ Success: OpenAI (gpt-3.5-turbo)");
-        } catch (openaiError2) {
-          errorChain.push(`OpenAI(gpt-3.5-turbo) failed: ${openaiError2.message}`);
-
-          console.log("⏩ OpenAI exhausted. Falling back to Gemini...");
-
-          // LAYER 3: GEMINI (Last Resort)
-          const geminiModels = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"];
-          for (const modelId of geminiModels) {
-            try {
-              console.log(`🚀 Layer 3: Attempting Gemini (${modelId})...`);
-              const model = genAI.getGenerativeModel({ model: modelId });
-              const result = await model.generateContent(prompt);
-              content = result.response.text();
-              fallbackUsed = `Gemini (${modelId})`;
-              if (content) {
-                console.log(`✅ Success: ${fallbackUsed}`);
-                break;
-              }
-            } catch (gemError) {
-              errorChain.push(`Gemini(${modelId}) failed: ${gemError.message}`);
-            }
-          }
-        }
+        const content = completion.choices[0]?.message?.content;
+        if (!content) throw new Error("empty");
+        return { content, source: "OpenAI (gpt-4o)" };
+      } catch (err) {
+        console.log("🏁 Racing: OpenAI (gpt-3.5-turbo)...");
+        const completion = await openai.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: "gpt-3.5-turbo",
+          temperature: 0.7,
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (!content) throw new Error("OpenAI returned empty content");
+        return { content, source: "OpenAI (gpt-3.5-turbo)" };
       }
-    }
+    })();
+    aiPromises.push(openAIPromise);
 
-    if (!content) {
-      console.warn("🔻 EMERGENCY: All AI services failed. Using static fallback pool.");
+    // 3. Gemini Promise (2.0-flash with fallback to 2.0-flash-lite)
+    const geminiPromise = (async () => {
+      try {
+        console.log("🏁 Racing: Gemini (2.0-flash)...");
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const result = await model.generateContent(prompt);
+        const content = result.response.text();
+        if (!content) throw new Error("Gemini returned empty content");
+        return { content, source: "Gemini (2.0-flash)" };
+      } catch (err) {
+        console.log("🏁 Gemini 2.0-flash failed, trying gemini-2.0-flash-lite...");
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+        const result = await model.generateContent(prompt);
+        const content = result.response.text();
+        if (!content) throw new Error("Gemini lite returned empty content");
+        return { content, source: "Gemini (2.0-flash-lite)" };
+      }
+    })();
+    aiPromises.push(geminiPromise);
+
+    let bestResult;
+    try {
+      bestResult = await Promise.any(aiPromises);
+      console.log(`🏆 Race winner: ${bestResult.source}`);
+    } catch (aggregateError) {
+      console.warn("🔻 EMERGENCY: All AI services failed in the race. Using static fallback pool.");
+      console.error(aggregateError.errors);
+
       const staticPool = [
         { question: "What is the capital of France?", answer: "Paris" },
         { question: "Who developed the theory of relativity?", answer: "Albert Einstein" },
@@ -163,14 +166,16 @@ ${avoidClause}`;
         ...randomQ,
         user: { username: user.username },
         source: "Emergency Static Pool",
-        version: "V8_MULTI_KEY_GROQ"
+        version: "V8_RACE_CONCURRENT"
       });
     }
+
+    const { content, source } = bestResult;
 
     const parsed = extractJSON(content);
 
     console.log("-----------------------------------------");
-    console.log(`📝 GENERATED QUIZ [${fallbackUsed || "Groq"}]:`);
+    console.log(`📝 GENERATED QUIZ [${source || "Race Winner"}]:`);
     console.log(`❓ Q: ${parsed.question}`);
     console.log(`💡 A: ${parsed.answer}`);
     console.log("-----------------------------------------");
@@ -179,15 +184,15 @@ ${avoidClause}`;
       question: parsed.question || "Fallback: What is the capital of India?",
       answer: parsed.answer || "New Delhi",
       user: { username: user.username },
-      source: fallbackUsed || "Groq",
-      version: "V8_MULTI_KEY_GROQ"
+      source: source || "Race Winner",
+      version: "V8_RACE_CONCURRENT"
     });
 
   } catch (error) {
     console.error("❌ FINAL API ERROR:", error.message);
     return NextResponse.json({
       message: error.message,
-      version: "V8_MULTI_KEY_GROQ",
+      version: "V8_RACE_CONCURRENT",
       stack: process.env.NODE_ENV === "development" ? error.stack : undefined
     }, { status: 503 });
   }

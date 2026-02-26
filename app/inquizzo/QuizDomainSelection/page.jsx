@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import Lottie from 'lottie-react';
-import errorAnimationData from '@/public/InQuizoo icons/lottieflow-404-12-1-000000-easey.json';
 import { cn } from "@/lib/utils";
 import { useRouter } from 'next/navigation';
 import { useTheme } from "next-themes";
@@ -341,26 +340,20 @@ const QuizDomainSelection = () => {
     const actualDifficulty = typeof diffOverride === "string" && validLevels.includes(diffOverride) ? diffOverride : selectedDifficulty;
     if (!sessionIdRef.current) sessionIdRef.current = crypto.randomUUID();
     try {
-      let data = null;
-      let attempts = 0;
-      const MAX_RETRIES = 3;
+      const data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
+        method: "POST",
+        body: JSON.stringify({
+          topic,
+          subject: domain,
+          category,
+          subCategory,
+          seenQuestions: seenQuestionsRef.current.slice(-15),
+          difficulty: actualDifficulty
+        })
+      });
 
-      while (attempts < MAX_RETRIES) {
-        data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
-          method: "POST",
-          body: JSON.stringify({
-            topic,
-            subject: domain,
-            category,
-            subCategory,
-            seenQuestions: seenQuestionsRef.current,
-            difficulty: actualDifficulty
-          })
-        });
-
-        if (!seenQuestionsRef.current.includes(data.question)) break;
-        attempts++;
-        console.warn(`🔄 Duplicate detected (Attempt ${attempts}). Retrying...`);
+      if (seenQuestionsRef.current.includes(data.question)) {
+        console.warn(`🔄 AI gave a duplicate question. Proceeding anyway rather than looping to avoid latency.`);
       }
 
       if (data && data.question) {
@@ -456,7 +449,7 @@ const QuizDomainSelection = () => {
     const timeTaken = Math.round((Date.now() - questionStartTimeRef.current) / 1000);
     setIsAnswering(true); setTimerActive(false);
     try {
-      const data = await makeAuthenticatedRequest("/api/inquizzo/evaluate", { method: "POST", body: JSON.stringify({ question: currentQuestionRef.current.question, userAnswer: finalAnswer, timeTaken }) });
+      const data = await makeAuthenticatedRequest("/api/inquizzo/evaluate", { method: "POST", body: JSON.stringify({ question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: currentQuestionRef.current.answer, timeTaken }) });
       setFeedback(data.result.explanation || data.result.feedback); setLastGainedScore(data.result.score || 0); setShowResult(true);
       const gained = data.result.score || 0;
       setLastIsCorrect(!!data.result.isCorrect);
@@ -543,18 +536,40 @@ const QuizDomainSelection = () => {
     </motion.div>
   );
 
-  // ─── RENDER: DOMAIN SELECTION ──────────────────────────────────────────────
-  const renderDomainSelection = () => (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-10 md:mt-20 text-left">
-      <div className="mb-8">
+  const renderStaticBackButton = () => {
+    if (currentView === "quiz") return null;
+
+    let onClick = () => router.push('/inquizzo');
+    let label = "Back to Dashboard";
+
+    if (currentView === "categories") {
+      onClick = () => { setCurrentView("domains"); setSelectedDomain(null); updateURL(null, null, null, null); };
+      label = "Back to Domains";
+    } else if (currentView === "subCategories") {
+      onClick = () => { setCurrentView("categories"); setSelectedCategory(null); updateURL(selectedDomain, null, null, null); };
+      label = "Back to Categories";
+    } else if (currentView === "topics") {
+      onClick = () => { setCurrentView("subCategories"); setSelectedSubCategory(null); updateURL(selectedDomain, selectedCategory, null, null); };
+      label = "Back to Sub-Categories";
+    }
+
+    return (
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 pt-4 md:pt-8 animate-fadeIn">
         <button
-          onClick={() => router.push('/inquizzo')}
-          className="flex items-center gap-2 text-sm text-[#94A3B8] hover:text-[#934cf0] transition-colors mb-6 group"
+          onClick={onClick}
+          className="flex items-center gap-2 text-sm transition-colors group"
+          style={{ color: t.textMuted }}
         >
           <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} />
-          Back to Dashboard
+          {label}
         </button>
       </div>
+    );
+  };
+
+  // ─── RENDER: DOMAIN SELECTION ──────────────────────────────────────────────
+  const renderDomainSelection = () => (
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-4 md:mt-8 text-left">
       <div className="flex flex-col gap-6 md:flex-row md:items-end justify-between md:gap-6 mb-8 md:mb-12">
         <div>
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4" style={{ background: t.glassBg, border: `1px solid ${t.glassBorder}` }}>
@@ -600,11 +615,8 @@ const QuizDomainSelection = () => {
   const renderCategorySelection = () => {
     const domain = QUIZ_STRUCTURE[selectedDomain];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-10 md:mt-20 text-left">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-4 md:mt-8 text-left">
         <div className="mb-12">
-          <button onClick={() => { setCurrentView("domains"); setSelectedDomain(null); updateURL(null, null, null, null); }} className="flex items-center gap-2 text-sm transition-colors mb-6 group" style={{ color: t.textMuted }}>
-            <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} /> Back to Domains
-          </button>
           <h2 className="font-syne text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight" style={{ color: t.textPrimary }}>{domain.name} <span className="iq-gradient-text" style={{ backgroundImage: `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` }}>Pathways</span></h2>
           <p className="text-lg max-w-2xl mt-2" style={{ color: t.textMuted }}>Select a specialty to begin your neural synchronization.</p>
         </div>
@@ -640,11 +652,8 @@ const QuizDomainSelection = () => {
   const renderSubCategorySelection = () => {
     const category = QUIZ_STRUCTURE[selectedDomain].categories[selectedCategory];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-6 md:mt-12 text-left">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-4 md:mt-8 text-left">
         <div className="mb-12">
-          <button onClick={() => { setCurrentView("categories"); setSelectedCategory(null); updateURL(selectedDomain, null, null, null); }} className="flex items-center gap-2 text-sm transition-colors mb-6 group" style={{ color: t.textMuted }}>
-            <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} /> Back to Categories
-          </button>
           <h2 className="font-syne text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight" style={{ color: t.textPrimary }}>{category.name} <span className="iq-gradient-text" style={{ backgroundImage: `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` }}>Collections</span></h2>
           <p className="text-lg mt-2" style={{ color: t.textMuted }}>Select a specific knowledge track.</p>
         </div>
@@ -671,11 +680,8 @@ const QuizDomainSelection = () => {
   const renderTopicSelection = () => {
     const subCat = QUIZ_STRUCTURE[selectedDomain].categories[selectedCategory].subCategories[selectedSubCategory];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-6 md:mt-12 text-left">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-4 md:mt-8 text-left">
         <div className="mb-12">
-          <button onClick={() => { setCurrentView("subCategories"); setSelectedSubCategory(null); updateURL(selectedDomain, selectedCategory, null, null); }} className="flex items-center gap-2 text-sm transition-colors mb-6 group" style={{ color: t.textMuted }}>
-            <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} /> Back to Sub-Categories
-          </button>
           <h2 className="font-syne text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight" style={{ color: t.textPrimary }}>{subCat.name} <span className="iq-gradient-text" style={{ backgroundImage: `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` }}>Topics</span></h2>
           <p className="text-lg mt-2" style={{ color: t.textMuted }}>Ready to begin your mastery challenge.</p>
         </div>
@@ -700,7 +706,7 @@ const QuizDomainSelection = () => {
   const renderQuizInterface = () => (
     <div className="w-full max-w-7xl mx-auto px-4 md:px-8 animate-fadeIn text-left">
       {/* ── Minimal Sub-Header ─────────────────────── */}
-      <div className="relative z-10 flex items-center justify-between pt-6 md:pt-10 w-full mb-8">
+      <div className="relative z-10 flex items-center justify-between pt-2 md:pt-4 w-full mb-4 md:mb-6">
         <div className="flex-1">
           <button
             onClick={() => { setCurrentView("topics"); setFeedback(""); setShowResult(false); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}
@@ -719,8 +725,8 @@ const QuizDomainSelection = () => {
       </div>
 
       {/* ── Main Content: 12-col grid ─────────────── */}
-      <main className="relative z-10 flex-grow flex flex-col items-center py-4 md:py-8">
-        <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-8 items-start">
+      <main className="relative z-10 flex-grow flex flex-col items-center py-1 md:py-2">
+        <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6 items-start">
 
           {/* ════ LEFT: Question Area (8 cols) ════ */}
           <div className="xl:col-span-8 flex flex-col gap-6 md:gap-8">
@@ -729,7 +735,7 @@ const QuizDomainSelection = () => {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="rounded-xl md:rounded-2xl p-4 sm:p-6 md:p-8 lg:p-10 min-h-[250px] md:min-h-[350px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
+              className="rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 min-h-[200px] md:min-h-[280px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
               style={{ background: t.cardBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.cardBorder}` }}
             >
               <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2 px-3 py-1 rounded-full" style={{ background: t.badgeBg, border: `1px solid ${t.badgeBorder}` }}>
@@ -750,7 +756,7 @@ const QuizDomainSelection = () => {
               )}
 
               <div className="max-w-2xl w-full">
-                <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight mt-6 md:mt-0" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
+                <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight mt-12 md:mt-10" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
                   {isLoading ? (
                     <div className="flex items-center justify-center gap-4">
                       <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
@@ -761,14 +767,14 @@ const QuizDomainSelection = () => {
 
                 {error && (
                   <div className="mt-8 mb-8 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-4">
-                    <Lottie animationData={errorAnimationData} loop={true} className="w-24 h-24 mb-2" />
+                    <XCircle className="w-10 h-10 mb-2" />
                     <p className="font-medium text-sm">{error}</p>
                     <button onClick={() => fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic)} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10 transition-all">Retry</button>
                   </div>
                 )}
 
                 {/* Voice / Listen Button */}
-                <div className="mt-8 md:mt-12 flex flex-col items-center gap-3 md:gap-4">
+                <div className="mt-4 md:mt-6 flex flex-col items-center gap-3 md:gap-4">
                   <div className="relative">
                     {/* Pulsing ripple rings */}
                     {isListening && (
@@ -870,19 +876,19 @@ const QuizDomainSelection = () => {
           </div>
 
           {/* ════ RIGHT: Control Sidebar (4 cols) ════ */}
-          <aside className="xl:col-span-4 flex flex-col gap-4 md:gap-6 md:sticky md:top-28">
+          <aside className="xl:col-span-4 flex flex-col gap-3 md:sticky md:top-28">
             {/* Quiz Controls */}
-            <div className="rounded-xl p-5 md:p-6 flex flex-col gap-5 md:gap-6 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
+            <div className="rounded-xl p-4 flex flex-col gap-3 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
               <div>
-                <h3 className="font-bold mb-3 md:mb-4 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
+                <h3 className="font-bold mb-2 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
                   <AnimeIcon Icon={Zap} className="w-5 h-5" style={{ color: t.primary }} animation="jump" selfHover={true} /> Quiz Controls
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
-                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-2 block" style={{ color: t.textMuted }}>Difficulty</label>
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: t.textMuted }}>Difficulty</label>
                     <div className="flex p-1 rounded-lg" style={{ background: t.diffBg, border: `1px solid ${t.diffBorder}` }}>
                       {["easy", "medium", "hard"].map((level) => (
-                        <button key={level} data-cursor="button" onClick={() => { setSelectedDifficulty(level); if (!isLoading) nextQuestion(level); }} className="flex-1 py-2 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize" style={selectedDifficulty === level ? { backgroundColor: t.primary, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } : { color: t.diffInactive }}>{level}</button>
+                        <button key={level} data-cursor="button" onClick={() => { setSelectedDifficulty(level); if (!isLoading) nextQuestion(level); }} className="flex-1 py-1.5 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize" style={selectedDifficulty === level ? { backgroundColor: t.primary, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } : { color: t.diffInactive }}>{level}</button>
                       ))}
                     </div>
                   </div>
@@ -890,14 +896,14 @@ const QuizDomainSelection = () => {
               </div>
               <hr style={{ borderColor: t.separator }} />
               {/* Export actions */}
-              <div className="flex flex-col gap-2 md:gap-3">
-                <button data-cursor="button" onClick={downloadPDF} className="flex items-center justify-between w-full p-3 md:p-4 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
+              <div className="flex flex-col gap-2">
+                <button data-cursor="button" onClick={downloadPDF} className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
                   <div className="flex items-center gap-2 md:gap-3">
                     <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg]" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
                     <span className="text-xs md:text-sm font-medium" style={{ color: t.exportText }}>Export Results PDF</span>
                   </div>
                 </button>
-                <button data-cursor="button" onClick={downloadCSV} className="flex items-center justify-between w-full p-3 md:p-4 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
+                <button data-cursor="button" onClick={downloadCSV} className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
                   <div className="flex items-center gap-2 md:gap-3">
                     <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg]" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
                     <span className="text-sm font-medium" style={{ color: t.exportText }}>Download CSV</span>
@@ -907,9 +913,9 @@ const QuizDomainSelection = () => {
             </div>
 
             {/* ── Session Statistics Card ── */}
-            <div className="rounded-xl p-5 md:p-6 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
-              <h4 className="font-bold mb-3 md:mb-4 text-xs md:text-sm" style={{ color: t.textPrimary }}>Your Session</h4>
-              <div className="grid grid-cols-2 gap-3 md:gap-4">
+            <div className="rounded-xl p-4 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
+              <h4 className="font-bold mb-3 text-xs md:text-sm" style={{ color: t.textPrimary }}>Your Session</h4>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
                   <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Timer</p>
                   <p className={cn("text-lg md:text-xl font-bold tabular-nums font-display", timer <= 10 && isListening && "text-red-500")} style={!(timer <= 10 && isListening) ? { color: t.statValue } : undefined}>{isListening ? `0:${timer < 10 ? `0${timer}` : timer}` : "--:--"}</p>
@@ -998,7 +1004,8 @@ const QuizDomainSelection = () => {
         </div>
       )}
 
-      <main className="relative z-10 flex flex-col items-center px-4 py-10 md:py-16 grow">
+      <main className="relative z-10 flex flex-col items-center px-4 py-4 md:py-8 grow">
+        {renderStaticBackButton()}
         {currentView === "domains" && renderDomainSelection()}
         {currentView === "categories" && renderCategorySelection()}
         {currentView === "subCategories" && renderSubCategorySelection()}
@@ -1019,26 +1026,26 @@ const QuizDomainSelection = () => {
         <div className="fixed inset-0 z-[100] backdrop-blur-xl flex items-center justify-center p-4 overflow-hidden" style={{ background: t.overlayBg }}>
           <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] blur-[120px] opacity-20 rounded-full" style={{ background: `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` }} />
           <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-xl relative">
-            <div className="relative glass-card rounded-[40px] p-6 md:p-12 overflow-hidden text-center shadow-2xl" style={{ background: t.overlayCardBg, border: `1px solid ${t.overlayBorder}`, backdropFilter: 'blur(24px)' }}>
+            <div className="relative glass-card rounded-[40px] p-5 md:p-8 overflow-hidden text-center shadow-2xl" style={{ background: t.overlayCardBg, border: `1px solid ${t.overlayBorder}`, backdropFilter: 'blur(24px)' }}>
               <div className="absolute top-0 inset-x-0 h-1.5" style={{ background: isLight ? `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` : `linear-gradient(to right, #934cf0, #4338ca)` }} />
-              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center mx-auto mb-6 md:mb-8 shadow-2xl animate-pulse overflow-hidden bg-white/10" style={{ border: `1px solid ${t.overlayBorder}` }}>
-                <img src="/Session complete badge.png" alt="Session Complete Badge" className="w-full h-full object-cover" />
+              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 overflow-hidden" style={{ boxShadow: '0 0 30px rgba(255, 193, 7, 0.7), 0 0 60px rgba(255, 193, 7, 0.5), 0 0 100px rgba(255, 193, 7, 0.35), 0 0 150px rgba(255, 193, 7, 0.2), 0 0 200px rgba(147, 76, 240, 0.25)' }}>
+                <img src="/Session complete badge.png" alt="Session Complete Badge" style={{ width: '160%', height: '113%', objectFit: 'cover', transform: 'scale(1.2)' }} />
               </div>
-              <h3 className="font-syne text-2xl sm:text-3xl md:text-5xl font-extrabold mb-3 md:mb-4 uppercase" style={{ color: t.textPrimary }}>SESSION COMPLETE</h3>
-              <p className="text-sm md:text-xl mb-6 md:mb-10 uppercase tracking-widest" style={{ color: t.textMuted }}>Completed {SESSION_LENGTH} questions</p>
-              <div className="grid grid-cols-2 gap-3 md:gap-6 mb-6 md:mb-10">
-                <div className="p-4 md:p-8 rounded-xl md:rounded-2xl border" style={{ background: t.overlayStatBg, borderColor: t.overlayBorder }}>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: t.statLabel }}>Final Score</p>
-                  <p className="font-display text-2xl sm:text-3xl md:text-5xl font-bold" style={{ color: t.textPrimary }}>{sessionScore}</p>
+              <h3 className="font-syne text-xl sm:text-2xl md:text-4xl font-extrabold mb-2 md:mb-3 uppercase" style={{ color: t.textPrimary }}>SESSION COMPLETE</h3>
+              <p className="text-xs md:text-base mb-4 md:mb-6 uppercase tracking-widest" style={{ color: t.textMuted }}>Completed {SESSION_LENGTH} questions</p>
+              <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-6">
+                <div className="p-3 md:p-5 rounded-xl md:rounded-2xl border" style={{ background: t.overlayStatBg, borderColor: t.overlayBorder }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: t.statLabel }}>Final Score</p>
+                  <p className="font-display text-xl sm:text-2xl md:text-4xl font-bold" style={{ color: t.textPrimary }}>{sessionScore}</p>
                 </div>
-                <div className="p-4 md:p-8 rounded-xl md:rounded-2xl border" style={{ background: t.overlayStatBg, borderColor: t.overlayBorder }}>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2" style={{ color: t.statLabel }}>Total XP</p>
-                  <p className="font-display text-2xl sm:text-3xl md:text-5xl font-bold" style={{ color: t.primary }}>{score}</p>
+                <div className="p-3 md:p-5 rounded-xl md:rounded-2xl border" style={{ background: t.overlayStatBg, borderColor: t.overlayBorder }}>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: t.statLabel }}>Total XP</p>
+                  <p className="font-display text-xl sm:text-2xl md:text-4xl font-bold" style={{ color: t.primary }}>{score}</p>
                 </div>
               </div>
               <div className="flex flex-col gap-3 md:gap-4">
-                <button onClick={startNewSession} className="h-12 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-sm md:text-lg shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all" style={{ backgroundColor: t.primary, boxShadow: `0 10px 30px ${t.micShadow}`, border: 'none' }}>START NEW SESSION</button>
-                <button onClick={() => { setCurrentView("topics"); setShowSessionEnd(false); setFeedback(""); }} className="h-12 md:h-16 rounded-xl md:rounded-2xl border font-bold text-sm md:text-lg transition-all" style={{ background: t.btnSecondaryBg, borderColor: t.btnSecondaryBorder, color: t.btnSecondaryText }}>BACK TO DASHBOARD</button>
+                <button onClick={startNewSession} className="h-11 md:h-14 rounded-xl md:rounded-2xl text-white font-bold text-sm md:text-base shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all" style={{ backgroundColor: t.primary, boxShadow: `0 10px 30px ${t.micShadow}`, border: 'none' }}>START NEW SESSION</button>
+                <button onClick={() => { setCurrentView("topics"); setShowSessionEnd(false); setFeedback(""); }} className="h-11 md:h-14 rounded-xl md:rounded-2xl border font-bold text-sm md:text-base transition-all" style={{ background: t.btnSecondaryBg, borderColor: t.btnSecondaryBorder, color: t.btnSecondaryText }}>BACK TO DASHBOARD</button>
               </div>
             </div>
           </motion.div>

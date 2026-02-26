@@ -10,7 +10,6 @@ import {
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import { motion } from 'framer-motion';
 import Lottie from 'lottie-react';
-import errorAnimationData from '@/public/InQuizoo icons/lottieflow-404-12-1-000000-easey.json';
 import Header from '@/app/components/shared/header/Header.jsx';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import CursorAura from '@/app/components/inquizzo/CursorAura';
@@ -239,11 +238,12 @@ const Quiz = () => {
 
     try {
       const data = await makeAuthenticatedRequest("/api/inquizzo/evaluate", {
-        method: "POST", body: JSON.stringify({ userAnswer: spokenText, question, timeTaken }),
+        method: "POST", body: JSON.stringify({ userAnswer: spokenText, question, correctAnswer: answer, timeTaken }),
       });
       const { result } = data;
-      const { isCorrect, similarity, score: gainedScore, feedback: evalFeedback, correctAnswer: correctAns } = result;
-      const resultData = { question, correctAnswer: correctAns || answer, userAnswer: spokenText, similarity, isCorrect, feedback: evalFeedback, score: gainedScore };
+      const { isCorrect, similarity, score: gainedScore, feedback: evalFeedback } = result;
+      // Always use the ORIGINAL correct answer from question generation for display
+      const resultData = { question, correctAnswer: answer, userAnswer: spokenText, similarity, isCorrect, feedback: evalFeedback, score: gainedScore };
 
       if (gainedScore > 0) { setScore((prev) => prev + gainedScore); setSessionScore((prev) => prev + gainedScore); }
       setLastIsCorrect(!!isCorrect);
@@ -254,7 +254,7 @@ const Quiz = () => {
       setQuestionsAnswered((prev) => prev + 1);
       setShowResult(true);
 
-      await saveAttempt({ question, userAnswer: spokenText, correctAnswer: correctAns || answer, isCorrect, score: gainedScore, timeTaken });
+      await saveAttempt({ question, userAnswer: spokenText, correctAnswer: answer, isCorrect, score: gainedScore, timeTaken });
       if (sessionQCount + 1 >= SESSION_LENGTH) setShowSessionEnd(true);
     } catch { setFeedback("Something went wrong during evaluation."); setShowResult(true); }
     finally { setIsAnswering(false); }
@@ -390,18 +390,12 @@ const Quiz = () => {
     const randomTopic = topics[Math.floor(Math.random() * topics.length)];
 
     try {
-      let data = null;
-      let attempts = 0;
-      const MAX_RETRIES = 3;
+      const data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
+        method: "POST", body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current.slice(-15), difficulty: actualDifficulty }),
+      });
 
-      while (attempts < MAX_RETRIES) {
-        data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
-          method: "POST", body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current, difficulty: actualDifficulty }),
-        });
-
-        if (!seenQuestionsRef.current.includes(data?.question)) break;
-        attempts++;
-        console.warn(`🔄 Duplicate detected (Attempt ${attempts}). Retrying...`);
+      if (seenQuestionsRef.current.includes(data?.question)) {
+        console.warn(`🔄 AI gave a duplicate question. Proceeding anyway rather than looping to avoid latency.`);
       }
 
       if (data?.question) {
@@ -631,7 +625,7 @@ const Quiz = () => {
       />
 
       {/* ── Minimal Sub-Header ─────────────────────── */}
-      <div className="relative z-10 flex items-center justify-between px-4 md:px-8 pt-6 md:pt-10 max-w-7xl mx-auto w-full">
+      <div className="relative z-10 flex items-center justify-between px-4 md:px-8 pt-2 md:pt-4 max-w-7xl mx-auto w-full">
         <div className="flex-1">
           <button
             onClick={() => window.location.href = '/inquizzo'}
@@ -648,8 +642,8 @@ const Quiz = () => {
       </div>
 
       {/* ── Main Content: 12-col grid ─────────────── */}
-      <main className="relative z-10 flex-grow flex flex-col items-center px-4 py-8 md:py-12 lg:py-16">
-        <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-8 items-start">
+      <main className="relative z-10 flex-grow flex flex-col items-center px-4 py-1 md:py-2">
+        <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6 items-start">
 
           {/* ════ LEFT: Question Area (8 cols) ════ */}
           <div className="xl:col-span-8 flex flex-col gap-6 md:gap-8">
@@ -658,7 +652,7 @@ const Quiz = () => {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="rounded-xl md:rounded-2xl p-4 sm:p-6 md:p-8 lg:p-10 min-h-[250px] md:min-h-[350px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
+              className="rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 min-h-[200px] md:min-h-[280px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
               style={{ background: t.cardBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.cardBorder}` }}
             >
               {/* Question badge */}
@@ -685,14 +679,14 @@ const Quiz = () => {
               {/* Error */}
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-3 w-full">
-                  <Lottie animationData={errorAnimationData} loop autoplay style={{ width: 80, height: 80 }} />
+                  <XCircle className="w-10 h-10" />
                   <p className="font-medium text-sm">{error}</p>
                   <button onClick={() => getAIQuestion()} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10">Retry</button>
                 </div>
               )}
 
               {/* Question text */}
-              <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight max-w-2xl mt-6 md:mt-0 transition-colors duration-500" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
+              <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight max-w-2xl mt-12 md:mt-10 transition-colors duration-500" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
                 {isLoading ? (
                   <div className="flex items-center justify-center gap-4">
                     <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
@@ -702,7 +696,7 @@ const Quiz = () => {
               </h2>
 
               {/* Voice / Listen Button */}
-              <div className="mt-8 md:mt-12 flex flex-col items-center gap-3 md:gap-4">
+              <div className="mt-4 md:mt-6 flex flex-col items-center gap-3 md:gap-4">
                 <div className="relative">
                   {/* Pulsing ripple rings */}
                   {isListening && (
@@ -841,29 +835,29 @@ const Quiz = () => {
           </div>
 
           {/* ════ RIGHT: Control Sidebar (4 cols) ════ */}
-          <aside className="xl:col-span-4 flex flex-col gap-4 md:gap-6 md:sticky md:top-28">
+          <aside className="xl:col-span-4 flex flex-col gap-3 md:sticky md:top-28">
 
             {/* ── Quiz Controls Card ── */}
             <div
-              className="rounded-xl p-5 md:p-6 flex flex-col gap-5 md:gap-6 transition-colors duration-500"
+              className="rounded-xl p-4 flex flex-col gap-3 transition-colors duration-500"
               style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}
             >
               <div>
-                <h3 className="font-bold mb-3 md:mb-4 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
+                <h3 className="font-bold mb-2 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
                   <AnimeIcon Icon={Zap} className="w-5 h-5" style={{ color: t.primary }} animation="jump" selfHover={true} />
                   Quiz Controls
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* Difficulty selector */}
                   <div>
-                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-2 block" style={{ color: t.textMuted }}>Difficulty</label>
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: t.textMuted }}>Difficulty</label>
                     <div className="flex p-1 rounded-lg" style={{ background: t.diffBg, border: `1px solid ${t.diffBorder}` }}>
                       {["easy", "medium", "hard"].map((level) => (
                         <button
                           key={level}
                           data-cursor="button"
                           onClick={() => { setSelectedDifficulty(level); if (!isLoading) resetQuiz(level); }}
-                          className="flex-1 py-2 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize"
+                          className="flex-1 py-1.5 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize"
                           style={selectedDifficulty === level
                             ? { backgroundColor: t.primary, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }
                             : { color: t.diffInactive }
@@ -882,11 +876,11 @@ const Quiz = () => {
               <hr style={{ borderColor: t.separator }} />
 
               {/* Export actions */}
-              <div className="flex flex-col gap-2 md:gap-3">
+              <div className="flex flex-col gap-2">
                 <button
                   data-cursor="button"
                   onClick={downloadPDF}
-                  className="flex items-center justify-between w-full p-3 md:p-4 rounded-lg group transition-all"
+                  className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all"
                   style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}
                 >
                   <div className="flex items-center gap-2 md:gap-3">
@@ -897,7 +891,7 @@ const Quiz = () => {
                 <button
                   data-cursor="button"
                   onClick={downloadCSV}
-                  className="flex items-center justify-between w-full p-3 md:p-4 rounded-lg group transition-all"
+                  className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all"
                   style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}
                 >
                   <div className="flex items-center gap-2 md:gap-3">
@@ -910,11 +904,11 @@ const Quiz = () => {
 
             {/* ── Session Statistics Card ── */}
             <div
-              className="rounded-xl p-5 md:p-6 transition-colors duration-500"
+              className="rounded-xl p-4 transition-colors duration-500"
               style={{ background: isLight ? 'linear-gradient(135deg, rgba(206,249,242,0.15), rgba(255,255,255,0.8))' : 'linear-gradient(135deg, rgba(147,76,240,0.08), transparent)', backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}
             >
-              <h4 className="font-bold mb-3 md:mb-4 text-xs md:text-sm" style={{ color: t.textSecondary }}>Your Session</h4>
-              <div className="grid grid-cols-2 gap-3 md:gap-4">
+              <h4 className="font-bold mb-3 text-xs md:text-sm" style={{ color: t.textSecondary }}>Your Session</h4>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
                   <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Timer</p>
                   <p className={cn("text-lg md:text-xl font-bold tabular-nums font-display", timer <= 10 && isListening && "text-red-500")} style={!(timer <= 10 && isListening) ? { color: t.statValue } : undefined}>
@@ -947,30 +941,30 @@ const Quiz = () => {
           <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] blur-[120px] rounded-full" style={{ backgroundColor: isLight ? 'rgba(171,146,191,0.15)' : 'rgba(147,76,240,0.2)' }} />
           <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-xl relative px-4">
             <div
-              className="relative rounded-2xl md:rounded-3xl p-6 md:p-12 overflow-hidden text-center shadow-2xl"
+              className="relative rounded-2xl md:rounded-3xl p-5 md:p-8 overflow-hidden text-center shadow-2xl"
               style={{ background: t.overlayCardBg, backdropFilter: 'blur(24px)', border: `1px solid ${t.overlayBorder}` }}
             >
               <div className="absolute top-0 inset-x-0 h-1.5" style={{ background: isLight ? `linear-gradient(to right, ${t.primary}, ${t.primaryLight})` : `linear-gradient(to right, #934cf0, #4338ca)` }} />
-              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center mx-auto mb-6 md:mb-8 shadow-2xl animate-pulse overflow-hidden" style={{ backgroundColor: isLight ? 'rgba(214,202,152,0.3)' : 'rgba(147,76,240,0.2)' }}>
-                <img src="/Session complete badge.png" alt="Session Complete Badge" className="w-full h-full object-cover" />
+              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6 overflow-hidden" style={{ boxShadow: '0 0 30px rgba(255, 193, 7, 0.7), 0 0 60px rgba(255, 193, 7, 0.5), 0 0 100px rgba(255, 193, 7, 0.35), 0 0 150px rgba(255, 193, 7, 0.2), 0 0 200px rgba(147, 76, 240, 0.25)' }}>
+                <img src="/Session complete badge.png" alt="Session Complete Badge" style={{ width: '160%', height: '113%', objectFit: 'cover', transform: 'scale(1.2)' }} />
               </div>
-              <h3 className="font-syne text-2xl sm:text-3xl md:text-5xl font-extrabold mb-3 md:mb-4" style={{ color: t.textPrimary }}>SESSION COMPLETE</h3>
-              <p className="text-sm md:text-xl mb-6 md:mb-10 uppercase tracking-widest" style={{ color: t.textMuted }}>Completed {SESSION_LENGTH} questions</p>
-              <div className="grid grid-cols-2 gap-3 md:gap-6 mb-6 md:mb-10">
-                <div className="p-4 md:p-8 rounded-xl md:rounded-2xl" style={{ backgroundColor: t.overlayStatBg, border: `1px solid ${t.overlayBorder}` }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: t.statLabel }}>Final Score</p>
-                  <p className="font-display text-2xl sm:text-3xl md:text-5xl font-bold" style={{ color: t.textPrimary }}>{sessionScore}</p>
+              <h3 className="font-syne text-xl sm:text-2xl md:text-4xl font-extrabold mb-2 md:mb-3" style={{ color: t.textPrimary }}>SESSION COMPLETE</h3>
+              <p className="text-xs md:text-base mb-4 md:mb-6 uppercase tracking-widest" style={{ color: t.textMuted }}>Completed {SESSION_LENGTH} questions</p>
+              <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-6">
+                <div className="p-3 md:p-5 rounded-xl md:rounded-2xl" style={{ backgroundColor: t.overlayStatBg, border: `1px solid ${t.overlayBorder}` }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: t.statLabel }}>Final Score</p>
+                  <p className="font-display text-xl sm:text-2xl md:text-4xl font-bold" style={{ color: t.textPrimary }}>{sessionScore}</p>
                 </div>
-                <div className="p-4 md:p-8 rounded-xl md:rounded-2xl" style={{ backgroundColor: t.overlayStatBg, border: `1px solid ${t.overlayBorder}` }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: t.statLabel }}>Total XP</p>
-                  <p className="font-display text-2xl sm:text-3xl md:text-5xl font-bold" style={{ color: t.primary }}>{score}</p>
+                <div className="p-3 md:p-5 rounded-xl md:rounded-2xl" style={{ backgroundColor: t.overlayStatBg, border: `1px solid ${t.overlayBorder}` }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: t.statLabel }}>Total XP</p>
+                  <p className="font-display text-xl sm:text-2xl md:text-4xl font-bold" style={{ color: t.primary }}>{score}</p>
                 </div>
               </div>
               <div className="flex flex-col gap-3 md:gap-4">
                 <button
                   data-cursor="button"
                   onClick={startNewSession}
-                  className="h-12 md:h-16 rounded-xl md:rounded-2xl text-white font-bold text-sm md:text-lg shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+                  className="h-11 md:h-14 rounded-xl md:rounded-2xl text-white font-bold text-sm md:text-base shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
                   style={{ backgroundColor: t.primary, boxShadow: `0 10px 25px ${t.micShadow}` }}
                 >
                   START NEW SESSION
@@ -978,7 +972,7 @@ const Quiz = () => {
                 <button
                   data-cursor="button"
                   onClick={() => window.location.href = '/inquizzo'}
-                  className="h-12 md:h-16 rounded-xl md:rounded-2xl font-bold text-sm md:text-lg transition-all"
+                  className="h-11 md:h-14 rounded-xl md:rounded-2xl font-bold text-sm md:text-base transition-all"
                   style={{ background: t.btnSecondaryBg, border: `1px solid ${t.btnSecondaryBorder}`, color: t.textPrimary }}
                 >
                   BACK TO DASHBOARD
