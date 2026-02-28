@@ -22,8 +22,12 @@ User Answer: ${userAnswer}
 
 Evaluate if the user's answer is correct. Compare against the expected correct answer above.
 Be lenient: if the user got the core concept right but phrased it differently, mark isCorrect: true.
-Respond ONLY in JSON:
-{"isCorrect": true/false, "explanation": "A brief explanation."}`;
+
+Respond ONLY in JSON with the following structure:
+{
+  "isCorrect": true/false, 
+  "explanation": "A detailed 4-5 sentence educational explanation about the topic/answer. Do NOT mention 'the user', 'your answer', or 'the user's answer'. Focus entirely on the subject matter and why the answer is what it is."
+}`;
 
     // Race AI evaluation using Multi-Key Chain vs OpenAI vs Gemini
     const aiPromises = [];

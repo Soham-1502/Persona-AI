@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { authenticate } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { runGroqAction } from "@/lib/ai-handler";
+import FallbackQuestion from "@/models/FallbackQuestion";
 
 // Initialize OpenAI and Gemini
 console.log("🛠️ Initializing secondary AI clients...");
@@ -66,12 +67,13 @@ export async function POST(req) {
 
     // Only send SHORT snippets of recent questions to avoid blowing up the token count.
     // Groq free tier has 6000 TPM — sending 150 full questions used ~4600 tokens per request!
-    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-15) : [];
+    // Increase buffer to help AI avoid repeats
+    const recentSeen = Array.isArray(seenQuestions) ? seenQuestions.slice(-50) : [];
     let avoidClause = "";
     if (recentSeen.length > 0) {
       // Truncate each question to first 60 chars to minimize tokens
       const shortList = recentSeen.map((q, i) => `${i + 1}. ${String(q).substring(0, 60)}`).join("\n");
-      avoidClause = `\nDo NOT repeat these recent questions:\n${shortList}`;
+      avoidClause = `\nCRITICAL: Do NOT repeat any of these recent questions:\n${shortList}\n\nYou MUST generate a completely unique and novel challenge.`;
     }
 
     const rngSeed = Math.floor(Math.random() * 1000000);
@@ -151,9 +153,30 @@ ${avoidClause}`;
       bestResult = await Promise.any(aiPromises);
       console.log(`🏆 Race winner: ${bestResult.source}`);
     } catch (aggregateError) {
-      console.warn("🔻 EMERGENCY: All AI services failed in the race. Using static fallback pool.");
-      console.error(aggregateError.errors);
+      console.warn("🔻 EMERGENCY: All AI services failed in the race. Fetching from database fallback.");
 
+      try {
+        // Try to get a random fallback question from DB for requested difficulty
+        const [dbFallback] = await FallbackQuestion.aggregate([
+          { $match: { difficulty: difficultyLevel.toLowerCase() } },
+          { $sample: { size: 1 } }
+        ]);
+
+        if (dbFallback) {
+          console.log(`✅ Success: Retreived ${difficultyLevel} fallback from database.`);
+          return NextResponse.json({
+            question: dbFallback.question,
+            answer: dbFallback.answer,
+            user: { username: user.username },
+            source: "Database Fallback Pool",
+            version: "V8_RACE_CONCURRENT"
+          });
+        }
+      } catch (dbErr) {
+        console.error("❌ Database fallback fetch failed:", dbErr.message);
+      }
+
+      console.warn("⚠️ Database fallback failed or empty. Using static pool last-resort.");
       const staticPool = [
         { question: "What is the capital of France?", answer: "Paris" },
         { question: "Who developed the theory of relativity?", answer: "Albert Einstein" },

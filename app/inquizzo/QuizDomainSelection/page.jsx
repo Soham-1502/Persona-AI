@@ -80,6 +80,8 @@ const QuizDomainSelection = () => {
   const [selectedDifficulty, setSelectedDifficulty] = useState("medium");
   const [lastIsCorrect, setLastIsCorrect] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+  const [isManualStop, setIsManualStop] = useState(false);
+  const [isTimeout, setIsTimeout] = useState(false);
 
   const SESSION_LENGTH = 10;
   const sessionIdRef = useRef(null);
@@ -88,10 +90,12 @@ const QuizDomainSelection = () => {
   const [showSessionEnd, setShowSessionEnd] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const questionStartTimeRef = useRef(Date.now());
+  const isTransitioningRef = useRef(false);
   const recognitionRef = useRef(null);
   const currentQuestionRef = useRef({ question: "", answer: "" });
   const voicesRef = useRef([]);
   const transcriptRef = useRef("");
+  const isManualStopRef = useRef(false);
 
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -320,10 +324,12 @@ const QuizDomainSelection = () => {
   }, []);
 
   const resetToHome = () => {
+    isTransitioningRef.current = true;
+    stopListening(true);
     setCurrentView("domains"); setSelectedDomain(null); setSelectedCategory(null);
     setSelectedSubCategory(null); setSelectedTopic(null); setScore(0);
     setQuestionsAnswered(0); setCurrentQuestion(""); setTranscript("");
-    setFeedback(""); setShowResult(false); setTimer(30); setTimerActive(false);
+    setFeedback(""); setShowResult(false); setTimer(30); setTimerActive(false); setError(""); setIsTimeout(false);
     sessionIdRef.current = null;
     setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setChatHistory([]);
     updateURL(null, null, null, null);
@@ -347,20 +353,35 @@ const QuizDomainSelection = () => {
           subject: domain,
           category,
           subCategory,
-          seenQuestions: seenQuestionsRef.current.slice(-15),
+          seenQuestions: seenQuestionsRef.current.slice(-50),
           difficulty: actualDifficulty
         })
       });
 
-      if (seenQuestionsRef.current.includes(data.question)) {
-        console.warn(`🔄 AI gave a duplicate question. Proceeding anyway rather than looping to avoid latency.`);
+      // Simple retry loop (max 3)
+      let currentData = data;
+      let retryCount = 0;
+      while (seenQuestionsRef.current.includes(currentData?.question) && retryCount < 3) {
+        console.warn(`🔄 AI gave a duplicate question (Attempt ${retryCount + 1}). Retrying...`);
+        retryCount++;
+        currentData = await makeAuthenticatedRequest("/api/inquizzo/ask", {
+          method: "POST",
+          body: JSON.stringify({
+            topic,
+            subject: domain,
+            category,
+            subCategory,
+            seenQuestions: seenQuestionsRef.current.slice(-50),
+            difficulty: actualDifficulty
+          })
+        });
       }
 
-      if (data && data.question) {
-        setCurrentQuestion(data.question); setCorrectAnswer(data.answer);
-        currentQuestionRef.current = { question: data.question, answer: data.answer };
-        saveSeenQuestion(data.question);
-        setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false);
+      if (currentData && currentData.question) {
+        setCurrentQuestion(currentData.question); setCorrectAnswer(currentData.answer);
+        currentQuestionRef.current = { question: currentData.question, answer: currentData.answer };
+        saveSeenQuestion(currentData.question);
+        setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsTimeout(false);
         questionStartTimeRef.current = Date.now();
       }
     } catch (err) {
@@ -409,25 +430,62 @@ const QuizDomainSelection = () => {
     if (!SR) { setError("Speech Recognition not supported. Please use Chrome."); setIsBrowserSupported(false); return; }
     if (!isListening) {
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { } }
+      isTransitioningRef.current = false;
       setTranscript(""); transcriptRef.current = ""; setError(""); setTimer(30); setTimerActive(true);
+      setIsManualStop(false);
       let intentionalStop = false; let silenceTimer;
-      const startSilenceTimer = () => { clearTimeout(silenceTimer); silenceTimer = setTimeout(() => { intentionalStop = true; recognition.stop(); }, 6000); };
+      const startSilenceTimer = (timeoutMs = 31000) => {
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          isManualStopRef.current = false;
+          recognition.stop();
+        }, timeoutMs);
+      };
       const recognition = new SR();
       recognition.continuous = true; recognition.interimResults = true; recognition.lang = "en-US"; recognition.maxAlternatives = 1;
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        if (recognitionRef.current !== recognition) return;
+        setIsListening(true);
+        startSilenceTimer(31000); // Initial durability
+      };
       recognition.onresult = (event) => {
-        startSilenceTimer();
+        if (recognitionRef.current !== recognition) return;
+        startSilenceTimer(3000); // 3s delay after speech detection
         let finalT = ""; let interimT = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) { if (event.results[i].isFinal) finalT += event.results[i][0].transcript; else interimT += event.results[i][0].transcript; }
         if (finalT) { const t = (transcriptRef.current + " " + finalT).trim(); transcriptRef.current = t; setTranscript(t); }
         else if (interimT) setTranscript((transcriptRef.current + " " + interimT).trim());
       };
       recognition.onend = () => {
+        if (recognitionRef.current !== recognition) return;
         clearTimeout(silenceTimer);
-        if (intentionalStop || transcriptRef.current.trim()) { setIsListening(false); recognitionRef.current = null; if (transcriptRef.current.trim()) submitAnswer(transcriptRef.current); }
-        else { try { recognition.start(); } catch { setIsListening(false); recognitionRef.current = null; } }
+
+        if (isManualStopRef.current) {
+          setIsListening(false);
+          recognitionRef.current = null;
+          setIsManualStop(true);
+          return;
+        }
+
+        if (transcriptRef.current.trim()) {
+          setIsListening(false);
+          recognitionRef.current = null;
+          submitAnswer(transcriptRef.current);
+        } else if (!isTransitioningRef.current && timerActive && timer > 0) {
+          // AUTO-RESTART
+          try {
+            recognition.start();
+          } catch (e) {
+            setIsListening(false);
+            recognitionRef.current = null;
+          }
+        } else {
+          setIsListening(false);
+          recognitionRef.current = null;
+        }
       };
       recognition.onerror = (event) => {
+        if (recognitionRef.current !== recognition) return;
         clearTimeout(silenceTimer);
         if (event.error === "no-speech" || event.error === "aborted") return;
         intentionalStop = true; setIsListening(false); recognitionRef.current = null; setError(`Mic Error: ${event.error}. Try refreshing.`);
@@ -437,22 +495,36 @@ const QuizDomainSelection = () => {
     }
   };
 
-  const stopListening = () => { if (recognitionRef.current && isListening) { setTimerActive(false); if (recognitionRef.current._setIntentionalStop) recognitionRef.current._setIntentionalStop(); recognitionRef.current.stop(); } };
+  const stopListening = (useAbort = false) => {
+    isManualStopRef.current = true;
+    setTimerActive(false);
+    setIsListening(false);
+    setIsManualStop(true);
+    if (recognitionRef.current) {
+      if (recognitionRef.current._setIntentionalStop) recognitionRef.current._setIntentionalStop();
+      try {
+        if (useAbort) recognitionRef.current.abort();
+        else recognitionRef.current.stop();
+      } catch { }
+      recognitionRef.current = null;
+    }
+  };
 
   const saveAttempt = async ({ question, userAnswer, correctAnswer, isCorrect, score, timeTaken }) => {
     try { const token = getAuthToken(); if (!token || !sessionIdRef.current) return; await fetch("/api/inquizzo/attempt", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ moduleId: "inQuizzo", gameType: "voice", sessionId: sessionIdRef.current, question, userAnswer, correctAnswer, isCorrect, score, difficulty: selectedDifficulty, timeTaken }) }); } catch { }
   };
 
-  const submitAnswer = async (textOverride = null) => {
+  const submitAnswer = async (textOverride = null, isTimeoutCall = false) => {
     const finalAnswer = textOverride || transcript;
     if (!finalAnswer.trim()) { setError("Please provide an answer."); return; }
     const timeTaken = Math.round((Date.now() - questionStartTimeRef.current) / 1000);
-    setIsAnswering(true); setTimerActive(false);
+    setIsAnswering(true); setTimerActive(false); setIsManualStop(false);
     try {
       const data = await makeAuthenticatedRequest("/api/inquizzo/evaluate", { method: "POST", body: JSON.stringify({ question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: currentQuestionRef.current.answer, timeTaken }) });
       setFeedback(data.result.explanation || data.result.feedback); setLastGainedScore(data.result.score || 0); setShowResult(true);
       const gained = data.result.score || 0;
       setLastIsCorrect(!!data.result.isCorrect);
+      setIsTimeout(isTimeoutCall);
       if (data.result.isCorrect) {
         setScore((p) => p + gained);
         setSessionScore((p) => p + gained);
@@ -461,14 +533,54 @@ const QuizDomainSelection = () => {
       await saveAttempt({ question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer || currentQuestionRef.current.answer, isCorrect: data.result.isCorrect || false, score: gained, timeTaken });
       const newCount = sessionQCount + 1; setSessionQCount(newCount); setQuestionsAnswered((p) => p + 1);
       setChatHistory((p) => [...p, { question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer, isCorrect: data.result.isCorrect, feedback: data.result.explanation || data.result.feedback, score: gained }]);
-      if (newCount >= SESSION_LENGTH) setShowSessionEnd(true);
+      if (newCount >= SESSION_LENGTH) {
+        setShowSessionEnd(true);
+        stopListening(true); // CRITICAL: Stop mic immediately when session ends
+      }
     } catch { setError("Failed to check answer. Please try again."); }
     finally { setIsAnswering(false); }
   };
 
-  const handleTimeout = async () => { setTranscript("Time's up!"); await submitAnswer("Time's up!"); };
-  const nextQuestion = (diffOverride = null) => { const v = ["easy", "medium", "hard"]; const a = typeof diffOverride === "string" && v.includes(diffOverride) ? diffOverride : null; setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic, a); };
-  const startNewSession = () => { sessionIdRef.current = crypto.randomUUID(); setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0); setCorrectCount(0); setChatHistory([]); setQuestionsAnswered(0); nextQuestion(); };
+  const handleTimeout = async () => {
+    stopListening(true); // Ensure mic is killed immediately
+    setTranscript("Time's up!");
+    setIsTimeout(true);
+    setLastIsCorrect(false);
+    setFeedback("Time's up! The correct answer is: " + currentQuestionRef.current.answer);
+    setShowResult(true);
+    setTimerActive(false);
+    const newCount = sessionQCount + 1;
+    setSessionQCount(newCount);
+    setQuestionsAnswered((p) => p + 1);
+    setIsManualStop(false);
+    if (newCount >= SESSION_LENGTH) {
+      setShowSessionEnd(true);
+      stopListening(true); // CRITICAL: Stop mic on timeout session end
+    }
+    saveAttempt({
+      question: currentQuestionRef.current.question,
+      userAnswer: "(Timeout)",
+      correctAnswer: currentQuestionRef.current.answer,
+      isCorrect: false,
+      score: 0,
+      timeTaken: 30
+    });
+  };
+  const nextQuestion = (diffOverride = null) => {
+    isTransitioningRef.current = true;
+    const v = ["easy", "medium", "hard"];
+    const a = typeof diffOverride === "string" && v.includes(diffOverride) ? diffOverride : null;
+    // Kill mic before fetching new question
+    stopListening(true);
+    setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsTimeout(false); setIsManualStop(false);
+    fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic, a);
+  };
+  const startNewSession = () => {
+    sessionIdRef.current = crypto.randomUUID(); setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0); setCorrectCount(0); setChatHistory([]); setQuestionsAnswered(0);
+    if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { } recognitionRef.current = null; setIsListening(false); }
+    nextQuestion();
+    setIsManualStop(false);
+  };
 
   const downloadCSV = () => {
     let csv = "Question,Your Answer,Correct Answer,Result,Score\n";
@@ -482,21 +594,61 @@ const QuizDomainSelection = () => {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(20); doc.text("Quiz Results", 20, 20);
-    doc.setFontSize(12);
-    let y = 40;
-    chatHistory.forEach((e, i) => {
-      if (y > 270) { doc.addPage(); y = 20; }
-      doc.attributedText = `Q${i + 1}: ${e.question}`;
-      const lines = doc.splitTextToSize(e.question, 170);
-      doc.text(`Q${i + 1}:`, 20, y);
-      doc.text(lines, 30, y);
-      y += lines.length * 7;
-      doc.text(`Your Answer: ${e.userAnswer}`, 20, y); y += 7;
-      doc.text(`Correct Answer: ${e.correctAnswer}`, 20, y); y += 7;
-      doc.text(`Result: ${e.isCorrect ? "Correct" : "Incorrect"}`, 20, y); y += 15;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - 2 * margin;
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(45, 38, 64);
+    doc.text("InQuizzo Quiz Report", margin, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Date: ${new Date().toLocaleDateString()} | Total Score: ${score} XP`, margin, 28);
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, 32, pageWidth - margin, 32);
+
+    let y = 45;
+    chatHistory.forEach((entry, index) => {
+      // Check if we need a new page
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+
+      // Question Number & Text
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(45, 38, 64);
+      const questionText = `Q${index + 1}: ${entry.question}`;
+      const splitQuestion = doc.splitTextToSize(questionText, contentWidth);
+      doc.text(splitQuestion, margin, y);
+      y += (splitQuestion.length * 6);
+
+      // Your Answer
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Your Answer: ${entry.userAnswer || "(No Answer)"}`, margin + 5, y);
+      y += 6;
+
+      // Correct Answer
+      doc.text(`Correct Answer: ${entry.correctAnswer}`, margin + 5, y);
+      y += 6;
+
+      // Result
+      const isCorrect = entry.isCorrect;
+      if (isCorrect) doc.setTextColor(16, 185, 129); // Green
+      else doc.setTextColor(239, 68, 68); // Red
+      doc.setFont("helvetica", "bold");
+      doc.text(`Result: ${isCorrect ? "Correct" : "Incorrect"}`, margin + 5, y);
+
+      y += 15; // Spacing between questions
     });
-    doc.save(`quiz_results_${new Date().toISOString().slice(0, 10)}.pdf`);
+
+    doc.save(`InQuizzo_Results_${new Date().getTime()}.pdf`);
   };
 
   const downloadHistory = () => {
@@ -510,8 +662,30 @@ const QuizDomainSelection = () => {
 
   const speakQuestion = async () => {
     if (!currentQuestion) return;
-    try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); const r = await fetch("/api/inquizzo/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: currentQuestion }) }); if (!r.ok) throw new Error(); const b = await r.blob(); const u = URL.createObjectURL(b); const a = new Audio(u); a.onended = () => URL.revokeObjectURL(u); a.play().catch(() => { }); }
-    catch { if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(currentQuestion); u.rate = 0.95; const v = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices(); u.voice = v.find((x) => x.lang.startsWith("en") && (x.name.includes("Natural") || x.name.includes("Neural"))) || v[0]; window.speechSynthesis.speak(u); } }
+    try {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      const response = await fetch("/api/inquizzo/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: currentQuestion })
+      });
+      if (!response.ok) throw new Error("TTS proxy failed");
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.play().catch(e => console.error("Audio play failed:", e));
+    } catch (err) {
+      console.warn("Proxy TTS failed, using browser fallback", err);
+      if ("speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(currentQuestion);
+        utterance.rate = 0.95;
+        const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
+        utterance.voice = voices.find((v) => v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Neural"))) ||
+          voices.find((v) => v.lang.startsWith("en")) || voices[0];
+        window.speechSynthesis.speak(utterance);
+      }
+    }
   };
 
   // ─── RENDER HELPERS ────────────────────────────────────────────────────────
@@ -703,242 +877,303 @@ const QuizDomainSelection = () => {
   };
 
   // ─── RENDER: QUIZ INTERFACE ────────────────────────────────────────────────
-  const renderQuizInterface = () => (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-8 animate-fadeIn text-left">
-      {/* ── Minimal Sub-Header ─────────────────────── */}
-      <div className="relative z-10 flex items-center justify-between pt-2 md:pt-4 w-full mb-4 md:mb-6">
-        <div className="flex-1">
-          <button
-            onClick={() => { setCurrentView("topics"); setFeedback(""); setShowResult(false); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}
-            className="flex items-center gap-2 group transition-colors"
-            style={{ color: t.textMuted }}
-            data-cursor="button"
-          >
-            <AnimeIcon Icon={ArrowLeft} className="w-5 h-5" animation="slide" selfHover={true} />
-            <span className="font-medium text-sm">Back</span>
-          </button>
-        </div>
-        <h1 className="text-lg md:text-xl font-bold tracking-tight text-center" style={{ color: t.textPrimary }}>
-          {selectedTopic ? QUIZ_STRUCTURE[selectedDomain].categories[selectedCategory].subCategories[selectedSubCategory].topics[selectedTopic].name : "Practice Session"}
-        </h1>
-        <div className="flex-1" />
-      </div>
-
-      {/* ── Main Content: 12-col grid ─────────────── */}
-      <main className="relative z-10 flex-grow flex flex-col items-center py-1 md:py-2">
-        <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6 items-start">
-
-          {/* ════ LEFT: Question Area (8 cols) ════ */}
-          <div className="xl:col-span-8 flex flex-col gap-6 md:gap-8">
-
-            {/* ── Question Card ── */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 min-h-[200px] md:min-h-[280px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
-              style={{ background: t.cardBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.cardBorder}` }}
+  const renderQuizInterface = () => {
+    if (showSessionEnd) return null; // Early return to prevent quiz showing behind overlay
+    return (
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-8 animate-fadeIn text-left">
+        {/* ── Minimal Sub-Header ─────────────────────── */}
+        <div className="relative z-10 flex items-center justify-between pt-2 md:pt-4 w-full mb-4 md:mb-6">
+          <div className="flex-1">
+            <button
+              onClick={() => { setCurrentView("topics"); setFeedback(""); setShowResult(false); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}
+              className="flex items-center gap-2 group transition-colors"
+              style={{ color: t.textMuted }}
+              data-cursor="button"
             >
-              <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2 px-3 py-1 rounded-full" style={{ background: t.badgeBg, border: `1px solid ${t.badgeBorder}` }}>
-                <AnimeIcon Icon={Zap} className="w-3 h-3" style={{ color: t.badgeText }} animation="jump" selfHover={true} />
-                <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest" style={{ color: t.badgeText }}>
-                  Question {questionsAnswered + 1}/{SESSION_LENGTH}
-                </span>
-              </div>
+              <AnimeIcon Icon={ArrowLeft} className="w-5 h-5" animation="slide" selfHover={true} />
+              <span className="font-medium text-sm">Back</span>
+            </button>
+          </div>
+          <h1 className="text-lg md:text-xl font-bold tracking-tight text-center" style={{ color: t.textPrimary }}>
+            {selectedTopic ? QUIZ_STRUCTURE[selectedDomain].categories[selectedCategory].subCategories[selectedSubCategory].topics[selectedTopic].name : "Practice Session"}
+          </h1>
+          <div className="flex-1" />
+        </div>
 
-              {!isLoading && currentQuestion && (
-                <button
-                  data-cursor="button" onClick={speakQuestion}
-                  className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group/btn"
-                  style={{ background: t.cardInnerBg, border: `1px solid ${t.glassBorder}` }}
-                >
-                  <Volume2 className="w-5 h-5 transition-colors" style={{ color: t.textMuted }} />
-                </button>
-              )}
+        {/* ── Main Content: 12-col grid ─────────────── */}
+        <main className="relative z-10 flex-grow flex flex-col items-center py-1 md:py-2">
+          <div className="max-w-7xl w-full grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-6 items-start">
 
-              <div className="max-w-2xl w-full">
-                <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight mt-12 md:mt-10" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
-                  {isLoading ? (
-                    <div className="flex items-center justify-center gap-4">
-                      <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
-                      <span style={{ color: t.textMuted }}>Generating challenge...</span>
-                    </div>
-                  ) : currentQuestion || "Ready to start?"}
-                </h2>
+            {/* ════ LEFT: Question Area (8 cols) ════ */}
+            <div className="xl:col-span-8 flex flex-col gap-6 md:gap-8">
 
-                {error && (
-                  <div className="mt-8 mb-8 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-4">
-                    <XCircle className="w-10 h-10 mb-2" />
-                    <p className="font-medium text-sm">{error}</p>
-                    <button onClick={() => fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic)} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10 transition-all">Retry</button>
-                  </div>
+              {/* ── Question Card ── */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 min-h-[200px] md:min-h-[280px] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden transition-colors duration-500"
+                style={{ background: t.cardBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.cardBorder}` }}
+              >
+                <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2 px-3 py-1 rounded-full" style={{ background: t.badgeBg, border: `1px solid ${t.badgeBorder}` }}>
+                  <AnimeIcon Icon={Zap} className="w-3 h-3" style={{ color: t.badgeText }} animation="jump" selfHover={true} />
+                  <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest" style={{ color: t.badgeText }}>
+                    Question {questionsAnswered + 1}/{SESSION_LENGTH}
+                  </span>
+                </div>
+
+                {!isLoading && currentQuestion && (
+                  <button
+                    data-cursor="button" onClick={speakQuestion}
+                    className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group/btn"
+                    style={{ background: t.cardInnerBg, border: `1px solid ${t.glassBorder}` }}
+                  >
+                    <Volume2 className="w-5 h-5 transition-colors" style={{ color: t.textMuted }} />
+                  </button>
                 )}
 
-                {/* Voice / Listen Button */}
-                <div className="mt-4 md:mt-6 flex flex-col items-center gap-3 md:gap-4">
-                  <div className="relative">
-                    {/* Pulsing ripple rings */}
-                    {isListening && (
-                      <>
-                        <div className="ripple-effect" />
-                        <div className="ripple-effect ripple-2" />
-                        <div className="ripple-effect ripple-3" />
-                        <motion.div
-                          animate={{ scale: [1, 1.3, 1] }}
-                          transition={{ repeat: Infinity, duration: 2 }}
-                          className="absolute -inset-6 rounded-full blur-2xl"
-                          style={{ backgroundColor: t.micGlow }}
-                        />
-                      </>
+                <div className="max-w-2xl w-full">
+                  <h2
+                    className="font-syne font-semibold leading-tight mt-12 md:mt-10 transition-all duration-300"
+                    style={{
+                      fontFamily: "'Raleway', sans-serif",
+                      color: t.textPrimary,
+                      fontSize: !currentQuestion ? '1.5rem' :
+                        currentQuestion.length > 200 ? '1.25rem' :
+                          currentQuestion.length > 120 ? '1.5rem' :
+                            currentQuestion.length > 80 ? '1.875rem' :
+                              '2.25rem'
+                    }}
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
+                        <span style={{ color: t.textMuted }}>Generating challenge...</span>
+                      </div>
+                    ) : currentQuestion || "Ready to start?"}
+                  </h2>
+
+                  {error && (
+                    <div className="mt-8 mb-8 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-4">
+                      <XCircle className="w-10 h-10 mb-2" />
+                      <p className="font-medium text-sm">{error}</p>
+                      <button onClick={() => fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic)} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10 transition-all">Retry</button>
+                    </div>
+                  )}
+
+                  {/* Voice / Listen Button */}
+                  <div className="mt-4 md:mt-6 flex flex-col items-center gap-3 md:gap-4">
+                    <div className="relative">
+                      {/* Pulsing ripple rings */}
+                      {isListening && (
+                        <>
+                          <div className="ripple-effect" />
+                          <div className="ripple-effect ripple-2" />
+                          <div className="ripple-effect ripple-3" />
+                          <motion.div
+                            animate={{ scale: [1, 1.3, 1] }}
+                            transition={{ repeat: Infinity, duration: 2 }}
+                            className="absolute -inset-6 rounded-full blur-2xl"
+                            style={{ backgroundColor: t.micGlow }}
+                          />
+                        </>
+                      )}
+                      <button
+                        data-cursor="button"
+                        onClick={isListening ? stopListening : startListening}
+                        disabled={isAnswering || isLoading || !currentQuestion}
+                        className="relative z-10 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-xl hover:scale-105 active:scale-90 transition-transform duration-300 group"
+                        style={isListening
+                          ? { backgroundColor: '#EF4444', boxShadow: '0 0 30px rgba(239,68,68,0.4)' }
+                          : { background: `linear-gradient(135deg, ${t.micGradientFrom}, ${t.micGradientTo})`, boxShadow: `0 0 30px ${t.micShadow}` }
+                        }
+                      >
+                        {isListening
+                          ? <MicOff className="w-7 h-7 md:w-9 md:h-9 text-white group-active:scale-90 transition-transform" />
+                          : <Mic className="w-7 h-7 md:w-9 md:h-9 text-white group-active:scale-90 transition-transform" />
+                        }
+                      </button>
+                    </div>
+
+                    {isAnswering ? (
+                      <div className="flex items-center gap-2 font-bold text-sm animate-pulse" style={{ color: t.primary }}>
+                        <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
+                        EVALUATING...
+                      </div>
+                    ) : !isListening && transcript.trim() && isManualStop ? (
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="flex items-center gap-3">
+                          <button
+                            data-cursor="button"
+                            onClick={() => startListening()}
+                            className="px-6 py-2 rounded-full border border-purple-500/30 text-sm font-bold uppercase hover:bg-purple-500/10 transition-all text-purple-400"
+                          >
+                            Resume Answer
+                          </button>
+                          <button
+                            data-cursor="button"
+                            onClick={() => submitAnswer(transcript)}
+                            className="px-6 py-2 rounded-full bg-purple-600 text-sm font-bold uppercase hover:bg-purple-700 transition-all text-white shadow-lg shadow-purple-900/20"
+                          >
+                            Evaluate Now
+                          </button>
+                        </div>
+                        <p className="text-xs opacity-50 italic">Paused. Continue speaking or submit for check.</p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] md:text-sm font-medium tracking-wide opacity-70 group-hover:opacity-100 transition-opacity">
+                        {isListening ? "Listening... speak your answer" :
+                          (transcript.trim() && !showResult) ? "Voice answer ready" : "Tap to answer via voice"}
+                      </p>
                     )}
-                    <button
-                      data-cursor="button"
-                      onClick={isListening ? stopListening : startListening}
-                      disabled={isAnswering || isLoading || !currentQuestion}
-                      className="relative z-10 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center shadow-xl hover:scale-105 active:scale-90 transition-transform duration-300 group"
-                      style={isListening
-                        ? { backgroundColor: '#EF4444', boxShadow: '0 0 30px rgba(239,68,68,0.4)' }
-                        : { background: `linear-gradient(135deg, ${t.micGradientFrom}, ${t.micGradientTo})`, boxShadow: `0 0 30px ${t.micShadow}` }
-                      }
-                    >
-                      {isListening
-                        ? <MicOff className="w-7 h-7 md:w-9 md:h-9 text-white group-active:scale-90 transition-transform" />
-                        : <Mic className="w-7 h-7 md:w-9 md:h-9 text-white group-active:scale-90 transition-transform" />
-                      }
-                    </button>
-                  </div>
 
-                  {isAnswering ? (
-                    <div className="flex items-center gap-2 font-bold text-sm animate-pulse" style={{ color: t.primary }}>
-                      <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
-                      EVALUATING...
-                    </div>
-                  ) : (
-                    <span className="text-xs md:text-sm font-medium" style={{ color: t.textMuted }}>
-                      {isListening ? "Listening... speak your answer" : "Tap to answer via voice"}
-                    </span>
-                  )}
-
-                  {isListening && transcript && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-2 p-4 rounded-xl backdrop-blur-md text-base italic max-w-lg mx-auto leading-relaxed" style={{ background: t.transcriptBg, border: `1px solid ${t.transcriptBorder}`, color: t.transcriptText }}>
-                      &ldquo;{transcript}&rdquo;
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-
-            {/* ── Navigation Controls ── */}
-            <div className="flex items-center gap-3 md:gap-4 max-w-md mx-auto w-full">
-              <button
-                data-cursor="button"
-                onClick={() => nextQuestion()}
-                disabled={isLoading}
-                className="flex-1 py-3 md:py-4 rounded-xl font-bold transition-all active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
-                style={{ background: t.btnSecondaryBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.btnSecondaryBorder}`, color: t.btnSecondaryText }}
-              >
-                Skip Question
-              </button>
-              <button
-                data-cursor="button"
-                onClick={() => { if (showResult) nextQuestion(); else if (isListening) stopListening(); else if (!isAnswering) startListening(); }}
-                className="flex-[2] py-3 md:py-4 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
-                style={{ backgroundColor: isListening ? '#EF4444' : t.btnPrimaryBg, boxShadow: isListening ? '0 10px 25px rgba(239, 68, 68, 0.3)' : `0 10px 25px ${t.micShadow}` }}
-              >
-                {showResult ? "Next Question" : isListening ? "Stop Answering" : "Start Answering"}
-              </button>
-            </div>
-
-            {/* Feedback */}
-            {showResult && feedback && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={cn("p-5 md:p-8 rounded-xl md:rounded-2xl border shadow-2xl text-left relative overflow-hidden", lastIsCorrect ? (isLight ? "border-green-500/30 bg-green-50/50" : "border-green-500/30 bg-green-500/5") : (isLight ? "border-red-500/30 bg-red-50/50" : "border-red-500/30 bg-red-500/5"))}>
-                <div className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16" style={{ background: lastIsCorrect ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' }} />
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center", lastIsCorrect ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500")}>
-                        {lastIsCorrect ? <AnimeIcon Icon={CheckCircle} className="w-7 h-7" animation="jump" selfHover={true} /> : <AnimeIcon Icon={XCircle} className="w-7 h-7" animation="wiggle" selfHover={true} />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textMuted }}>Answer</p>
-                        <h4 className={cn("font-syne text-lg md:text-2xl font-bold", lastIsCorrect ? "text-green-500" : "text-red-500")}>{lastIsCorrect ? "Right" : "Wrong"}</h4>
-                      </div>
-                    </div>
-                    {lastGainedScore > 0 && <Badge className="text-white px-4 py-1.5 rounded-full font-bold shadow-lg text-sm" style={{ backgroundColor: t.primary, border: 'none' }}>+{lastGainedScore} XP</Badge>}
-                  </div>
-                  {/* Explanation */}
-                  <div className="mt-2">
-                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: t.textMuted }}>Explanation</p>
-                    <p className="text-sm md:text-lg leading-relaxed whitespace-pre-wrap" style={{ color: t.textPrimary, opacity: 0.9 }}>{feedback}</p>
+                    {isListening && transcript && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-2 p-4 rounded-xl backdrop-blur-md text-base italic max-w-lg mx-auto leading-relaxed" style={{ background: t.transcriptBg, border: `1px solid ${t.transcriptBorder}`, color: t.transcriptText }}>
+                        &ldquo;{transcript}&rdquo;
+                      </motion.div>
+                    )}
                   </div>
                 </div>
               </motion.div>
-            )}
-          </div>
 
-          {/* ════ RIGHT: Control Sidebar (4 cols) ════ */}
-          <aside className="xl:col-span-4 flex flex-col gap-3 md:sticky md:top-28">
-            {/* Quiz Controls */}
-            <div className="rounded-xl p-4 flex flex-col gap-3 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
-              <div>
-                <h3 className="font-bold mb-2 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
-                  <AnimeIcon Icon={Zap} className="w-5 h-5" style={{ color: t.primary }} animation="jump" selfHover={true} /> Quiz Controls
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: t.textMuted }}>Difficulty</label>
-                    <div className="flex p-1 rounded-lg" style={{ background: t.diffBg, border: `1px solid ${t.diffBorder}` }}>
-                      {["easy", "medium", "hard"].map((level) => (
-                        <button key={level} data-cursor="button" onClick={() => { setSelectedDifficulty(level); if (!isLoading) nextQuestion(level); }} className="flex-1 py-1.5 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize" style={selectedDifficulty === level ? { backgroundColor: t.primary, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } : { color: t.diffInactive }}>{level}</button>
-                      ))}
+              {/* ── Navigation Controls ── */}
+              <div className="flex items-center gap-3 md:gap-4 max-w-md mx-auto w-full">
+                <button
+                  data-cursor="button"
+                  onClick={() => nextQuestion()}
+                  disabled={isLoading}
+                  className="flex-1 py-3 md:py-4 rounded-xl font-bold transition-all active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
+                  style={{ background: t.btnSecondaryBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.btnSecondaryBorder}`, color: t.btnSecondaryText }}
+                >
+                  Skip Question
+                </button>
+                <button
+                  data-cursor="button"
+                  onClick={() => {
+                    if (showResult) nextQuestion();
+                    else if (isListening) stopListening();
+                    else if (!isListening && transcript.trim() && isManualStop) submitAnswer(transcript);
+                    else if (!isAnswering) startListening();
+                  }}
+                  className="flex-[2] py-3 md:py-4 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
+                  style={{
+                    backgroundColor: isListening ? '#EF4444' : (!isListening && transcript.trim() && isManualStop) ? '#10B981' : t.btnPrimaryBg,
+                    boxShadow: isListening ? '0 10px 25px rgba(239, 68, 68, 0.3)' : `0 10px 25px ${t.micShadow}`
+                  }}
+                >
+                  {showResult ? "Next Question"
+                    : isListening ? "Stop Answering"
+                      : (!isListening && transcript.trim() && isManualStop) ? "Evaluate Answer"
+                        : "Start Answering"}
+                </button>
+              </div>
+
+              {/* Feedback */}
+              {showResult && feedback && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={cn("p-5 md:p-8 rounded-xl md:rounded-2xl border shadow-2xl text-left relative overflow-hidden", isTimeout ? "border-amber-500/30 bg-amber-500/5" : lastIsCorrect ? (isLight ? "border-green-500/30 bg-green-50/50" : "border-green-500/30 bg-green-500/5") : (isLight ? "border-red-500/30 bg-red-50/50" : "border-red-500/30 bg-red-500/5"))}>
+                  <div className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16" style={{ background: isTimeout ? 'rgba(245,158,11,0.1)' : lastIsCorrect ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)' }} />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-4 md:mb-6">
+                      <div className="flex items-center gap-3 md:gap-4">
+                        <div className={cn("w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center", isTimeout ? "bg-amber-500/20 text-amber-500" : lastIsCorrect ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500")} data-cursor="card">
+                          {isTimeout
+                            ? <AnimeIcon Icon={Clock} className="w-6 h-6 md:w-7 md:h-7" animation="wiggle" hoverParent={true} />
+                            : lastIsCorrect
+                              ? <AnimeIcon Icon={CheckCircle} className="w-6 h-6 md:w-7 md:h-7" animation="jump" hoverParent={true} />
+                              : <AnimeIcon Icon={XCircle} className="w-6 h-6 md:w-7 md:h-7" animation="wiggle" hoverParent={true} />
+                          }
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textMuted }}>Answer</p>
+                          <h4 className={cn("font-syne text-lg md:text-2xl font-bold", isTimeout ? "text-amber-500" : lastIsCorrect ? "text-green-500" : "text-red-500")}>
+                            {isTimeout ? "Time's Up!" : lastIsCorrect ? "Right" : "Wrong"}
+                          </h4>
+                        </div>
+                      </div>
+                      {lastGainedScore > 0 && <Badge className="text-white px-4 py-1.5 rounded-full font-bold shadow-lg text-sm" style={{ backgroundColor: t.primary, border: 'none' }}>+{lastGainedScore} XP</Badge>}
+                    </div>
+                    {/* Real Answer (if wrong) */}
+                    {!lastIsCorrect && (
+                      <div className="mt-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                        <p className="text-xs font-bold uppercase tracking-wider mb-1 text-green-600 dark:text-green-400">Correct Answer</p>
+                        <p className="text-sm md:text-base font-bold text-green-700 dark:text-green-300">{correctAnswer}</p>
+                      </div>
+                    )}
+
+                    {/* Explanation */}
+                    <div className="mt-4">
+                      <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: t.textMuted }}>Explanation</p>
+                      <p className="text-sm md:text-lg leading-relaxed whitespace-pre-wrap" style={{ color: t.textPrimary, opacity: 0.9 }}>{feedback}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
+            {/* ════ RIGHT: Control Sidebar (4 cols) ════ */}
+            <aside className="xl:col-span-4 flex flex-col gap-3 md:sticky md:top-28">
+              {/* Quiz Controls */}
+              <div className="rounded-xl p-4 flex flex-col gap-3 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
+                <div>
+                  <h3 className="font-bold mb-2 flex items-center gap-2 text-sm md:text-base" style={{ color: t.textPrimary }}>
+                    <AnimeIcon Icon={Zap} className="w-5 h-5" style={{ color: t.primary }} animation="jump" selfHover={true} /> Quiz Controls
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: t.textMuted }}>Difficulty</label>
+                      <div className="flex p-1 rounded-lg" style={{ background: t.diffBg, border: `1px solid ${t.diffBorder}` }}>
+                        {["easy", "medium", "hard"].map((level) => (
+                          <button key={level} data-cursor="button" onClick={() => { setSelectedDifficulty(level); if (!isLoading) nextQuestion(level); }} className="flex-1 py-1.5 text-[10px] md:text-xs font-bold transition-all rounded-md capitalize" style={selectedDifficulty === level ? { backgroundColor: t.primary, color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } : { color: t.diffInactive }}>{level}</button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
+                <hr style={{ borderColor: t.separator }} />
+                {/* Export actions */}
+                <div className="flex flex-col gap-2">
+                  <button data-cursor="button" onClick={downloadPDF} className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg]" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
+                      <span className="text-xs md:text-sm font-medium" style={{ color: t.exportText }}>Export Results PDF</span>
+                    </div>
+                  </button>
+                  <button data-cursor="button" onClick={downloadCSV} className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg]" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
+                      <span className="text-sm font-medium" style={{ color: t.exportText }}>Download CSV</span>
+                    </div>
+                  </button>
+                </div>
               </div>
-              <hr style={{ borderColor: t.separator }} />
-              {/* Export actions */}
-              <div className="flex flex-col gap-2">
-                <button data-cursor="button" onClick={downloadPDF} className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
-                  <div className="flex items-center gap-2 md:gap-3">
-                    <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg]" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
-                    <span className="text-xs md:text-sm font-medium" style={{ color: t.exportText }}>Export Results PDF</span>
-                  </div>
-                </button>
-                <button data-cursor="button" onClick={downloadCSV} className="flex items-center justify-between w-full p-2.5 rounded-lg group transition-all" style={{ background: t.exportBg, border: `1px solid ${t.exportBorder}` }}>
-                  <div className="flex items-center gap-2 md:gap-3">
-                    <AnimeIcon Icon={ArrowLeft} className="w-4 h-4 rotate-[270deg]" style={{ color: t.textMuted }} animation="slide" selfHover={true} />
-                    <span className="text-sm font-medium" style={{ color: t.exportText }}>Download CSV</span>
-                  </div>
-                </button>
-              </div>
-            </div>
 
-            {/* ── Session Statistics Card ── */}
-            <div className="rounded-xl p-4 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
-              <h4 className="font-bold mb-3 text-xs md:text-sm" style={{ color: t.textPrimary }}>Your Session</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
-                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Timer</p>
-                  <p className={cn("text-lg md:text-xl font-bold tabular-nums font-display", timer <= 10 && isListening && "text-red-500")} style={!(timer <= 10 && isListening) ? { color: t.statValue } : undefined}>{isListening ? `0:${timer < 10 ? `0${timer}` : timer}` : "--:--"}</p>
-                </div>
-                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
-                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Score</p>
-                  <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statAccent }}>{score}</p>
-                </div>
-                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
-                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Answered</p>
-                  <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statValue }}>{questionsAnswered}/{SESSION_LENGTH}</p>
-                </div>
-                <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
-                  <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Accuracy</p>
-                  <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statAccent }}>{questionsAnswered > 0 ? Math.round((correctCount / questionsAnswered) * 100) : 0}%</p>
+              {/* ── Session Statistics Card ── */}
+              <div className="rounded-xl p-4 transition-colors duration-500" style={{ background: t.glassBg, backdropFilter: 'blur(12px)', border: `1px solid ${t.glassBorder}` }}>
+                <h4 className="font-bold mb-3 text-xs md:text-sm" style={{ color: t.textPrimary }}>Your Session</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Timer</p>
+                    <p className={cn("text-lg md:text-xl font-bold tabular-nums font-display", timer <= 10 && isListening && "text-red-500")} style={!(timer <= 10 && isListening) ? { color: t.statValue } : undefined}>{isListening ? `0:${timer < 10 ? `0${timer}` : timer}` : "--:--"}</p>
+                  </div>
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Score</p>
+                    <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statAccent }}>{score}</p>
+                  </div>
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Answered</p>
+                    <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statValue }}>{questionsAnswered}/{SESSION_LENGTH}</p>
+                  </div>
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: t.statBg }}>
+                    <p className="text-[10px] font-bold uppercase" style={{ color: t.statLabel }}>Accuracy</p>
+                    <p className="text-lg md:text-xl font-bold font-display" style={{ color: t.statAccent }}>{questionsAnswered > 0 ? Math.round((correctCount / questionsAnswered) * 100) : 0}%</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </aside>
-        </div>
-      </main>
-    </div>
-  );
+            </aside>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!mounted) return null;
 

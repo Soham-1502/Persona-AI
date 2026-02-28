@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "next-themes";
 import {
   Mic, MicOff, Volume2, CheckCircle, XCircle,
-  Zap, ArrowLeft
+  Clock, Zap, ArrowLeft
 } from "lucide-react";
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import { motion } from 'framer-motion';
@@ -44,6 +44,7 @@ const Quiz = () => {
   const [lastIsCorrect, setLastIsCorrect] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [isManualStop, setIsManualStop] = useState(false);
 
   // Session tracking (10 questions per session)
   const SESSION_LENGTH = 10;
@@ -51,6 +52,7 @@ const Quiz = () => {
   const [sessionQCount, setSessionQCount] = useState(0);
   const [sessionScore, setSessionScore] = useState(0);
   const [showSessionEnd, setShowSessionEnd] = useState(false);
+  const [isTimeout, setIsTimeout] = useState(false);
   const questionStartTimeRef = useRef(Date.now());
 
   const [selectedSubject, setSelectedSubject] = useState(null);
@@ -58,11 +60,13 @@ const Quiz = () => {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
 
+  const isTransitioningRef = useRef(false);
   const recognitionRef = useRef(null);
   const currentQuestionRef = useRef({ question: "", answer: "" });
   const seenQuestionsRef = useRef([]);
   const voicesRef = useRef([]);
   const transcriptRef = useRef("");
+  const isManualStopRef = useRef(false);
 
   // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
@@ -157,18 +161,31 @@ const Quiz = () => {
 
     if (!isListening) {
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { } }
+      isTransitioningRef.current = false;
       setTranscript(""); transcriptRef.current = ""; setFeedback(""); setTimer(30); setTimerActive(true);
+      setIsManualStop(false);
 
       let intentionalStop = false;
       let silenceTimer;
-      const startSilenceTimer = () => { clearTimeout(silenceTimer); silenceTimer = setTimeout(() => { intentionalStop = true; recognition.stop(); }, 6000); };
+      const startSilenceTimer = (timeoutMs = 31000) => {
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          isManualStopRef.current = false;
+          recognition.stop();
+        }, timeoutMs);
+      };
 
       const recognition = new SpeechRecognition();
       recognition.continuous = true; recognition.interimResults = true; recognition.lang = "en-US"; recognition.maxAlternatives = 1;
 
-      recognition.onstart = () => setIsListening(true);
+      recognition.onstart = () => {
+        if (recognitionRef.current !== recognition) return;
+        setIsListening(true);
+        startSilenceTimer(31000); // Initial durability: 31s
+      };
       recognition.onresult = (event) => {
-        startSilenceTimer();
+        if (recognitionRef.current !== recognition) return;
+        startSilenceTimer(3000); // Fast evaluation: 3s after speech detection
         let finalTranscript = ""; let interimTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
@@ -178,16 +195,44 @@ const Quiz = () => {
         else if (interimTranscript) setTranscript((transcriptRef.current + " " + interimTranscript).trim());
       };
       recognition.onend = () => {
+        if (recognitionRef.current !== recognition) return;
         clearTimeout(silenceTimer);
-        if (intentionalStop || transcriptRef.current.trim()) {
-          setIsListening(false); recognitionRef.current = null;
-          if (transcriptRef.current.trim()) checkAnswer(transcriptRef.current);
-        } else { try { recognition.start(); } catch { setIsListening(false); recognitionRef.current = null; } }
+
+        if (isManualStopRef.current) {
+          setIsListening(false);
+          recognitionRef.current = null;
+          setIsManualStop(true);
+          return;
+        }
+
+        if (transcriptRef.current.trim()) {
+          setIsListening(false);
+          recognitionRef.current = null;
+          checkAnswer(transcriptRef.current);
+        } else if (!isTransitioningRef.current && timerActive && timer > 0) {
+          // AUTO-RESTART for no-speech/silence
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error("Mic restart failed:", e);
+            setIsListening(false);
+            recognitionRef.current = null;
+          }
+        } else {
+          setIsListening(false);
+          recognitionRef.current = null;
+        }
       };
       recognition.onerror = (event) => {
+        if (recognitionRef.current !== recognition) return;
         clearTimeout(silenceTimer);
+
+        // no-speech often triggers onend immediately after, so we let onend handle the restart
         if (event.error === "no-speech" || event.error === "aborted") return;
-        intentionalStop = true; setIsListening(false); recognitionRef.current = null;
+
+        intentionalStop = true;
+        setIsListening(false);
+        recognitionRef.current = null;
         setFeedback(`Mic Error: ${event.error}`);
       };
       recognition._setIntentionalStop = () => { intentionalStop = true; };
@@ -195,25 +240,26 @@ const Quiz = () => {
     }
   };
 
-  const stopListening = () => {
+  const stopListening = (useAbort = false) => {
+    isManualStopRef.current = true;
+    setTimerActive(false);
+    setIsListening(false);
+    setIsManualStop(true);
+
     if (recognitionRef.current) {
-      setTimerActive(false);
-      // Ensure we capture whatever is in the current transcript state (including interim) before stopping
-      if (transcript && !transcriptRef.current) {
-        transcriptRef.current = transcript;
-      }
       if (recognitionRef.current._setIntentionalStop) recognitionRef.current._setIntentionalStop();
       try {
-        recognitionRef.current.stop();
+        if (useAbort) recognitionRef.current.abort();
+        else recognitionRef.current.stop();
       } catch (e) {
         console.error("Error stopping recognition:", e);
       }
-      setIsListening(false);
+      recognitionRef.current = null;
     }
   };
 
   // ── Evaluate Answer ────────────────────────────────────────
-  const checkAnswer = async (spokenText) => {
+  const checkAnswer = async (spokenText, isTimeoutCall = false) => {
     const { question, answer } = currentQuestionRef.current;
     if (!question) { setFeedback("Error: Missing question data."); setShowResult(true); return; }
 
@@ -226,7 +272,7 @@ const Quiz = () => {
     if (isSkip) {
       const feedbackMsg = "You chose to skip this question.";
       const resultData = { question, correctAnswer: answer, userAnswer: spokenText, isCorrect: false, feedback: feedbackMsg, score: 0 };
-      setFeedback(feedbackMsg); setLastIsCorrect(false);
+      setFeedback(feedbackMsg); setLastIsCorrect(false); setIsTimeout(false);
       setChatHistory((prev) => [...prev, resultData]);
       setSessionQCount(prev => prev + 1);
       setQuestionsAnswered((prev) => prev + 1);
@@ -247,6 +293,7 @@ const Quiz = () => {
 
       if (gainedScore > 0) { setScore((prev) => prev + gainedScore); setSessionScore((prev) => prev + gainedScore); }
       setLastIsCorrect(!!isCorrect);
+      setIsTimeout(isTimeoutCall);
       if (isCorrect) setCorrectCount((prev) => prev + 1);
       setFeedback(evalFeedback); setLastGainedScore(gainedScore || 0);
       setChatHistory((prev) => [...prev, resultData]);
@@ -265,19 +312,26 @@ const Quiz = () => {
     if (!currentQuestion) return;
     try {
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-      const response = await fetch("/api/inquizzo/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: currentQuestion }) });
+      const response = await fetch("/api/inquizzo/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: currentQuestion })
+      });
       if (!response.ok) throw new Error("TTS proxy failed");
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       audio.onended = () => URL.revokeObjectURL(audioUrl);
       audio.play().catch(e => console.error("Audio play failed:", e));
-    } catch {
+    } catch (err) {
+      console.warn("Proxy TTS failed, using browser fallback", err);
       if ("speechSynthesis" in window) {
         const utterance = new SpeechSynthesisUtterance(currentQuestion);
         utterance.rate = 0.95;
         const voices = voicesRef.current.length > 0 ? voicesRef.current : window.speechSynthesis.getVoices();
-        utterance.voice = voices.find((v) => v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Neural"))) || voices[0];
+        // Priority: Natural/Neural voices -> English -> First available
+        utterance.voice = voices.find((v) => v.lang.startsWith("en") && (v.name.includes("Natural") || v.name.includes("Neural"))) ||
+          voices.find((v) => v.lang.startsWith("en")) || voices[0];
         window.speechSynthesis.speak(utterance);
       }
     }
@@ -285,12 +339,9 @@ const Quiz = () => {
 
   // ── Quiz Management ────────────────────────────────────────
   const resetQuiz = (diffOverride = null) => {
+    isTransitioningRef.current = true;
     // Robustly stop any active recognition
-    if (recognitionRef.current) {
-      if (recognitionRef.current._setIntentionalStop) recognitionRef.current._setIntentionalStop();
-      try { recognitionRef.current.abort(); } catch { }
-      recognitionRef.current = null;
-    }
+    stopListening(true);
 
     const validLevels = ["easy", "medium", "hard"];
     const actualOverride = typeof diffOverride === "string" && validLevels.includes(diffOverride) ? diffOverride : null;
@@ -304,6 +355,30 @@ const Quiz = () => {
     setTimer(30);
     setTimerActive(false);
     setError("");
+    setIsTimeout(false);
+    setIsManualStop(false);
+
+    questionStartTimeRef.current = Date.now();
+    getAIQuestion(actualOverride);
+  };
+
+  const nextQuestion = (actualOverride = null) => {
+    isTransitioningRef.current = true; // Set flag to indicate a transition is happening
+    stopListening(true); // Robustly stop any active recognition
+    setIsListening(false);
+    setTranscript("");
+    transcriptRef.current = "";
+    setFeedback("");
+    setShowResult(false);
+    setIsAnswering(false);
+    setTimer(30);
+    setTimerActive(false);
+    setError("");
+    setIsTimeout(false);
+    setIsManualStop(false);
+
+    // CRITICAL: Force stop any active mic before moving to next question
+    stopListening(true);
 
     questionStartTimeRef.current = Date.now();
     getAIQuestion(actualOverride);
@@ -322,18 +397,20 @@ const Quiz = () => {
       return () => clearInterval(countdown);
     } else if (timer === 0 && timerActive) {
       setTimerActive(false);
-      stopListening();
+      // Force immediate mic release on timeout
+      stopListening(true);
 
       const sessionQIdx = sessionQCount;
       const finalTranscript = transcript || transcriptRef.current;
 
       if (finalTranscript) {
-        checkAnswer(finalTranscript);
+        checkAnswer(finalTranscript, true);
       } else {
         // No answer given - Timeout
         const timeTaken = 30;
         setLastGainedScore(0);
         setLastIsCorrect(false);
+        setIsTimeout(true);
         setFeedback("Time's up! The correct answer is: " + correctAnswer);
         setShowResult(true);
 
@@ -391,16 +468,23 @@ const Quiz = () => {
 
     try {
       const data = await makeAuthenticatedRequest("/api/inquizzo/ask", {
-        method: "POST", body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current.slice(-15), difficulty: actualDifficulty }),
+        method: "POST", body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current.slice(-50), difficulty: actualDifficulty }),
       });
 
-      if (seenQuestionsRef.current.includes(data?.question)) {
-        console.warn(`🔄 AI gave a duplicate question. Proceeding anyway rather than looping to avoid latency.`);
+      // Simple retry loop for duplicates (max 3)
+      let currentData = data;
+      let retryCount = 0;
+      while (seenQuestionsRef.current.includes(currentData?.question) && retryCount < 3) {
+        console.warn(`🔄 AI gave a duplicate question (Attempt ${retryCount + 1}). Retrying...`);
+        retryCount++;
+        currentData = await makeAuthenticatedRequest("/api/inquizzo/ask", {
+          method: "POST", body: JSON.stringify({ topic: randomTopic, seenQuestions: seenQuestionsRef.current.slice(-50), difficulty: actualDifficulty }),
+        });
       }
 
-      if (data?.question) {
-        setCurrentQuestion(data.question); setCorrectAnswer(data.answer);
-        saveSeenQuestion(data.question);
+      if (currentData?.question) {
+        setCurrentQuestion(currentData.question); setCorrectAnswer(currentData.answer);
+        saveSeenQuestion(currentData.question);
         setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsAnswering(false);
         questionStartTimeRef.current = Date.now();
       } else throw new Error("Invalid data");
@@ -448,14 +532,61 @@ const Quiz = () => {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    doc.text("InQuizzo Random Practice Results", 20, 20);
-    doc.text(`Score: ${score}`, 20, 30);
-    let y = 40;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - 2 * margin;
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(45, 38, 64);
+    doc.text("InQuizzo Quiz Report", margin, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Date: ${new Date().toLocaleDateString()} | Total Score: ${score} XP`, margin, 28);
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, 32, pageWidth - margin, 32);
+
+    let y = 45;
     chatHistory.forEach((entry, index) => {
-      if (y > 270) { doc.addPage(); y = 20; }
-      doc.text(`Q${index + 1}: ${entry.question.substring(0, 70)}`, 20, y); y += 10;
+      // Check if we need a new page
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+
+      // Question Number & Text
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(45, 38, 64);
+      const questionText = `Q${index + 1}: ${entry.question}`;
+      const splitQuestion = doc.splitTextToSize(questionText, contentWidth);
+      doc.text(splitQuestion, margin, y);
+      y += (splitQuestion.length * 6);
+
+      // Your Answer
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`Your Answer: ${entry.userAnswer || "(No Answer)"}`, margin + 5, y);
+      y += 6;
+
+      // Correct Answer
+      doc.text(`Correct Answer: ${entry.correctAnswer}`, margin + 5, y);
+      y += 6;
+
+      // Result
+      const isCorrect = entry.isCorrect;
+      if (isCorrect) doc.setTextColor(16, 185, 129); // Green
+      else doc.setTextColor(239, 68, 68); // Red
+      doc.setFont("helvetica", "bold");
+      doc.text(`Result: ${isCorrect ? "Correct" : "Incorrect"}`, margin + 5, y);
+
+      y += 15; // Spacing between questions
     });
-    doc.save("quiz_results.pdf");
+
+    doc.save(`InQuizzo_Results_${new Date().getTime()}.pdf`);
   };
 
   // ── Derived ────────────────────────────────────────────────
@@ -686,7 +817,18 @@ const Quiz = () => {
               )}
 
               {/* Question text */}
-              <h2 className="font-syne text-lg sm:text-lg md:text-xl lg:text-2xl xl:text-3xl 2xl:text-4xl font-semibold leading-tight max-w-2xl mt-12 md:mt-10 transition-colors duration-500" style={{ fontFamily: "'Raleway', sans-serif", color: t.textPrimary }}>
+              <h2
+                className="font-syne font-semibold leading-tight max-w-2xl mt-12 md:mt-10 transition-all duration-300"
+                style={{
+                  fontFamily: "'Raleway', sans-serif",
+                  color: t.textPrimary,
+                  fontSize: !currentQuestion ? '1.5rem' :
+                    currentQuestion.length > 200 ? '1.25rem' :
+                      currentQuestion.length > 120 ? '1.5rem' :
+                        currentQuestion.length > 80 ? '1.875rem' :
+                          '2.25rem'
+                }}
+              >
                 {isLoading ? (
                   <div className="flex items-center justify-center gap-4">
                     <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
@@ -734,10 +876,31 @@ const Quiz = () => {
                     <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: t.primary, borderTopColor: 'transparent' }} />
                     EVALUATING...
                   </div>
+                ) : !isListening && transcript.trim() && isManualStop ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        data-cursor="button"
+                        onClick={() => startListening()}
+                        className="px-6 py-2 rounded-full border border-purple-500/30 text-sm font-bold uppercase hover:bg-purple-500/10 transition-all text-purple-400"
+                      >
+                        Resume Answer
+                      </button>
+                      <button
+                        data-cursor="button"
+                        onClick={() => checkAnswer(transcript)}
+                        className="px-6 py-2 rounded-full bg-purple-600 text-sm font-bold uppercase hover:bg-purple-700 transition-all text-white shadow-lg shadow-purple-900/20"
+                      >
+                        Evaluate Now
+                      </button>
+                    </div>
+                    <p className="text-xs opacity-50 italic">Paused. You can continue speaking or submit for check.</p>
+                  </div>
                 ) : (
-                  <span className="text-xs md:text-sm font-medium" style={{ color: t.textMuted }}>
-                    {isListening ? "Listening... speak your answer" : "Tap to answer via voice"}
-                  </span>
+                  <p className="text-[10px] md:text-sm font-medium tracking-wide opacity-70 group-hover:opacity-100 transition-opacity">
+                    {isListening ? "Listening... speak your answer" :
+                      (transcript.trim() && !showResult) ? "Voice answer ready" : "Tap to answer via voice"}
+                  </p>
                 )}
 
                 {/* Live transcript */}
@@ -772,14 +935,22 @@ const Quiz = () => {
                     resetQuiz();
                   } else if (isListening) {
                     stopListening();
+                  } else if (!isListening && transcript.trim() && isManualStop) {
+                    checkAnswer(transcript);
                   } else if (!isAnswering) {
                     startListening();
                   }
                 }}
                 className="flex-[2] py-3 md:py-4 rounded-xl font-bold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.98] text-sm md:text-base whitespace-nowrap"
-                style={{ backgroundColor: isListening ? '#EF4444' : t.btnPrimaryBg, boxShadow: isListening ? '0 10px 25px rgba(239, 68, 68, 0.3)' : `0 10px 25px ${t.micShadow}` }}
+                style={{
+                  backgroundColor: isListening ? '#EF4444' : (!isListening && transcript.trim() && isManualStop) ? '#10B981' : t.btnPrimaryBg,
+                  boxShadow: isListening ? '0 10px 25px rgba(239, 68, 68, 0.3)' : `0 10px 25px ${t.micShadow}`
+                }}
               >
-                {showResult ? "Next Question" : isListening ? "Stop Answering" : "Start Answering"}
+                {showResult ? "Next Question"
+                  : isListening ? "Stop Answering"
+                    : (!isListening && transcript.trim() && isManualStop) ? "Evaluate Answer"
+                      : "Start Answering"}
               </button>
             </div>
 
@@ -790,7 +961,7 @@ const Quiz = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
                   "p-5 md:p-8 rounded-xl md:rounded-2xl border shadow-2xl text-left relative overflow-hidden",
-                  isCorrectResult ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5"
+                  isTimeout ? "border-amber-500/30 bg-amber-500/5" : isCorrectResult ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5"
                 )}
               >
                 <div className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16" style={{ backgroundColor: isLight ? 'rgba(101,90,124,0.05)' : 'rgba(255,255,255,0.05)' }} />
@@ -798,28 +969,24 @@ const Quiz = () => {
                   {/* Answer status */}
                   <div className="flex items-center justify-between mb-4 md:mb-6">
                     <div className="flex items-center gap-3 md:gap-4">
-                      <div className={cn("w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center", isCorrectResult ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500")} data-cursor="card">
-                        {isCorrectResult
-                          ? <AnimeIcon Icon={CheckCircle} className="w-6 h-6 md:w-7 md:h-7" animation="jump" hoverParent={true} />
-                          : <AnimeIcon Icon={XCircle} className="w-6 h-6 md:w-7 md:h-7" animation="wiggle" hoverParent={true} />
+                      <div className={cn("w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center", isTimeout ? "bg-amber-500/20 text-amber-500" : isCorrectResult ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500")} data-cursor="card">
+                        {isTimeout
+                          ? <AnimeIcon Icon={Clock} className="w-6 h-6 md:w-7 md:h-7" animation="wiggle" hoverParent={true} />
+                          : isCorrectResult
+                            ? <AnimeIcon Icon={CheckCircle} className="w-6 h-6 md:w-7 md:h-7" animation="jump" hoverParent={true} />
+                            : <AnimeIcon Icon={XCircle} className="w-6 h-6 md:w-7 md:h-7" animation="wiggle" hoverParent={true} />
                         }
                       </div>
                       <div>
                         <p className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textMuted }}>Answer</p>
-                        <h4 className={cn("font-syne text-lg md:text-2xl font-bold", isCorrectResult ? "text-green-500" : "text-red-500")}>
-                          {isCorrectResult ? "Right" : "Wrong"}
+                        <h4 className={cn("font-syne text-lg md:text-2xl font-bold", isTimeout ? "text-amber-500" : isCorrectResult ? "text-green-500" : "text-red-500")}>
+                          {isTimeout ? "Time's Up!" : isCorrectResult ? "Right" : "Wrong"}
                         </h4>
                       </div>
                     </div>
                     {lastGainedScore > 0 && (
                       <Badge className="text-white px-3 md:px-4 py-1 md:py-1.5 rounded-full font-bold shadow-lg text-xs md:text-sm" style={{ backgroundColor: t.primary }}>+{lastGainedScore} XP</Badge>
                     )}
-                  </div>
-
-                  {/* Explanation */}
-                  <div className="mt-2">
-                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: t.textMuted }}>Explanation</p>
-                    <p className="text-sm md:text-lg leading-relaxed whitespace-pre-wrap" style={{ color: isLight ? 'rgba(45,38,64,0.8)' : 'rgba(255,255,255,0.8)' }}>{feedback}</p>
                   </div>
 
                   {/* Real Answer (if wrong) */}
@@ -829,6 +996,12 @@ const Quiz = () => {
                       <p className="text-sm md:text-base font-bold text-green-700 dark:text-green-300">{correctAnswer}</p>
                     </div>
                   )}
+
+                  {/* Explanation */}
+                  <div className="mt-4">
+                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: t.textMuted }}>Explanation</p>
+                    <p className="text-sm md:text-lg leading-relaxed whitespace-pre-wrap" style={{ color: isLight ? 'rgba(45,38,64,0.8)' : 'rgba(255,255,255,0.8)' }}>{feedback}</p>
+                  </div>
                 </div>
               </motion.div>
             )}
