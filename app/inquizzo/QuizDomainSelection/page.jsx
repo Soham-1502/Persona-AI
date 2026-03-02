@@ -16,7 +16,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import Lottie from 'lottie-react';
 import { cn } from "@/lib/utils";
 import { useRouter } from 'next/navigation';
 import { useTheme } from "next-themes";
