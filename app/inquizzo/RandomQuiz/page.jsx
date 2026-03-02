@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import { motion } from 'framer-motion';
-import Lottie from 'lottie-react';
 import Header from '@/app/components/shared/header/Header.jsx';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import { Badge } from "@/components/ui/badge";
