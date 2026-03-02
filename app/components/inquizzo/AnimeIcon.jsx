@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useCallback } from 'react';
-import anime from 'animejs';
+import { animate } from 'animejs';
 
 /**
  * AnimeIcon — Lucide React icon wrapper with anime.js hover animations.
@@ -24,58 +24,50 @@ import anime from 'animejs';
 
 const ANIMATIONS = {
     bounce: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             scale: [1, 1.35, 0.9, 1.1, 1],
             duration: 600,
             easing: 'easeOutElastic(1, .5)',
         }),
     pulse: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             scale: [1, 1.25, 1],
             opacity: [1, 0.8, 1],
             duration: 500,
             easing: 'easeInOutSine',
         }),
     spin: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             rotate: '1turn',
             duration: 600,
             easing: 'easeInOutCubic',
         }),
     wiggle: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             rotate: [0, -15, 15, -10, 10, -5, 0],
             duration: 500,
             easing: 'easeInOutSine',
         }),
     slide: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             translateX: [0, 6, 0],
             duration: 400,
             easing: 'easeInOutQuad',
         }),
     jump: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             translateY: [0, -8, 0],
             duration: 450,
             easing: 'easeOutBounce',
         }),
     shake: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             translateX: [0, -4, 4, -3, 3, 0],
             duration: 400,
             easing: 'easeInOutSine',
         }),
     flip: (el) =>
-        anime({
-            targets: el,
+        animate(el, {
             rotateY: [0, 180, 360],
             duration: 600,
             easing: 'easeInOutQuad',
