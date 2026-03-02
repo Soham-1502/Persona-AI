@@ -12,7 +12,6 @@ import { motion } from 'framer-motion';
 import Lottie from 'lottie-react';
 import Header from '@/app/components/shared/header/Header.jsx';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { jsPDF } from "jspdf";
@@ -723,11 +722,10 @@ const Quiz = () => {
 
   return (
     <div
-      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
+      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500", !isLight && "iq-mesh-bg")}
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
-      <CursorAura />
 
       {/* ── Ambient orbs ── */}
       {isLight ? (
@@ -740,12 +738,12 @@ const Quiz = () => {
           <div className="absolute top-[10%] left-[45%] w-[300px] h-[300px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#655A7C', opacity: 0.35 }} />
         </>
       ) : (
-        <>
+        <div className="fixed inset-0 pointer-events-none overflow-hidden text-center z-0">
           {/* Dark mode: original orbs */}
           <div className="absolute -top-20 -left-20 w-[400px] h-[400px] blur-[80px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: t.orb1 }} />
           <div className="absolute bottom-10 right-10 w-[300px] h-[300px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb2 }} />
           <div className="absolute top-1/2 left-1/3 w-[250px] h-[250px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb3 }} />
-        </>
+        </div>
       )}
 
       <Header

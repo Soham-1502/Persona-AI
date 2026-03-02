@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 
 export function SidebarLayout({ children }) {
   const pathname = usePathname();
-  
+
   // Define routes where sidebar should be hidden
   const authRoutes = ['/login', '/signup', '/forgot-password'];
   const shouldHideSidebar = authRoutes.some(route => pathname.startsWith(route));
@@ -19,7 +19,7 @@ export function SidebarLayout({ children }) {
   // Otherwise, render with sidebar
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full">
+      <div className="flex min-h-screen w-full">
         <AppSidebar />
         <main className="w-full">{children}</main>
       </div>

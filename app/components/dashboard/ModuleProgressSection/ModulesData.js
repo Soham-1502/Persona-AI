@@ -29,8 +29,9 @@ export const modulesData = [
     name: "InQuizzo",
     icon: "Brain",
     submodules: [
-      { id: "warmup", name: "Warm-up Quizzes", progress: 100 },
-      { id: "timed", name: "Timed Speaking", progress: 40 },
+      { id: "accuracy", name: "Quiz Accuracy", progress: 0 },
+      { id: "questions", name: "Questions Answered", progress: 0 },
+      { id: "sessions", name: "Sessions Played", progress: 0 },
     ],
   },
   {

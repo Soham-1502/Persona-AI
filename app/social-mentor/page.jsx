@@ -48,9 +48,9 @@ export default function SocialMentorPage() {
     });
 
     return (
-        <div className="w-full h-screen flex flex-col overflow-hidden bg-background">
+        <div className="w-full h-screen flex flex-col bg-background">
             {/* Header Section */}
-            <div className="shrink-0">
+            <div className="sticky top-0 z-50 w-full shrink-0">
                 <Header
                     DateValue="Interactive"
                     onDateChange={() => { }}

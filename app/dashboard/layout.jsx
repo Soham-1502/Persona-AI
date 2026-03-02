@@ -2,24 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAuthenticated, clearAuth } from '@/lib/auth-client';
 
 export default function DashboardLayout({ children }) {
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authenticated, setIsAuthenticatedState] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      // No token, redirect to login
+    // Check if user is logged in AND token is not expired
+    if (!isAuthenticated()) {
+      // Token is either missing, invalid, or expired. 
+      // isAuthenticated() automatically securely clears it if it was expired.
       router.push('/login');
     } else {
-      // Token exists, allow access
-      setIsAuthenticated(true);
+      // Token exists and is valid
+      setIsAuthenticatedState(true);
     }
-    
+
     setIsLoading(false);
   }, [router]);
 
@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }) {
   }
 
   // Only render children if authenticated
-  if (!isAuthenticated) {
+  if (!authenticated) {
     return null;
   }
 

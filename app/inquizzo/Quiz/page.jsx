@@ -282,7 +282,6 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
-import CursorGlow from '@/app/components/inquizzo/effects/CursorGlow'
 import { AnimatedIcon } from '@/app/components/inquizzo/AnimatedIcon'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
@@ -436,8 +435,6 @@ export default function QuizBrowser() {
           <rect width="100%" height="100%" filter="url(#noise)" />
         </svg>
       </div>
-
-      <CursorGlow />
 
       <Header
         DateValue="last7"

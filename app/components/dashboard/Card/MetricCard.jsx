@@ -1,6 +1,51 @@
-// components/dashboard/MetricCard.jsx
-import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+// components/dashboard/Card/MetricCard.jsx
+'use client';
+
+import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
+import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+
+// Inquizzo-synced theme tokens
+const lightTokens = {
+  cardBg: 'var(--card)',
+  cardBorder: 'var(--border)',
+  primary: '#9067C6',
+  primaryLight: '#8D86C9',
+  textPrimary: '#242038',
+  textMuted: '#655A7C',
+};
+
+const darkTokens = {
+  cardBg: 'var(--card)',
+  cardBorder: 'var(--border)',
+  primary: '#934cf0',
+  primaryLight: '#934cf0',
+  textPrimary: '#ffffff',
+  textMuted: '#94A3B8',
+};
+
+const dateLabels = {
+  today: 'Today',
+  last7: 'This Week',
+  last30: 'This Month',
+};
+
+const badgeToneConfig = {
+  positive: {
+    icon: TrendingUp,
+    color: '#10b981',
+  },
+  negative: {
+    icon: TrendingDown,
+    color: '#f43f5e',
+  },
+  neutral: {
+    icon: Minus,
+    color: '#94A3B8',
+  },
+};
 
 export default function MetricCard({
   icon: Icon,
@@ -8,55 +53,84 @@ export default function MetricCard({
   value,
   subtitle,
   badgeText,
-  badgeTone = "positive",
+  badgeTone = 'positive',
   className,
 }) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const t = isLight ? lightTokens : darkTokens;
 
-  // Mappings for Subtitle
-  const selectedDate = {
-    today : "Today",
-    last7 : "This Week",
-    last30 : "This Month"
-  }
+  const badge = badgeToneConfig[badgeTone] ?? badgeToneConfig.positive;
+  const BadgeIcon = badge.icon;
 
   return (
-    <Card
+    <motion.div
+      whileHover={{ y: -5, borderColor: t.primary }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className={cn(
-        "h-45 w-full rounded-2xl bg-card cursor-pointer",
-        "dark:bg-card dark:text-card-foreground",
-        "flex flex-col justify-between px-6 py-4 gap-3",
+        'backdrop-blur-[12px] border rounded-2xl p-5 flex flex-col gap-4 cursor-pointer shadow-xl group transition-all duration-300 h-full',
         className
       )}
+      data-cursor="card"
+      style={{
+        backgroundColor: t.cardBg,
+        borderColor: t.cardBorder,
+        boxShadow: `0 10px 30px -15px ${isLight ? 'rgba(0,0,0,0.1)' : t.primary + '22'}`,
+      }}
     >
-      {/* top row: icon + badge */}
-      <div className="flex items-start justify-between">
-        <div className="w-10 h-10 rounded-2xl border bg-persona-purple/10 text-persona-purple flex items-center justify-center">
-          <Icon className="w-5 h-5" />
+      {/* Top row: label + animated icon */}
+      <div className="flex items-center justify-between">
+        <span
+          className="text-xs font-bold uppercase tracking-[0.2em]"
+          style={{ color: t.textMuted }}
+        >
+          {label}
+        </span>
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          style={{
+            backgroundColor: t.primary + '1A',
+            border: `1px solid ${t.primary}33`,
+          }}
+        >
+          <AnimeIcon
+            Icon={Icon}
+            className="size-5"
+            animation="pulse"
+            hoverParent={true}
+            color={t.primary}
+          />
         </div>
+      </div>
+
+      {/* Value */}
+      <div
+        className="text-3xl sm:text-4xl font-black tracking-tight"
+        style={{ color: t.textPrimary }}
+      >
+        {value}
+      </div>
+
+      {/* Bottom: badge + subtitle */}
+      <div className="flex items-center justify-between mt-auto">
         {badgeText && (
-          <span
-            className={cn(
-              "px-3 py-1 rounded-full text-[12px] font-semibold",
-              "bg-emerald-50 text-emerald-600",
-              badgeTone === "neutral" && "bg-slate-100 text-slate-600",
-              badgeTone === "negative" && "bg-rose-50 text-rose-600"
-            )}
+          <div
+            className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"
+            style={{ color: badge.color }}
           >
+            <BadgeIcon className="size-3" />
             {badgeText}
+          </div>
+        )}
+        {subtitle && (
+          <span
+            className="text-[11px] font-medium ml-auto"
+            style={{ color: t.textMuted }}
+          >
+            {dateLabels[subtitle] ?? subtitle}
           </span>
         )}
       </div>
-
-      {/* bottom: value + labels */}
-      <div>
-        <div className="text-4xl font-extrabold tracking-tight text-persona-ink">
-          {value}
-        </div>
-        <div className="mt-1 text-md font-semibold text-persona-ink/80">
-          {label}
-        </div>
-        <div className="text-sm text-persona-ink/45">{selectedDate[subtitle]}</div>
-      </div>
-    </Card>
+    </motion.div>
   );
 }
