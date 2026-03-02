@@ -543,7 +543,7 @@ const QuizDomainSelection = () => {
 
   // ─── RENDER: DOMAIN SELECTION ──────────────────────────────────────────────
   const renderDomainSelection = () => (
-    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-10 md:mt-20 text-left">
+    <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn text-left">
       <div className="mb-8">
         <button
           onClick={() => router.push('/inquizzo')}
@@ -598,7 +598,7 @@ const QuizDomainSelection = () => {
   const renderCategorySelection = () => {
     const domain = QUIZ_STRUCTURE[selectedDomain];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-10 md:mt-20 text-left">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn text-left">
         <div className="mb-12">
           <button onClick={() => { setCurrentView("domains"); setSelectedDomain(null); updateURL(null, null, null, null); }} className="flex items-center gap-2 text-sm transition-colors mb-6 group" style={{ color: t.textMuted }}>
             <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} /> Back to Domains
@@ -638,7 +638,7 @@ const QuizDomainSelection = () => {
   const renderSubCategorySelection = () => {
     const category = QUIZ_STRUCTURE[selectedDomain].categories[selectedCategory];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-6 md:mt-12 text-left">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn text-left">
         <div className="mb-12">
           <button onClick={() => { setCurrentView("categories"); setSelectedCategory(null); updateURL(selectedDomain, null, null, null); }} className="flex items-center gap-2 text-sm transition-colors mb-6 group" style={{ color: t.textMuted }}>
             <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} /> Back to Categories
@@ -669,7 +669,7 @@ const QuizDomainSelection = () => {
   const renderTopicSelection = () => {
     const subCat = QUIZ_STRUCTURE[selectedDomain].categories[selectedCategory].subCategories[selectedSubCategory];
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn mt-6 md:mt-12 text-left">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-6 animate-fadeIn text-left">
         <div className="mb-12">
           <button onClick={() => { setCurrentView("subCategories"); setSelectedSubCategory(null); updateURL(selectedDomain, selectedCategory, null, null); }} className="flex items-center gap-2 text-sm transition-colors mb-6 group" style={{ color: t.textMuted }}>
             <AnimeIcon Icon={ArrowLeft} className="w-4 h-4" animation="slide" selfHover={true} /> Back to Sub-Categories

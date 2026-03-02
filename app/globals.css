@@ -51,126 +51,195 @@
   --radius: 0.625rem;
 
   /* ========================================
-     PERSONAAI / INQUIZZO GLOBAL THEME (Light)
+     PERSONAAI THEME
+     Palette: #242038 - #9067C6 - #8D86C9 - #CAC4CE - #F7ECE1
      ======================================== */
 
   /* Background & Surface Colors */
-  --background: oklch(0.985 0.005 290); /* Very clean, almost white with a hint of purple */
-  --foreground: oklch(0.22 0.05 285); /* #242038 - Deep text */
+  --background: oklch(0.977 0.005 60);
+  /* #F7ECE1 - Cream background */
+  --foreground: oklch(0.225 0.028 285);
+  /* #242038 - Deep purple text */
 
-  --card: oklch(1 0 0); /* Pure white cards for high contrast */
-  --card-foreground: oklch(0.22 0.05 285);
+  --card: oklch(1 0 0);
+  /* White cards */
+  --card-foreground: oklch(0.225 0.028 285);
+  /* #242038 - Card text */
 
-  --popover: oklch(1 0 0); /* Pure white popovers */
-  --popover-foreground: oklch(0.22 0.05 285);
+  --popover: oklch(1 0 0);
+  /* White popovers */
+  --popover-foreground: oklch(0.225 0.028 285);
+  /* #242038 - Popover text */
 
-  /* Primary Colors - Inquizzo Purple */
-  --primary: oklch(0.56 0.14 285); /* #9067C6 */
+  /* Primary Colors - Vibrant Purple (#9067C6) */
+  --primary: oklch(0.565 0.145 285);
+  /* #9067C6 - Main accent */
   --primary-foreground: oklch(1 0 0);
+  /* White text on purple */
 
-  /* Secondary Colors */
-  --secondary: oklch(0.92 0.04 290); /* Soft secondary background */
-  --secondary-foreground: oklch(0.22 0.05 285);
+  /* Secondary Colors - Soft Indigo (#8D86C9) */
+  --secondary: oklch(0.595 0.085 285);
+  /* #8D86C9 - Soft accent */
+  --secondary-foreground: oklch(1 0 0);
+  /* White text on indigo */
 
-  /* Muted Colors */
-  --muted: oklch(0.85 0.03 290); /* Subtly tinted grey */
-  --muted-foreground: oklch(0.45 0.06 285); /* #655A7C */
+  /* Muted Colors - Light Grey (#CAC4CE) */
+  --muted: oklch(0.82 0.012 285);
+  /* #CAC4CE - Muted background */
+  --muted-foreground: oklch(0.225 0.028 285);
+  /* #242038 - Muted text */
 
-  /* Accent Colors */
-  --accent: oklch(0.85 0.08 100); /* #D6CA98 */
-  --accent-foreground: oklch(0.22 0.05 285);
+  /* Accent Colors - Using primary purple */
+  --accent: oklch(0.565 0.145 285);
+  /* #9067C6 - Accent */
+  --accent-foreground: oklch(1 0 0);
+  /* White text */
 
   /* Utility Colors */
-  --destructive: oklch(0.57 0.24 27);
+  --destructive: oklch(0.577 0.245 27.325);
+  /* Red for errors */
   --destructive-foreground: oklch(1 0 0);
+  /* White text */
 
-  --border: oklch(0.85 0.04 290); /* rgba(101, 90, 124, 0.22) equivalent */
-  --input: oklch(0.95 0.02 290);
-  --ring: oklch(0.56 0.14 285);
+  --border: oklch(0.82 0.012 285);
+  /* #CAC4CE - Borders */
+  --input: oklch(0.922 0.008 285);
+  /* Light input background */
+  --ring: oklch(0.565 0.145 285);
+  /* #9067C6 - Focus rings */
 
-  /* Chart Colors */
-  --chart-1: oklch(0.56 0.14 285);
-  --chart-2: oklch(0.66 0.10 285);
-  --chart-3: oklch(0.85 0.08 100);
-  --chart-4: oklch(0.93 0.08 180);
-  --chart-5: oklch(0.81 0.03 255);
+  /* Chart Colors - PersonaAI themed */
+  --chart-1: oklch(0.565 0.145 285);
+  /* #9067C6 - Primary purple */
+  --chart-2: oklch(0.595 0.085 285);
+  /* #8D86C9 - Soft indigo */
+  --chart-3: oklch(0.225 0.028 285);
+  /* #242038 - Deep purple */
+  --chart-4: oklch(0.82 0.012 285);
+  /* #CAC4CE - Light grey */
+  --chart-5: oklch(0.977 0.005 60);
+  /* #F7ECE1 - Cream */
 
-  /* SIDEBAR - Pure White (Light Mode option 4) */
-  --sidebar: oklch(1 0 0); /* Pure white */
-  --sidebar-foreground: oklch(0.22 0.05 285); /* Deep purple-ink text */
-  --sidebar-primary: oklch(0.56 0.14 285); /* Purple active bg */
-  --sidebar-primary-foreground: oklch(1 0 0); /* White text on active */
-  --sidebar-accent: oklch(0.94 0.03 290); /* Soft purple tint on hover */
-  --sidebar-accent-foreground: oklch(0.22 0.05 285);
-  --sidebar-border: oklch(0.88 0.04 290); /* Subtle purple border */
-  --sidebar-ring: oklch(0.56 0.14 285);
+  /* SIDEBAR - PersonaAI Style (Dark sidebar) */
+  --sidebar: oklch(0.225 0.028 285);
+  /* #242038 - Dark purple */
+  --sidebar-foreground: oklch(0.977 0.005 60);
+  /* #F7ECE1 - Cream text */
+  --sidebar-primary: oklch(0.565 0.145 285);
+  /* #9067C6 - Active item */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  /* White text */
+  --sidebar-accent: oklch(0.595 0.085 285);
+  /* #8D86C9 - Hover accent */
+  --sidebar-accent-foreground: oklch(1 0 0);
+  /* White text */
+  --sidebar-border: oklch(0.82 0.012 285);
+  /* #CAC4CE - Border */
+  --sidebar-ring: oklch(0.565 0.145 285);
+  /* #9067C6 - Focus ring */
 
   /* ScrollBar Colour */
-  --scrollbar-colour: oklch(0.75 0.08 285);
-  --scrollbar-hover: oklch(0.56 0.14 285);
+  --scrollbar-colour: oklch(0.82 0.012 285);
+  /* visible but subtle */
+  --scrollbar-hover: oklch(0.565 0.145 285);
+  /* purple hover */
 }
 
 .dark {
   /* ========================================
-     INQUIZZO ARGON DARK THEME
+     DARK MODE - Inverted PersonaAI Theme
      ======================================== */
 
   /* Background & Surface Colors */
-  --background: oklch(0.15 0.04 290); /* Near black/magenta (#0A080D) */
-  --foreground: oklch(0.98 0 0);      /* #FFFFFF */
+  --background: oklch(0.225 0.028 285);
+  /* #242038 - Deep purple background */
+  --foreground: oklch(0.977 0.005 60);
+  /* #F7ECE1 - Cream text */
 
-  --card: oklch(0.22 0.06 295);       /* rgba(24, 16, 34, 0.4) */
-  --card-foreground: oklch(0.98 0 0);
+  --card: oklch(0.28 0.028 285);
+  /* Slightly lighter purple cards */
+  --card-foreground: oklch(0.977 0.005 60);
+  /* #F7ECE1 - Card text */
 
-  --popover: oklch(0.22 0.06 295);
-  --popover-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.28 0.028 285);
+  /* Dark purple popovers */
+  --popover-foreground: oklch(0.977 0.005 60);
+  /* Cream text */
 
-  /* Primary Colors - Inquizzo Purple */
-  --primary: oklch(0.50 0.18 290);    /* #934CF0 */
-  --primary-foreground: oklch(0.98 0 0);
+  /* Primary Colors - Brighter in dark mode */
+  --primary: oklch(0.665 0.165 285);
+  /* Brighter #9067C6 */
+  --primary-foreground: oklch(1 0 0);
+  /* White text */
 
   /* Secondary Colors */
-  --secondary: oklch(0.30 0.12 290);  /* rgba(147, 76, 240, 0.15) */
-  --secondary-foreground: oklch(0.85 0.05 290);
+  --secondary: oklch(0.395 0.045 285);
+  /* Darker indigo */
+  --secondary-foreground: oklch(0.977 0.005 60);
+  /* Cream text */
 
   /* Muted Colors */
-  --muted: oklch(0.25 0.08 290);
-  --muted-foreground: oklch(0.65 0.08 260); /* #94A3B8 shifted slightly */
+  --muted: oklch(0.395 0.028 285);
+  /* Dark muted */
+  --muted-foreground: oklch(0.82 0.012 285);
+  /* #CAC4CE - Muted text */
 
   /* Accent Colors */
-  --accent: oklch(0.50 0.18 290);     /* #934CF0 */
-  --accent-foreground: oklch(0.98 0 0);
+  --accent: oklch(0.595 0.085 285);
+  /* #8D86C9 - Accent */
+  --accent-foreground: oklch(1 0 0);
+  /* White text */
 
   /* Utility Colors */
-  --destructive: oklch(0.60 0.20 22);
-  --destructive-foreground: oklch(0.98 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  /* Lighter red for dark mode */
+  --destructive-foreground: oklch(1 0 0);
+  /* White text */
 
-  --border: oklch(0.35 0.10 290);     /* rgba(255, 255, 255, 0.1) approx */
-  --input: oklch(0.25 0.08 290);
-  --ring: oklch(0.50 0.18 290);
+  --border: oklch(1 0 0 / 10%);
+  /* Semi-transparent white border */
+  --input: oklch(1 0 0 / 15%);
+  /* Semi-transparent input */
+  --ring: oklch(0.665 0.165 285);
+  /* Bright purple focus ring */
 
-  /* Chart Colors */
-  --chart-1: oklch(0.50 0.18 290);
-  --chart-2: oklch(0.60 0.25 330);    /* Pink accent */
-  --chart-3: oklch(0.40 0.18 260);    /* Indigo accent */
-  --chart-4: oklch(0.70 0.15 200);    /* Mint/Blue accent */
-  --chart-5: oklch(0.85 0.05 290);
+  /* Chart Colors - Adjusted for dark mode */
+  --chart-1: oklch(0.665 0.165 285);
+  /* Bright purple */
+  --chart-2: oklch(0.695 0.125 285);
+  /* Bright indigo */
+  --chart-3: oklch(0.82 0.012 285);
+  /* Light grey */
+  --chart-4: oklch(0.595 0.085 285);
+  /* Soft indigo */
+  --chart-5: oklch(0.977 0.005 60);
+  /* Cream accent */
 
-  /* SIDEBAR - Dark mode matches the deep background */
-  --sidebar: oklch(0.18 0.05 290);
-  --sidebar-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.50 0.18 290);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.25 0.08 290);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.35 0.10 290);
-  --sidebar-ring: oklch(0.50 0.18 290);
+  /* SIDEBAR - Dark mode */
+  --sidebar: oklch(0.18 0.028 285);
+  /* Even darker purple */
+  --sidebar-foreground: oklch(0.977 0.005 60);
+  /* Cream text */
+  --sidebar-primary: oklch(0.665 0.165 285);
+  /* Bright purple active */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  /* White text */
+  --sidebar-accent: oklch(0.395 0.045 285);
+  /* Darker hover */
+  --sidebar-accent-foreground: oklch(0.977 0.005 60);
+  /* Cream text */
+  --sidebar-border: oklch(1 0 0 / 10%);
+  /* Subtle border */
+  --sidebar-ring: oklch(0.665 0.165 285);
+  /* Bright focus ring */
 
   /* ScrollBar Colour */
-  --scrollbar-colour: oklch(0.35 0.10 290);
-  --scrollbar-hover: oklch(0.50 0.18 290);
+  --scrollbar-colour: oklch(0.665 0.165 285);
+  /* #CAC4CE */
+  --scrollbar-hover: oklch(0.28 0.028 285 1);
+  /* #8D86C9 */
 
-  /* InQuizzo Argon Color System Variables */
+  /* InQuizzo Argon Color System */
   --iq-void: 260 100% 6%;
   --iq-deep: 262 96% 8%;
   --iq-surface: 258 78% 11%;
@@ -463,11 +532,6 @@
   body {
     @apply bg-background text-foreground;
   }
-
-  /* Aggressively hide default browser cursor globally */
-  * {
-    cursor: none !important;
-  }
 }
 
 /* ========================================
@@ -726,15 +790,4 @@ body[data-scroll-locked] {
   .auth-container * {
     transition: all 0.3s ease-in-out;
   }
-}
-
-/* Redundant global override to ensure cursor is hidden */
-html, body, * {
-  cursor: none !important;
-}
-
-/* Re-enable cursor when custom cursor is specifically disabled */
-body.custom-cursor-disabled,
-body.custom-cursor-disabled * {
-  cursor: auto !important;
 }

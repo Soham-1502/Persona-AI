@@ -5,10 +5,17 @@ import { useTheme } from 'next-themes'
 import { ProgressStatusFilter, CategoryFilter, SortSelect } from './ModuleProgressFilters.jsx'
 import ModuleProgressList from './ModuleProgressList.jsx'
 import { modulesData } from './ModulesData.js'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { LayoutList } from 'lucide-react'
 
-export default function ModuleProgressSection() {
+/**
+ * Props
+ * ─────
+ * liveData    – { accuracyProgress, questionsProgress, sessionsProgress } | null
+ *               Passed from dashboard/page.jsx (fetched alongside metric cards).
+ * liveLoading – boolean — true while the API call is in-flight.
+ */
+export default function ModuleProgressSection({ liveData = null, liveLoading = true }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortOption, setSortOption] = useState('recent');
@@ -22,15 +29,31 @@ export default function ModuleProgressSection() {
     primary: '#9067C6',
     textPrimary: '#242038',
     textMuted: '#655A7C',
-    separator: 'var(--border)',
   } : {
     cardBg: 'var(--card)',
     cardBorder: 'var(--border)',
     primary: '#934cf0',
     textPrimary: '#ffffff',
     textMuted: '#94A3B8',
-    separator: 'var(--border)',
   };
+
+  // Merge live InQuizzo progress into base module data
+  const mergedModules = useMemo(() => {
+    if (!liveData) return modulesData;
+
+    return modulesData.map((module) => {
+      if (module.id !== 'inquizzo') return module;
+      return {
+        ...module,
+        submodules: module.submodules.map((sub) => {
+          if (sub.id === 'accuracy') return { ...sub, progress: liveData.accuracyProgress ?? 0 };
+          if (sub.id === 'questions') return { ...sub, progress: liveData.questionsProgress ?? 0 };
+          if (sub.id === 'sessions') return { ...sub, progress: liveData.sessionsProgress ?? 0 };
+          return sub;
+        }),
+      };
+    });
+  }, [liveData]);
 
   return (
     <motion.div
@@ -54,47 +77,62 @@ export default function ModuleProgressSection() {
         <span className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: t.textMuted }}>
           Module Progress
         </span>
+
+        {/* Live indicator — shown once real data has arrived */}
+        {!liveLoading && liveData && (
+          <span
+            className="ml-auto text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: t.primary + '1A', color: t.primary }}
+          >
+            Live
+          </span>
+        )}
       </div>
 
-      {/* Filters & Content Area */}
+      {/* Filters & Content */}
       <div className='flex flex-col flex-1 w-full gap-4 min-h-0'>
         <div className='flex flex-col md:flex-row justify-between h-fit items-start md:items-center gap-2'>
           <div className="min-w-0 w-full">
             <ProgressStatusFilter
               value={statusFilter}
-              onValueChange={(value) => {
-                if (!value) return;
-                setStatusFilter(value);
-              }} />
+              onValueChange={(value) => { if (!value) return; setStatusFilter(value); }}
+            />
           </div>
-
           <div className='flex items-center gap-2 min-w-0 w-full md:w-auto md:shrink-0'>
             <div className="flex-1 min-w-0 md:flex-none">
               <CategoryFilter
                 value={selectedCategory}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setSelectedCategory(value);
-                }} />
+                onValueChange={(value) => { if (!value) return; setSelectedCategory(value); }}
+              />
             </div>
             <div className="flex-1 min-w-0 md:flex-none">
               <SortSelect
                 value={sortOption}
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setSortOption(value);
-                }} />
+                onValueChange={(value) => { if (!value) return; setSortOption(value); }}
+              />
             </div>
           </div>
         </div>
 
         <div className='flex-1 overflow-y-auto custom-scroll pr-2 min-h-0'>
-          <ModuleProgressList
-            modules={modulesData}
-            selectedCategory={selectedCategory}
-            statusFilter={statusFilter}
-            sortOption={sortOption}
-          />
+          {liveLoading ? (
+            <div className="flex flex-col gap-3">
+              {Array(5).fill(0).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-[68px] rounded-lg animate-pulse"
+                  style={{ backgroundColor: t.primary + '10' }}
+                />
+              ))}
+            </div>
+          ) : (
+            <ModuleProgressList
+              modules={mergedModules}
+              selectedCategory={selectedCategory}
+              statusFilter={statusFilter}
+              sortOption={sortOption}
+            />
+          )}
         </div>
       </div>
     </motion.div>
