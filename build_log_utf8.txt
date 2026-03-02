@@ -1,0 +1,68 @@
+﻿
+> inquizzo-dashboard@0.1.0 build
+> next build
+
+Γû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 20.2s
+  Running TypeScript ...
+  Collecting page data using 19 workers ...
+ΓÅ░ Reminder cron started (runs every minute)
+ΓÅ¡∩╕Å Cron already running, skipping...
+≡ƒ¢á∩╕Å Initializing secondary AI clients...
+  Generating static pages using 19 workers (0/37) ...
+  Generating static pages using 19 workers (9/37) 
+  Generating static pages using 19 workers (18/37) 
+ΓÅ░ Reminder cron started (runs every minute)
+ΓÅ¡∩╕Å Cron already running, skipping...
+≡ƒ¢á∩╕Å Initializing secondary AI clients...
+  Generating static pages using 19 workers (27/37) 
+Γ£ô Generating static pages using 19 workers (37/37) in 844.9ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /api/auth/forgot-password
+Γö£ ╞Æ /api/auth/google
+Γö£ ╞Æ /api/auth/login
+Γö£ ╞Æ /api/auth/register
+Γö£ ╞Æ /api/auth/verify-reset-otp
+Γö£ ╞Æ /api/dashboard/cron/init
+Γö£ ╞Æ /api/dashboard/insights
+Γö£ ╞Æ /api/dashboard/reminders
+Γö£ ╞Æ /api/dashboard/reminders/[id]
+Γö£ ╞Æ /api/dashboard/reminders/[id]/completed
+Γö£ ╞Æ /api/dashboard/reminders/run
+Γö£ ╞Æ /api/dashboard/reminders/stats
+Γö£ ╞Æ /api/inquizzo/ask
+Γö£ ╞Æ /api/inquizzo/attempt
+Γö£ ╞Æ /api/inquizzo/dashboard-stats
+Γö£ ╞Æ /api/inquizzo/evaluate
+Γö£ ╞Æ /api/inquizzo/generate-ai
+Γö£ ╞Æ /api/inquizzo/tts
+Γö£ ╞Æ /api/inquizzo/user-attempts
+Γö£ ╞Æ /api/inquizzo/user-scores
+Γö£ ╞Æ /api/mentor
+Γö£ ╞Æ /api/mentor/history
+Γö£ ╞Æ /api/notifications
+Γö£ ╞Æ /api/notifications/[id]
+Γö£ Γùï /dashboard
+Γö£ Γùï /forgot-password
+Γö£ Γùï /inquizzo
+Γö£ Γùï /inquizzo/Home
+Γö£ Γùï /inquizzo/Quiz
+Γö£ Γùï /inquizzo/QuizDomainSelection
+Γö£ Γùï /inquizzo/RandomQuiz
+Γö£ Γùï /login
+Γö£ Γùï /micro-learning
+Γö£ Γùï /reset-password
+Γö£ Γùï /signup
+Γöö Γùï /social-mentor
+
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

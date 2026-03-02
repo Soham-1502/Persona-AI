@@ -3,39 +3,49 @@ import { NextResponse } from "next/server";
 export async function POST(req) {
     try {
         const { text } = await req.json();
+        if (!text) return NextResponse.json({ message: "Text is required" }, { status: 400 });
 
-        if (!text) {
-            return NextResponse.json({ message: "Text is required" }, { status: 400 });
+        // --- Provider 1: Microsoft Edge Neural (High Quality) ---
+        try {
+            const edgeVoice = "en-US-AriaNeural"; // Professional and natural
+            const edgeUrl = `https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/single-step?api-key=6A5AA1D4EAFF4E9FB37E23D1A48D9886`;
+            const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${edgeVoice}'><prosody rate='0%' pitch='0%'>${text}</prosody></voice></speak>`;
+
+            const response = await fetch(edgeUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/ssml+xml",
+                    "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/91.0.864.41",
+                },
+                body: ssml,
+            });
+
+            if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                return new NextResponse(buffer, { headers: { "Content-Type": "audio/mpeg" } });
+            }
+        } catch (e) {
+            console.warn("Edge TTS failed, falling back to Google:", e.message);
         }
 
-        // Unofficial Microsoft Edge TTS endpoint (for free neural voices)
-        const voice = "en-US-JennyNeural"; // High quality natural voice
-        const url = `https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/single-step?api-key=6A5AA1D4EAFF4E9FB37E23D1A48D9886`;
+        // --- Provider 2: Google Translate Neural (Reliable Fallback) ---
+        try {
+            const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`;
+            const response = await fetch(googleUrl, {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+            });
 
-        // Construct the synthesis request body (this is a common way to consume this internal API)
-        const body = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='${voice}'><prosody rate='0%' pitch='0%'>${text}</prosody></voice></speak>`;
-
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/ssml+xml",
-                "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36 Edg/91.0.864.41",
-            },
-            body: body,
-        });
-
-        if (!response.ok) {
-            throw new Error(`TTS service error: ${response.statusText}`);
+            if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                return new NextResponse(buffer, { headers: { "Content-Type": "audio/mpeg" } });
+            }
+        } catch (e) {
+            console.error("Google TTS failed too:", e.message);
         }
 
-        const audioBuffer = await response.arrayBuffer();
+        throw new Error("All TTS providers failed");
 
-        return new NextResponse(audioBuffer, {
-            headers: {
-                "Content-Type": "audio/mpeg",
-            },
-        });
     } catch (error) {
         console.error("❌ TTS Proxy error:", error.message);
         return NextResponse.json({ message: error.message }, { status: 500 });
