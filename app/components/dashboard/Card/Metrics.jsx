@@ -1,23 +1,24 @@
 // Total Sessions Metric Card
 
-export function getTotalSessions(sessions) {
-    // Adding ?.length and || 0 ensures this never returns 'undefined'
-    return sessions?.length || 0;
+/** Accepts a plain number count (from API) or a session array. */
+export function getTotalSessions(countOrSessions) {
+    if (typeof countOrSessions === 'number') return countOrSessions;
+    return countOrSessions?.length || 0;
 }
 
-// Metrics.jsx
-
 export function getTotalSessionsBadge(current, previous) {
-    // If no data exists in the previous period, show a flat increase count
-    if (previous === 0) {
+    // Accepts plain number counts or falls back to .length on arrays
+    const cur = typeof current === 'number' ? current : (current?.length || 0);
+    const prev = typeof previous === 'number' ? previous : (previous?.length || 0);
+
+    if (prev === 0) {
         return {
-            text: `+${current} sessions`,
+            text: `+${cur} sessions`,
             tone: "positive"
         };
     }
 
-    // Standard percentage improvement calculation
-    const change = Math.round(((current - previous) / previous) * 100);
+    const change = Math.round(((cur - prev) / prev) * 100);
 
     return {
         text: `${change >= 0 ? "+" : ""}${change}%`,
@@ -26,11 +27,16 @@ export function getTotalSessionsBadge(current, previous) {
 }
 // Confidence Score Metric Card
 
-export function getConfidenceScore(sessions) {
+/**
+ * Accepts a plain number (e.g. 78) directly from the API, or a session array
+ * (falls back to delta-sum approach for backwards compatibility).
+ */
+export function getConfidenceScore(scoreOrSessions) {
     const BASE_SCORE = 70;
-    if (!sessions || !Array.isArray(sessions)) return BASE_SCORE;
+    if (typeof scoreOrSessions === 'number') return scoreOrSessions;
+    if (!scoreOrSessions || !Array.isArray(scoreOrSessions)) return BASE_SCORE;
 
-    const deltaSum = sessions.reduce(
+    const deltaSum = scoreOrSessions.reduce(
         (sum, session) => sum + (session.confidenceDelta || 0),
         0
     );
@@ -38,13 +44,18 @@ export function getConfidenceScore(sessions) {
     return Math.min(100, BASE_SCORE + deltaSum);
 }
 
-// Metrics.jsx
-
-export function getConfidenceScoreBadge(currentSessions, previousSessions) {
-    const currentGain = currentSessions?.reduce((sum, s) => sum + (s.confidenceDelta || 0), 0) || 0;
-    const previousGain = previousSessions?.reduce((sum, s) => sum + (s.confidenceDelta || 0), 0) || 0;
-
-    const delta = currentGain - previousGain;
+/**
+ * Accepts either two plain number scores (from API) or two session arrays.
+ */
+export function getConfidenceScoreBadge(currentScoreOrSessions, previousScoreOrSessions) {
+    let delta;
+    if (typeof currentScoreOrSessions === 'number' && typeof previousScoreOrSessions === 'number') {
+        delta = currentScoreOrSessions - previousScoreOrSessions;
+    } else {
+        const currentGain = (currentScoreOrSessions ?? []).reduce((sum, s) => sum + (s.confidenceDelta || 0), 0);
+        const previousGain = (previousScoreOrSessions ?? []).reduce((sum, s) => sum + (s.confidenceDelta || 0), 0);
+        delta = currentGain - previousGain;
+    }
     return {
         text: `${delta >= 0 ? "+" : "-"}${Math.abs(delta)}%`,
         tone: delta > 0 ? "positive" : delta < 0 ? "negative" : "neutral",
@@ -53,19 +64,34 @@ export function getConfidenceScoreBadge(currentSessions, previousSessions) {
 
 // Voice Quizzes Metric Card
 
-export function getVoiceQuizzes(sessions) {
-    return sessions.filter((session) => session.isVoiceQuiz).length;
+/**
+ * Returns the voice quiz count.
+ * Pass a plain number (from live-data API) for accurate DB-only count.
+ * Falls back to filtering session array if a number is not provided.
+ */
+export function getVoiceQuizzes(countOrSessions) {
+    if (typeof countOrSessions === 'number') return countOrSessions;
+    if (!Array.isArray(countOrSessions)) return 0;
+    // Scope to inQuizzo only so mock sessions for other modules don't inflate the count
+    return countOrSessions.filter(s => s.isVoiceQuiz && s.module === 'inQuizzo').length;
 }
 
-export function getVoiceQuizzesBadge(currentSessions, previousSessions, range) {
-    // Safety check: default to 0 if inputs are invalid or not arrays
-    const currentCount = Array.isArray(currentSessions)
-        ? currentSessions.filter(s => s.isVoiceQuiz).length
-        : 0;
+/**
+ * Badge helper — accepts either plain number counts (preferred, from API)
+ * or session arrays as fallback.
+ */
+export function getVoiceQuizzesBadge(currentCountOrSessions, previousCountOrSessions, range) {
+    const currentCount = typeof currentCountOrSessions === 'number'
+        ? currentCountOrSessions
+        : Array.isArray(currentCountOrSessions)
+            ? currentCountOrSessions.filter(s => s.isVoiceQuiz && s.module === 'inQuizzo').length
+            : 0;
 
-    const previousCount = Array.isArray(previousSessions)
-        ? previousSessions.filter(s => s.isVoiceQuiz).length
-        : 0;
+    const previousCount = typeof previousCountOrSessions === 'number'
+        ? previousCountOrSessions
+        : Array.isArray(previousCountOrSessions)
+            ? previousCountOrSessions.filter(s => s.isVoiceQuiz && s.module === 'inQuizzo').length
+            : 0;
 
     const diff = currentCount - previousCount;
     const label = range === "today" ? "vs yesterday" : "vs last period";

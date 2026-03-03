@@ -11,6 +11,8 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 const chartConfig = {
   views: {
     label: "Page Views",
@@ -21,7 +23,7 @@ const chartConfig = {
   inQuizzo: { label: "InQuizzo", color: "var(--chart-4)" },
 };
 
-export const ActivityChart = React.memo(function ActivityChart({ data, selectedDate }) {
+export const ActivityChart = React.memo(function ActivityChart({ data, selectedDate, isLoading = false }) {
   const [activeChart, setActiveChart] = React.useState("confidenceCoach");
 
   const total = React.useMemo(
@@ -67,6 +69,38 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
     textMuted: '#94A3B8',
     gridColor: 'color-mix(in srgb, var(--border) 10%, transparent)',
   };
+
+  if (isLoading) {
+    return (
+      <div
+        className="backdrop-blur-[12px] border rounded-2xl overflow-hidden shadow-xl h-full flex flex-col"
+        style={{
+          backgroundColor: t.cardBg,
+          borderColor: t.cardBorder,
+        }}
+      >
+        <div className="flex flex-col sm:flex-row" style={{ borderBottom: `1px solid ${t.tabBorder}` }}>
+          <div className="flex flex-col justify-center gap-1 px-6 py-4">
+            <Skeleton className="h-3 w-24 rounded-full" />
+            <Skeleton className="h-3 w-40 rounded-full" />
+          </div>
+          <div className="flex overflow-x-auto flex-nowrap sm:ml-auto">
+            {Array(4).fill(0).map((_, i) => (
+              <div key={i} className="px-6 py-4 flex flex-col gap-2 items-center border-l first:border-l-0" style={{ borderColor: t.tabBorder }}>
+                <Skeleton className="h-2 w-12 rounded-full" />
+                <Skeleton className="h-5 w-8 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="p-6 flex-1 flex items-end gap-3 justify-between">
+          {Array(7).fill(0).map((_, i) => (
+            <Skeleton key={i} className="flex-1 rounded-t-lg" style={{ height: `${20 + Math.random() * 60}%` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

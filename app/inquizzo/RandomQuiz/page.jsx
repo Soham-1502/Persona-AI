@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import { motion } from 'framer-motion';
-import Lottie from 'lottie-react';
 import Header from '@/app/components/shared/header/Header.jsx';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import { Badge } from "@/components/ui/badge";
@@ -682,7 +681,9 @@ const Quiz = () => {
               {/* Error */}
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-3 w-full">
-                  <Lottie animationData={errorAnimationData} loop autoplay style={{ width: 80, height: 80 }} />
+                  <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-1 border border-red-500/20 whitespace-nowrap">
+                    <XCircle className="w-7 h-7 text-red-500" />
+                  </div>
                   <p className="font-medium text-sm">{error}</p>
                   <button onClick={() => getAIQuestion()} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10">Retry</button>
                 </div>

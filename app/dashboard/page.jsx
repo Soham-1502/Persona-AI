@@ -11,11 +11,9 @@ import InsightsCard from '../components/dashboard/Card/InsightsCard';
 import ModuleProgressSection from '../components/dashboard/ModuleProgressSection/ModuleProgressSection.jsx';
 import ReminderSection from '../components/dashboard/Reminder/ReminderSection';
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { mockSessions } from '../mockData';
 import {
   getConfidenceScore,
   getConfidenceScoreBadge,
-  getCurrentStreak,
   getCurrentStreakBadge,
   getTotalSessions,
   getTotalSessionsBadge,
@@ -25,16 +23,22 @@ import {
 import { mockUserDashboardData } from '@/lib/mockUserData';
 import { getAuthToken } from '@/lib/auth-client';
 
-// Non-InQuizzo mock sessions (used as baseline for other modules)
-const NON_INQUIZZO_MOCK = mockSessions.filter(s => s.module !== 'inQuizzo');
-
 export default function Home() {
   const [selectedDate, onDateChange] = useState('today');
 
-  // ── Live InQuizzo data state ──────────────────────────────────────────────
-  const [liveCurrentSessions, setLiveCurrentSessions] = useState([]);
-  const [livePreviousSessions, setLivePreviousSessions] = useState([]);
-  const [liveModuleProgress, setLiveModuleProgress] = useState(null);
+  // ── Live data state (InQuizzo DB — no mocks) ─────────────────────────────
+  const [liveData, setLiveData] = useState({
+    currentSessions: [],
+    previousSessions: [],
+    voiceQuizCount: 0,
+    prevVoiceQuizCount: 0,
+    currentStreak: 0,
+    confidenceScore: 70,
+    prevConfidenceScore: 70,
+    totalSessions: 0,
+    prevTotalSessions: 0,
+    moduleProgress: null,
+  });
   const [liveLoading, setLiveLoading] = useState(true);
 
   const fetchLiveData = useCallback(async (range) => {
@@ -49,12 +53,21 @@ export default function Home() {
 
       if (res.ok) {
         const json = await res.json();
-        setLiveCurrentSessions(json.currentSessions ?? []);
-        setLivePreviousSessions(json.previousSessions ?? []);
-        setLiveModuleProgress(json.moduleProgress ?? null);
+        setLiveData({
+          currentSessions: json.currentSessions ?? [],
+          previousSessions: json.previousSessions ?? [],
+          voiceQuizCount: json.voiceQuizCount ?? 0,
+          prevVoiceQuizCount: json.prevVoiceQuizCount ?? 0,
+          currentStreak: json.currentStreak ?? 0,
+          confidenceScore: json.confidenceScore ?? 70,
+          prevConfidenceScore: json.prevConfidenceScore ?? 70,
+          totalSessions: json.totalSessions ?? 0,
+          prevTotalSessions: json.prevTotalSessions ?? 0,
+          moduleProgress: json.moduleProgress ?? null,
+        });
       }
     } catch (err) {
-      console.error('Failed to fetch live InQuizzo data:', err);
+      console.error('Failed to fetch live data:', err);
     } finally {
       setLiveLoading(false);
     }
@@ -68,85 +81,25 @@ export default function Home() {
   const insightsData = mockUserDashboardData;
   const insightsLoading = false;
 
-  // ── Date-filtered mock data for non-InQuizzo modules ─────────────────────
-  const { mockCurrentData, mockPreviousData } = useMemo(() => {
-    const result = filterByDateRange(NON_INQUIZZO_MOCK, selectedDate);
-    return {
-      mockCurrentData: result?.currentPeriodData || [],
-      mockPreviousData: result?.previousPeriodData || [],
-    };
-  }, [selectedDate]);
-
-  // ── Merge: non-InQuizzo mock + real InQuizzo ──────────────────────────────
-  const currentData = useMemo(
-    () => [...mockCurrentData, ...liveCurrentSessions],
-    [mockCurrentData, liveCurrentSessions]
-  );
-  const previousData = useMemo(
-    () => [...mockPreviousData, ...livePreviousSessions],
-    [mockPreviousData, livePreviousSessions]
-  );
-
-  // ── All sessions for streak (mock non-iq + real iq current) ──────────────
-  const allSessionsForStreak = useMemo(
-    () => [...NON_INQUIZZO_MOCK, ...liveCurrentSessions],
-    [liveCurrentSessions]
-  );
-
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
   });
 
-  // ── Metric card values ────────────────────────────────────────────────────
-  const totalSessions = getTotalSessions(currentData);
-  const ConfidenceCoach = getConfidenceScore(currentData);
-  const VoiceQuizzes = getVoiceQuizzes(currentData);
-  const CurrentStreak = getCurrentStreak(allSessionsForStreak);
+  // ── Metric card values — all from live API ────────────────────────────────
+  const totalSessions = getTotalSessions(liveData.totalSessions);
+  const ConfidenceCoach = getConfidenceScore(liveData.confidenceScore);
+  const VoiceQuizzes = getVoiceQuizzes(liveData.voiceQuizCount);
+  const CurrentStreak = liveData.currentStreak;
 
-  const totalSessionsBadge = getTotalSessionsBadge(currentData.length, previousData.length);
-  const ConfidenceCoachBadge = getConfidenceScoreBadge(currentData, previousData);
-  const VoiceQuizzesBadge = getVoiceQuizzesBadge(currentData, previousData, selectedDate);
+  const totalSessionsBadge = getTotalSessionsBadge(liveData.totalSessions, liveData.prevTotalSessions);
+  const ConfidenceCoachBadge = getConfidenceScoreBadge(liveData.confidenceScore, liveData.prevConfidenceScore);
+  const VoiceQuizzesBadge = getVoiceQuizzesBadge(liveData.voiceQuizCount, liveData.prevVoiceQuizCount, selectedDate);
   const CurrentStreakBadge = getCurrentStreakBadge(CurrentStreak);
 
-  const ActivityChartData = useMemo(() => getActivityChartData(currentData), [currentData]);
-
-  // ── Date-range filter helper ──────────────────────────────────────────────
-  function filterByDateRange(data, range) {
-    const toLocalDateStr = (d) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    };
-
-    const today = new Date();
-    const currentStart = new Date(today);
-    const prevStart = new Date(today);
-    const prevEnd = new Date(today);
-
-    if (range === 'today') {
-      prevStart.setDate(today.getDate() - 1);
-      prevEnd.setDate(today.getDate() - 1);
-    } else if (range === 'last7') {
-      currentStart.setDate(today.getDate() - 6);
-      prevStart.setDate(today.getDate() - 13);
-      prevEnd.setDate(today.getDate() - 7);
-    } else if (range === 'last30') {
-      currentStart.setDate(today.getDate() - 29);
-      prevStart.setDate(today.getDate() - 59);
-      prevEnd.setDate(today.getDate() - 30);
-    }
-
-    const todayStr = toLocalDateStr(today);
-    const currentStartStr = toLocalDateStr(currentStart);
-    const prevStartStr = toLocalDateStr(prevStart);
-    const prevEndStr = toLocalDateStr(prevEnd);
-
-    return {
-      currentPeriodData: data.filter(item => item.date >= currentStartStr && item.date <= todayStr),
-      previousPeriodData: data.filter(item => item.date >= prevStartStr && item.date <= prevEndStr),
-    };
-  }
+  const ActivityChartData = useMemo(
+    () => getActivityChartData(liveData.currentSessions),
+    [liveData.currentSessions]
+  );
 
   return (
     <div className="w-full">
@@ -164,6 +117,7 @@ export default function Home() {
             badgeText={totalSessionsBadge.text}
             badgeTone={totalSessionsBadge.tone}
             subtitle={selectedDate}
+            isLoading={liveLoading}
           />
           <MetricCard
             icon={Sparkles}
@@ -172,6 +126,7 @@ export default function Home() {
             badgeText={ConfidenceCoachBadge.text}
             badgeTone={ConfidenceCoachBadge.tone}
             subtitle={selectedDate}
+            isLoading={liveLoading}
           />
           <MetricCard
             icon={Mic}
@@ -180,6 +135,7 @@ export default function Home() {
             badgeText={VoiceQuizzesBadge.text}
             badgeTone={VoiceQuizzesBadge.tone}
             subtitle={selectedDate}
+            isLoading={liveLoading}
           />
           <MetricCard
             icon={Trophy}
@@ -188,11 +144,12 @@ export default function Home() {
             badgeText={CurrentStreakBadge.text}
             badgeTone={CurrentStreakBadge.tone}
             subtitle={selectedDate}
+            isLoading={liveLoading}
           />
         </MetricCardSwiper>
 
         <div className='col-span-full lg:col-span-3'>
-          <ActivityChart data={ActivityChartData} selectedDate={selectedDate} />
+          <ActivityChart data={ActivityChartData} selectedDate={selectedDate} isLoading={liveLoading} />
         </div>
         <div className='col-span-full lg:col-span-1'>
           <InsightsCard
@@ -202,8 +159,9 @@ export default function Home() {
           />
         </div>
 
+
         {/* Pass live module progress down so ModuleProgressSection needs no extra fetch */}
-        <ModuleProgressSection liveData={liveModuleProgress} liveLoading={liveLoading} />
+        <ModuleProgressSection liveData={liveData.moduleProgress} liveLoading={liveLoading} />
         <ReminderSection />
       </div>
     </div>

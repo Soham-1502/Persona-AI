@@ -15,7 +15,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import Lottie from 'lottie-react';
 import { cn } from "@/lib/utils";
 import { useRouter } from 'next/navigation';
 import { useTheme } from "next-themes";
@@ -759,8 +758,10 @@ const QuizDomainSelection = () => {
 
                 {error && (
                   <div className="mt-8 mb-8 p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex flex-col items-center gap-4">
-                    <Lottie animationData={errorAnimationData} loop={true} className="w-24 h-24 mb-2" />
-                    <p className="font-medium text-sm">{error}</p>
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-2 border border-red-500/20 whitespace-nowrap">
+                      <XCircle className="w-8 h-8 text-red-500" />
+                    </div>
+                    <p className="font-medium text-sm text-center">{error}</p>
                     <button onClick={() => fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic)} className="px-4 py-1.5 rounded-full border border-red-500/30 text-xs font-bold uppercase hover:bg-red-500/10 transition-all">Retry</button>
                   </div>
                 )}
