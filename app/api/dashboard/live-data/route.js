@@ -157,6 +157,13 @@ export async function GET(req) {
         const currentSessions = currentAttempts.map(attemptToSession);
         const previousSessions = previousAttempts.map(attemptToSession);
 
+        // --- Unique Session Counting (Group by sessionId) ---
+        const currentUniqueSessionIds = new Set(currentAttempts.map(a => a.sessionId).filter(Boolean));
+        const previousUniqueSessionIds = new Set(previousAttempts.map(a => a.sessionId).filter(Boolean));
+
+        const totalSessions = currentUniqueSessionIds.size;
+        const prevTotalSessions = previousUniqueSessionIds.size;
+
         // --- Voice quiz counts (current & previous period) ---
         const voiceQuizCount = currentAttempts.filter(a => a.gameType === 'voice').length;
         const prevVoiceQuizCount = previousAttempts.filter(a => a.gameType === 'voice').length;
@@ -196,8 +203,8 @@ export async function GET(req) {
             currentStreak,
             confidenceScore,
             prevConfidenceScore,
-            totalSessions: currentSessions.length,
-            prevTotalSessions: previousSessions.length,
+            totalSessions,
+            prevTotalSessions,
             moduleProgress: {
                 accuracyProgress,
                 questionsProgress,
