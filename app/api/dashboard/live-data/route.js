@@ -1,6 +1,6 @@
 // app/api/dashboard/live-data/route.js
 // Unified endpoint: returns real InQuizzo UserAttempt records shaped like
-// mockSessions, plus all-time module-progress stats for ModuleProgressSection.
+// mockSessions, plus all-time module-progress stats and streak.
 
 import { NextResponse } from 'next/server';
 import { authenticate } from '@/lib/auth';
@@ -17,82 +17,45 @@ function toLocalDateStr(date) {
     return `${y}-${m}-${d}`;
 }
 
-/**
- * Convert attempt records into a single dashboard session item per sessionId.
- * This keeps dashboard metrics aligned with InQuizzo page cards, which are
- * session-aware for totals and accuracy calculations.
- */
-function attemptsToSessions(attempts) {
-    const sessionsById = new Map();
-
-    for (const attempt of attempts) {
-        const sessionId = attempt.sessionId || attempt._id.toString();
-        const timestamp = new Date(attempt.timestamp);
-
-        if (!sessionsById.has(sessionId)) {
-            sessionsById.set(sessionId, {
-                _id: sessionId,
-                date: toLocalDateStr(timestamp),
-                module: 'inQuizzo',
-                isVoiceQuiz: false,
-                duration: 0,
-                attemptCount: 0,
-                correctCount: 0,
-            });
-        }
-
-        const session = sessionsById.get(sessionId);
-        session.isVoiceQuiz = session.isVoiceQuiz || attempt.gameType === 'voice';
-        session.duration += attempt.timeTaken ?? 30;
-        session.attemptCount += 1;
-        session.correctCount += attempt.isCorrect ? 1 : 0;
-    }
-
-    return [...sessionsById.values()].map((session) => {
-        const accuracy = session.attemptCount > 0
-            ? Math.round((session.correctCount / session.attemptCount) * 100)
-            : 0;
-
-        return {
-            _id: session._id,
-            date: session.date,
-            module: session.module,
-            isVoiceQuiz: session.isVoiceQuiz,
-            duration: session.duration,
-            // Keep confidence gain bounded and meaningful per session.
-            confidenceDelta: Math.max(1, Math.round(accuracy / 20)),
-        };
-    });
+/** Convert a raw UserAttempt document into the session shape dashboard expects */
+function attemptToSession(attempt) {
+    return {
+        _id: attempt._id.toString(),
+        date: toLocalDateStr(new Date(attempt.timestamp)),
+        module: 'inQuizzo',            // ActivityChart groups on this key
+        isVoiceQuiz: attempt.gameType === 'voice',
+        confidenceDelta: attempt.isCorrect ? 2 : 1,
+        duration: attempt.timeTaken ?? 30,
+    };
 }
 
-function aggregateRangeStats(attempts) {
-    const sessionsById = new Map();
+/**
+ * Compute the current consecutive-day streak from an array of unique date strings
+ * (e.g. ['2026-03-03', '2026-03-02', ...]) sorted descending.
+ */
+function computeStreak(uniqueDatesSortedDesc) {
+    if (!uniqueDatesSortedDesc.length) return 0;
 
-    for (const attempt of attempts) {
-        const sessionId = attempt.sessionId || attempt._id.toString();
-        if (!sessionsById.has(sessionId)) {
-            sessionsById.set(sessionId, { count: 0, correct: 0 });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let streak = 0;
+    let cursor = new Date(today);
+
+    for (const dateStr of uniqueDatesSortedDesc) {
+        const d = new Date(dateStr);
+        d.setHours(0, 0, 0, 0);
+
+        if (d.getTime() === cursor.getTime()) {
+            streak++;
+            cursor.setDate(cursor.getDate() - 1);
+        } else if (d.getTime() > cursor.getTime()) {
+            continue; // skip future dates
+        } else {
+            break; // gap found
         }
-
-        const session = sessionsById.get(sessionId);
-        session.count += 1;
-        session.correct += attempt.isCorrect ? 1 : 0;
     }
-
-    let totalQuestions = 0;
-    let totalCorrect = 0;
-
-    for (const session of sessionsById.values()) {
-        totalQuestions += session.count;
-        totalCorrect += session.correct;
-    }
-
-    const totalSessions = sessionsById.size;
-    const accuracyRate = totalQuestions > 0
-        ? Math.round((totalCorrect / totalQuestions) * 100)
-        : 0;
-
-    return { totalQuestions, totalCorrect, totalSessions, accuracyRate };
+    return streak;
 }
 
 // ─── route ────────────────────────────────────────────────────────────────────
@@ -140,31 +103,101 @@ export async function GET(req) {
 
         const baseFilter = { userId, moduleId: 'inQuizzo' };
 
-        // --- Fetch current & previous periods in parallel ---
-        const [currentAttempts, previousAttempts] = await Promise.all([
+        // --- Fetch all queries in parallel ---
+        const [currentAttempts, previousAttempts, allTimeAgg, allTimeDates] = await Promise.all([
+            // Current period attempts
             UserAttempt.find({ ...baseFilter, ...buildDateFilter(currentStart) })
                 .sort({ timestamp: -1 })
                 .lean(),
 
+            // Previous period attempts (for badges)
             UserAttempt.find({ ...baseFilter, ...buildPrevDateFilter(prevStart, prevEnd) })
                 .sort({ timestamp: -1 })
                 .lean(),
+
+            // All-time aggregation for module progress section
+            UserAttempt.aggregate([
+                { $match: baseFilter },
+                {
+                    $group: {
+                        _id: '$sessionId',
+                        sessionCorrect: { $sum: { $cond: ['$isCorrect', 1, 0] } },
+                        sessionCount: { $sum: 1 },
+                    },
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalQuestions: { $sum: '$sessionCount' },
+                        totalCorrect: { $sum: '$sessionCorrect' },
+                        totalSessions: { $sum: 1 },
+                    },
+                },
+            ]),
+
+            // All-time unique session dates for streak calculation
+            UserAttempt.aggregate([
+                { $match: baseFilter },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: {
+                                format: '%Y-%m-%d',
+                                date: '$timestamp',
+                                timezone: 'Asia/Kolkata',
+                            }
+                        }
+                    }
+                },
+                { $sort: { _id: -1 } },
+            ]),
         ]);
 
         // --- Shape sessions ---
-        const currentSessions = attemptsToSessions(currentAttempts);
-        const previousSessions = attemptsToSessions(previousAttempts);
+        const currentSessions = currentAttempts.map(attemptToSession);
+        const previousSessions = previousAttempts.map(attemptToSession);
 
-        // --- Module progress stats (range-aligned with InQuizzo cards) ---
-        const agg = aggregateRangeStats(currentAttempts);
+        // --- Voice quiz counts (current & previous period) ---
+        const voiceQuizCount = currentAttempts.filter(a => a.gameType === 'voice').length;
+        const prevVoiceQuizCount = previousAttempts.filter(a => a.gameType === 'voice').length;
 
-        const accuracyProgress = agg.accuracyRate;
-        const questionsProgress = Math.min(100, agg.totalQuestions);
+        // --- Streak ---
+        const uniqueDates = allTimeDates.map(d => d._id).filter(Boolean);
+        const currentStreak = computeStreak(uniqueDates);
+
+        // --- Confidence score ---
+        // Base 70 + sum of confidenceDeltas in current period sessions
+        const BASE_SCORE = 70;
+        const confidenceScore = Math.min(
+            100,
+            BASE_SCORE + currentSessions.reduce((sum, s) => sum + (s.confidenceDelta || 0), 0)
+        );
+
+        // --- Previous confidence score (for badge delta) ---
+        const prevConfidenceScore = Math.min(
+            100,
+            BASE_SCORE + previousSessions.reduce((sum, s) => sum + (s.confidenceDelta || 0), 0)
+        );
+
+        // --- Module progress stats ---
+        const agg = allTimeAgg[0] ?? { totalQuestions: 0, totalCorrect: 0, totalSessions: 0 };
+
+        const accuracyProgress = agg.totalQuestions > 0
+            ? Math.round((agg.totalCorrect / agg.totalQuestions) * 100)
+            : 0;
+        const questionsProgress = Math.min(100, Math.round((agg.totalQuestions / 200) * 100));
         const sessionsProgress = Math.min(100, Math.round((agg.totalSessions / 20) * 100));
 
         return NextResponse.json({
             currentSessions,
             previousSessions,
+            voiceQuizCount,
+            prevVoiceQuizCount,
+            currentStreak,
+            confidenceScore,
+            prevConfidenceScore,
+            totalSessions: currentSessions.length,
+            prevTotalSessions: previousSessions.length,
             moduleProgress: {
                 accuracyProgress,
                 questionsProgress,
