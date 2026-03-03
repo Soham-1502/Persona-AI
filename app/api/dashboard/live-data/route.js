@@ -17,16 +17,82 @@ function toLocalDateStr(date) {
     return `${y}-${m}-${d}`;
 }
 
-/** Convert a raw UserAttempt document into the session shape dashboard expects */
-function attemptToSession(attempt) {
-    return {
-        _id: attempt._id.toString(),
-        date: toLocalDateStr(new Date(attempt.timestamp)),
-        module: 'inQuizzo',            // ActivityChart groups on this key
-        isVoiceQuiz: attempt.gameType === 'voice',
-        confidenceDelta: attempt.isCorrect ? 2 : 1, // small positive contribution either way
-        duration: attempt.timeTaken ?? 30,           // seconds
-    };
+/**
+ * Convert attempt records into a single dashboard session item per sessionId.
+ * This keeps dashboard metrics aligned with InQuizzo page cards, which are
+ * session-aware for totals and accuracy calculations.
+ */
+function attemptsToSessions(attempts) {
+    const sessionsById = new Map();
+
+    for (const attempt of attempts) {
+        const sessionId = attempt.sessionId || attempt._id.toString();
+        const timestamp = new Date(attempt.timestamp);
+
+        if (!sessionsById.has(sessionId)) {
+            sessionsById.set(sessionId, {
+                _id: sessionId,
+                date: toLocalDateStr(timestamp),
+                module: 'inQuizzo',
+                isVoiceQuiz: false,
+                duration: 0,
+                attemptCount: 0,
+                correctCount: 0,
+            });
+        }
+
+        const session = sessionsById.get(sessionId);
+        session.isVoiceQuiz = session.isVoiceQuiz || attempt.gameType === 'voice';
+        session.duration += attempt.timeTaken ?? 30;
+        session.attemptCount += 1;
+        session.correctCount += attempt.isCorrect ? 1 : 0;
+    }
+
+    return [...sessionsById.values()].map((session) => {
+        const accuracy = session.attemptCount > 0
+            ? Math.round((session.correctCount / session.attemptCount) * 100)
+            : 0;
+
+        return {
+            _id: session._id,
+            date: session.date,
+            module: session.module,
+            isVoiceQuiz: session.isVoiceQuiz,
+            duration: session.duration,
+            // Keep confidence gain bounded and meaningful per session.
+            confidenceDelta: Math.max(1, Math.round(accuracy / 20)),
+        };
+    });
+}
+
+function aggregateRangeStats(attempts) {
+    const sessionsById = new Map();
+
+    for (const attempt of attempts) {
+        const sessionId = attempt.sessionId || attempt._id.toString();
+        if (!sessionsById.has(sessionId)) {
+            sessionsById.set(sessionId, { count: 0, correct: 0 });
+        }
+
+        const session = sessionsById.get(sessionId);
+        session.count += 1;
+        session.correct += attempt.isCorrect ? 1 : 0;
+    }
+
+    let totalQuestions = 0;
+    let totalCorrect = 0;
+
+    for (const session of sessionsById.values()) {
+        totalQuestions += session.count;
+        totalCorrect += session.correct;
+    }
+
+    const totalSessions = sessionsById.size;
+    const accuracyRate = totalQuestions > 0
+        ? Math.round((totalCorrect / totalQuestions) * 100)
+        : 0;
+
+    return { totalQuestions, totalCorrect, totalSessions, accuracyRate };
 }
 
 // ─── route ────────────────────────────────────────────────────────────────────
@@ -75,7 +141,7 @@ export async function GET(req) {
         const baseFilter = { userId, moduleId: 'inQuizzo' };
 
         // --- Fetch current & previous periods in parallel ---
-        const [currentAttempts, previousAttempts, allTimeAgg] = await Promise.all([
+        const [currentAttempts, previousAttempts] = await Promise.all([
             UserAttempt.find({ ...baseFilter, ...buildDateFilter(currentStart) })
                 .sort({ timestamp: -1 })
                 .lean(),
@@ -83,39 +149,17 @@ export async function GET(req) {
             UserAttempt.find({ ...baseFilter, ...buildPrevDateFilter(prevStart, prevEnd) })
                 .sort({ timestamp: -1 })
                 .lean(),
-
-            // All-time aggregation for module progress section
-            UserAttempt.aggregate([
-                { $match: baseFilter },
-                {
-                    $group: {
-                        _id: '$sessionId',
-                        sessionCorrect: { $sum: { $cond: ['$isCorrect', 1, 0] } },
-                        sessionCount: { $sum: 1 },
-                    },
-                },
-                {
-                    $group: {
-                        _id: null,
-                        totalQuestions: { $sum: '$sessionCount' },
-                        totalCorrect: { $sum: '$sessionCorrect' },
-                        totalSessions: { $sum: 1 },
-                    },
-                },
-            ]),
         ]);
 
         // --- Shape sessions ---
-        const currentSessions = currentAttempts.map(attemptToSession);
-        const previousSessions = previousAttempts.map(attemptToSession);
+        const currentSessions = attemptsToSessions(currentAttempts);
+        const previousSessions = attemptsToSessions(previousAttempts);
 
-        // --- Module progress stats ---
-        const agg = allTimeAgg[0] ?? { totalQuestions: 0, totalCorrect: 0, totalSessions: 0 };
+        // --- Module progress stats (range-aligned with InQuizzo cards) ---
+        const agg = aggregateRangeStats(currentAttempts);
 
-        const accuracyProgress = agg.totalQuestions > 0
-            ? Math.round((agg.totalCorrect / agg.totalQuestions) * 100)
-            : 0;
-        const questionsProgress = Math.min(100, Math.round((agg.totalQuestions / 200) * 100));
+        const accuracyProgress = agg.accuracyRate;
+        const questionsProgress = Math.min(100, agg.totalQuestions);
         const sessionsProgress = Math.min(100, Math.round((agg.totalSessions / 20) * 100));
 
         return NextResponse.json({
