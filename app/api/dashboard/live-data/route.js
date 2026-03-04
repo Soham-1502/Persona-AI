@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { authenticate } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import UserAttempt from '@/models/UserAttempt';
+import ActiveQuizSession from '@/models/ActiveQuizSession';
 import mongoose from 'mongoose';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ export async function GET(req) {
         const baseFilter = { userId, moduleId: 'inQuizzo' };
 
         // --- Fetch all queries in parallel ---
-        const [currentAttempts, previousAttempts, allTimeAgg, allTimeDates] = await Promise.all([
+        const [currentAttempts, previousAttempts, allTimeAgg, allTimeDates, activeSession] = await Promise.all([
             // Current period attempts
             UserAttempt.find({ ...baseFilter, ...buildDateFilter(currentStart) })
                 .sort({ timestamp: -1 })
@@ -151,11 +152,21 @@ export async function GET(req) {
                 },
                 { $sort: { _id: -1 } },
             ]),
+
+            // Active session (if any)
+            ActiveQuizSession.findOne({ userId }).lean(),
         ]);
 
         // --- Shape sessions ---
         const currentSessions = currentAttempts.map(attemptToSession);
         const previousSessions = previousAttempts.map(attemptToSession);
+
+        // --- Unique Session Counting (Group by sessionId) ---
+        const currentUniqueSessionIds = new Set(currentAttempts.map(a => a.sessionId).filter(Boolean));
+        const previousUniqueSessionIds = new Set(previousAttempts.map(a => a.sessionId).filter(Boolean));
+
+        const totalSessions = currentUniqueSessionIds.size;
+        const prevTotalSessions = previousUniqueSessionIds.size;
 
         // --- Voice quiz counts (current & previous period) ---
         const voiceQuizCount = currentAttempts.filter(a => a.gameType === 'voice').length;
@@ -196,8 +207,8 @@ export async function GET(req) {
             currentStreak,
             confidenceScore,
             prevConfidenceScore,
-            totalSessions: currentSessions.length,
-            prevTotalSessions: previousSessions.length,
+            totalSessions,
+            prevTotalSessions,
             moduleProgress: {
                 accuracyProgress,
                 questionsProgress,
@@ -206,6 +217,25 @@ export async function GET(req) {
                 totalCorrect: agg.totalCorrect,
                 totalSessions: agg.totalSessions,
             },
+            activeSession: activeSession ? {
+                sessionId: activeSession.sessionId,
+                gameType: activeSession.gameType,
+                progress: activeSession.questionsAnswered,
+                totalQuestions: 10,
+                title: activeSession.config?.topic || activeSession.config?.category || 'Active Session',
+                lastUpdated: activeSession.updatedAt
+            } : null,
+            lastCompletedSession: await UserAttempt.aggregate([
+                { $match: baseFilter },
+                { $group: { _id: '$sessionId', count: { $sum: 1 }, lastTimestamp: { $max: '$timestamp' }, question: { $first: '$question' } } },
+                { $match: { count: { $gte: 10 } } },
+                { $sort: { lastTimestamp: -1 } },
+                { $limit: 1 }
+            ]).then(res => res[0] ? {
+                sessionId: res[0]._id,
+                title: 'Last Completed Session',
+                timestamp: res[0].lastTimestamp
+            } : null)
         });
 
     } catch (error) {
