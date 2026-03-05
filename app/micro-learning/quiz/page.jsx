@@ -401,37 +401,46 @@ function QuizContent() {
 
   // ─── Quiz View ───
   return (
-    <div style={{
-      display: 'flex',
-      height: '100vh',
-      width: '100vw',
-      backgroundColor: t.bg,
-      color: '#fff',
-      overflow: 'hidden',
-      position: 'relative',
-    }}>
+    <div
+      className="ml-quiz-root"
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        minHeight: '100vh',
+        width: '100%',
+        maxWidth: '100%',
+        backgroundColor: t.bg,
+        color: '#fff',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
       {/* Theme overlays */}
       <div className="scanline" />
       <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
       <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
 
       {/* ── Sidebar ── */}
-      <aside style={{
-        width: '280px',
-        height: 'calc(100vh - 32px)',
-        margin: '16px',
-        marginRight: 0,
-        background: t.glass,
-        backdropFilter: 'blur(12px)',
-        border: `1px solid ${t.border}`,
-        borderRight: 'none',
-        borderRadius: '16px 0 0 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '24px',
-        position: 'relative',
-        zIndex: 10,
-      }}>
+      <aside
+        className="ml-quiz-sidebar quiz-sidebar-scroll"
+        style={{
+          width: '280px',
+          height: 'calc(100vh - 32px)',
+          margin: '16px',
+          marginRight: 0,
+          background: t.glass,
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${t.border}`,
+          borderRight: 'none',
+          borderRadius: '16px 0 0 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '24px',
+          position: 'relative',
+          zIndex: 10,
+          flexShrink: 0,
+        }}
+      >
         {/* Sidebar Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
           <div style={{
@@ -471,10 +480,16 @@ function QuizContent() {
         </div>
 
         {/* Segment Nav */}
-        <nav style={{
-          flex: 1, display: 'flex', flexDirection: 'column', gap: '12px',
-          overflowY: 'auto', paddingRight: '8px',
-        }} className="quiz-sidebar-scroll">
+        <nav
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            overflowY: 'auto',
+            paddingRight: '8px',
+          }}
+        >
           {mcqs.map((_, idx) => {
             const isActive = idx === currentIndex;
             const isAnswered = selectedAnswers.hasOwnProperty(idx);
@@ -528,17 +543,21 @@ function QuizContent() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main style={{
-        flex: 1,
-        height: '100vh',
-        padding: '32px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        position: 'relative',
-        overflowY: 'auto',
-        zIndex: 10,
-      }} className="quiz-main-scroll">
+      <main
+        style={{
+          flex: 1,
+          height: '100vh',
+          padding: '24px',
+          paddingTop: '32px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          position: 'relative',
+          overflowY: 'auto',
+          zIndex: 10,
+        }}
+        className="quiz-main-scroll"
+      >
         <div style={{ width: '100%', maxWidth: '900px', paddingTop: '40px', paddingBottom: '80px' }}>
           {/* Question Header */}
           <div style={{ marginBottom: '48px' }}>
@@ -741,6 +760,41 @@ function QuizContent() {
           from { opacity: 0; transform: translateY(30px); }
           to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Layout responsiveness */
+        .ml-quiz-root {
+          flex-direction: column;
+        }
+
+        @media (min-width: 1024px) {
+          .ml-quiz-root {
+            flex-direction: row;
+          }
+          .ml-quiz-sidebar {
+            width: 280px;
+            height: calc(100vh - 32px);
+            margin: 16px;
+            margin-right: 0;
+            border-right: none;
+            border-radius: 16px 0 0 16px;
+          }
+          .quiz-main-scroll {
+            padding: 32px;
+          }
+        }
+
+        @media (max-width: 1023px) {
+          .ml-quiz-sidebar {
+            width: 100%;
+            height: auto;
+            margin: 16px;
+            margin-bottom: 0;
+            border-right: 1px solid ${t.border};
+            border-bottom: none;
+            border-radius: 16px;
+          }
+        }
+
         .quiz-sidebar-scroll::-webkit-scrollbar,
         .quiz-main-scroll::-webkit-scrollbar {
           width: 4px;

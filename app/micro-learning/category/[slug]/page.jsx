@@ -79,7 +79,7 @@ function CategoryPlaylists() {
           No playlists found for this {isAcademic ? "subject" : "category"}.
         </div>
       ) : (
-        <div style={styles.grid}>
+        <div style={styles.grid} className="ml-category-playlist-grid">
           {playlists.map((pl) => (
             <Link
               key={pl.id}
@@ -114,6 +114,19 @@ function CategoryPlaylists() {
           ))}
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 1024px) {
+          .ml-category-playlist-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 640px) {
+          .ml-category-playlist-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </main>
   );
 }
@@ -148,7 +161,8 @@ const styles = {
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",              // ← KEPT exact same 4 columns
+    gridTemplateColumns: "repeat(4, 1fr)",              // desktop: 4 columns
+    gridAutoRows: "1fr",
     gap: "clamp(16px, 2vw, 28px)",                      // ← KEPT exact same
     width: "100%",
     maxWidth: "1600px",                                 // ← KEPT exact same
@@ -227,6 +241,11 @@ const styles = {
     margin: "0 0 8px 0",                                // ← KEPT exact same
     color: "#fff",
     transition: "color 0.3s ease",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
 
   channelName: {

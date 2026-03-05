@@ -311,13 +311,16 @@ export default function ArticulationResults() {
         </section>
 
         {/* ═══ GRID LAYOUT ═══ */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '7fr 5fr',
-          gap: '32px',
-          width: '100%',
-          maxWidth: '1400px',
-        }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '7fr 5fr',
+            gap: '32px',
+            width: '100%',
+            maxWidth: '1400px',
+          }}
+          className="ml-articulation-grid"
+        >
 
           {/* ═══ 2. SPEECH MAP (left, spans full height) ═══ */}
           <div style={{
@@ -868,6 +871,13 @@ export default function ArticulationResults() {
         .restart-btn:hover {
           color: #fff !important;
           border-color: #934CF0 !important;
+        }
+
+        /* Responsive grid layout */
+        @media (max-width: 1024px) {
+          .ml-articulation-grid {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>
