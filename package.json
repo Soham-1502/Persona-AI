@@ -38,6 +38,7 @@
     "dotenv": "^17.2.3",
     "double-metaphone": "^2.0.1",
     "express": "^5.2.1",
+    "google-tts-api": "^2.0.2",
     "groq-sdk": "^0.37.0",
     "joi": "^18.0.2",
     "joi-password-complexity": "^5.2.0",
