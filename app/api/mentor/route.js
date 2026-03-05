@@ -24,7 +24,7 @@ export async function POST(req) {
         });
 
         // Parse request body
-        const { messages } = await req.json();
+        const { messages, sessionId, timeTaken = 0 } = await req.json();
 
         if (!messages || !Array.isArray(messages)) {
             return Response.json({ error: 'Invalid messages format' }, { status: 400 });
@@ -34,21 +34,26 @@ export async function POST(req) {
         const groqMessages = [
             {
                 role: "system",
-                content: `You are a warm, supportive, and highly experienced Social Mentor. Your goal is to help users navigate tricky social situations with ease and confidence.
+                content: `You are a warm, extremely friendly, and supportive Social Mentor. You speak like a wise older friend—approachable, kind, and deeply helpful.
 
-CRITICAL FORMATTING RULES:
+CORE PRINCIPLES:
+- DYNAMIC LENGTH: 
+  * For simple greetings (e.g., "Hi", "Hello", "Hey"), respond with ONE extremely brief, cheerful sentence (e.g., "Hi there! How can I help you today?").
+  * For deep or important social questions (e.g., conflict, anxiety, friendship issues), provide detailed, thoughtful, and high-value information. 
+- FRIENDLINESS: Use a very warm and human tone. Make the user feel heard and supported.
+- NO FLUFF: Even when providing detail, avoid generic repetitive icebreakers. Get straight to the wisdom.
+
+CRITICAL FORMATTING:
 - DO NOT use bullet points or asterisks (*). 
 - DO NOT use excessive bolding.
-- Write in natural, flowing paragraphs as if you are sending a thoughtful message to a friend.
-- Use a warm, human, and encouraging tone. Avoid sounding like a structured AI assistant.
+- Write in natural, flowing, and friendly paragraphs.
 
-When a user presents a scenario:
-1. Briefly acknowledge their situation with empathy.
-2. Provide 3 distinct phrases they can use, woven naturally into your advice. Label them simply as "Option 1", "Option 2", etc., or just describe the vibe (e.g., "If you want to be more direct, try saying...").
-3. For each phrase, explain in a sentence why it's effective.
-4. End with one friendly, practical tip on their presence or delivery (like pacing or eye contact).
+STRUCTURE (For complex social scenarios):
+1. Acknowledge with genuine warmth and empathy (1-2 sentences).
+2. Provide informative context-appropriate phrases or advice. Provide clear "Options" (labeled "Option 1", "Option 2") to help the user choose.
+3. End with ONE very practical, encouraging tip.
 
-Make your entire response feel like a single, cohesive piece of advice from a real person who cares about their success.`
+Make your entire response feel like a real conversation with a friend who truly cares.`
             },
             ...messages
                 .filter(msg => msg.text && msg.text.trim())
@@ -120,7 +125,7 @@ Make your entire response feel like a single, cohesive piece of advice from a re
         const decoded = getUserFromToken(req);
         if (decoded?.userId && messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
-            saveSessionAsync(decoded, lastMessage).catch((err) =>
+            saveSessionAsync(decoded, lastMessage, sessionId, timeTaken).catch((err) =>
                 console.error("[mentor] Failed to save UserAttempt:", err)
             );
         }
@@ -167,7 +172,7 @@ Make your entire response feel like a single, cohesive piece of advice from a re
 }
 
 // ── Async session saver (fire-and-forget) ─────────────────────────────────────
-async function saveSessionAsync(decoded, lastMessage) {
+async function saveSessionAsync(decoded, lastMessage, sessionId, timeTaken) {
     await connectDB();
 
     const user = await User.findById(decoded.userId).select("username mentorStats");
@@ -177,7 +182,7 @@ async function saveSessionAsync(decoded, lastMessage) {
         userId: user._id,
         username: user.username,
         moduleId: "socialMentor",
-        sessionId: `mentor_${Date.now()}`,
+        sessionId: sessionId || `mentor_${Date.now()}`,
         gameType: "chat",
         question: lastMessage.text,
         userAnswer: lastMessage.text,
@@ -185,7 +190,7 @@ async function saveSessionAsync(decoded, lastMessage) {
         isCorrect: true,
         score: 5,
         maxPossibleScore: 10,
-        timeTaken: 0,
+        timeTaken: timeTaken,
     });
 
     user.mentorStats.sessionsAttended += 1;
