@@ -15,6 +15,11 @@ const activeQuizSessionSchema = new mongoose.Schema({
         type: String,
         default: 'inQuizzo'
     },
+    // Human-readable title for the dashboard (e.g. video title)
+    title: {
+        type: String,
+        default: ''
+    },
     gameType: {
         type: String,
         enum: ['quiz', 'mcq', 'voice'],
@@ -55,6 +60,11 @@ const activeQuizSessionSchema = new mongoose.Schema({
         content: String,
         timestamp: { type: Date, default: Date.now }
     }],
+    // Flexible state map for frontend needs (e.g. selected answers, currentIndex)
+    quizState: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    },
     lastUpdated: {
         type: Date,
         default: Date.now

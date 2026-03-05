@@ -40,7 +40,9 @@ export default function ReminderSection() {
                 console.error("Failed to fetch:", result.error);
             }
         } catch (error) {
-            console.error("Error fetching reminders:", error);
+            if (error.name !== 'TypeError' || error.message !== 'Failed to fetch') {
+                console.error("Error fetching reminders:", error);
+            }
         } finally {
             setLoading(false);
         }
@@ -73,7 +75,9 @@ export default function ReminderSection() {
                 console.error("Failed to fetch:", result.error);
             }
         } catch (error) {
-            console.error("Error fetching reminders:", error);
+            if (error.name !== 'TypeError' || error.message !== 'Failed to fetch') {
+                console.error("Error fetching reminders:", error);
+            }
         } finally {
             setRefreshing(false);
         }

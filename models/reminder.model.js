@@ -45,6 +45,15 @@ const ReminderSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    type: {
+      type: String,
+      enum: ["user", "system_streak", "system_incomplete"],
+      default: "user",
+    },
+    actionUrl: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -57,51 +66,51 @@ ReminderSchema.index({ userId: 1, date: 1 });
 ReminderSchema.index({ userId: 1, status: 1 });
 
 // Virtual for checking if reminder is overdue
-ReminderSchema.virtual('isOverdue').get(function() {
+ReminderSchema.virtual('isOverdue').get(function () {
   return this.status !== 'completed' && new Date() > this.date;
 });
 
 // Method to mark reminder as completed
-ReminderSchema.methods.markAsCompleted = function() {
+ReminderSchema.methods.markAsCompleted = function () {
   this.status = 'completed';
   this.completedAt = new Date();
   return this.save();
 };
 
 // Method to soft delete reminder
-ReminderSchema.methods.softDelete = function() {
+ReminderSchema.methods.softDelete = function () {
   this.isDeleted = true;
   return this.save();
 };
 
 // Static method to get user's reminders
-ReminderSchema.statics.getUserReminders = function(userId) {
-  return this.find({ 
-    userId, 
-    isDeleted: false 
+ReminderSchema.statics.getUserReminders = function (userId) {
+  return this.find({
+    userId,
+    isDeleted: false
   }).sort({ date: 1 });
 };
 
 // Static method to get user's pending reminders
-ReminderSchema.statics.getUserPendingReminders = function(userId) {
-  return this.find({ 
-    userId, 
+ReminderSchema.statics.getUserPendingReminders = function (userId) {
+  return this.find({
+    userId,
     status: 'pending',
-    isDeleted: false 
+    isDeleted: false
   }).sort({ date: 1 });
 };
 
 // Static method to get user's upcoming reminders (next 7 days)
-ReminderSchema.statics.getUserUpcomingReminders = function(userId) {
+ReminderSchema.statics.getUserUpcomingReminders = function (userId) {
   const today = new Date();
   const nextWeek = new Date();
   nextWeek.setDate(today.getDate() + 7);
-  
-  return this.find({ 
-    userId, 
+
+  return this.find({
+    userId,
     status: { $ne: 'completed' },
     date: { $gte: today, $lte: nextWeek },
-    isDeleted: false 
+    isDeleted: false
   }).sort({ date: 1 });
 };
 

@@ -39,11 +39,35 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
   const handleAction = () => {
     if (submodule.isVirtual) {
       if (submodule.type === 'continue') {
+        if (submodule.moduleId === 'microlearning' || submodule.moduleId === 'microLearning') {
+          // Route to the exact stage the user left at
+          const stage = submodule.stage;
+          if (stage === 'articulation') {
+            window.location.href = '/micro-learning/articulation-round?sessionId=' + submodule.sessionId;
+          } else if (stage === 'quiz') {
+            window.location.href = '/micro-learning/quiz?sessionId=' + submodule.sessionId;
+          } else if (stage === 'video' && submodule.videoId) {
+            const listParam = submodule.playlistId ? `&list=${submodule.playlistId}` : '';
+            window.location.href = `/micro-learning/video/${submodule.videoId}?sessionId=${submodule.sessionId}${listParam}`;
+          } else {
+            // Fallback — go to video if we have one, else categories
+            window.location.href = submodule.videoId
+              ? `/micro-learning/video/${submodule.videoId}?sessionId=${submodule.sessionId}`
+              : '/micro-learning/categories';
+          }
+          return;
+        }
+
         const route = submodule.name.toLowerCase().includes('random')
-          ? '/inquizzo/RandomQuiz'
-          : '/inquizzo/QuizDomainSelection';
+          ? '/inquizzo/RandomQuiz?sessionId=' + submodule.sessionId
+          : '/inquizzo/QuizDomainSelection?sessionId=' + submodule.sessionId;
         window.location.href = route;
       } else if (submodule.type === 'review') {
+        if (submodule.moduleId === 'microlearning' || submodule.moduleId === 'microLearning') {
+          window.location.href = '/micro-learning/articulation-results?sessionId=' + submodule.sessionId;
+          return;
+        }
+
         const route = submodule.name.toLowerCase().includes('random')
           ? '/inquizzo/RandomQuiz?review=' + submodule.sessionId
           : '/inquizzo/QuizDomainSelection?review=' + submodule.sessionId;
