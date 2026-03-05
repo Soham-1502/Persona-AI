@@ -63,10 +63,34 @@ export default function MCQRound() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', backgroundColor: theme.bg, color: theme.text, fontFamily: 'Inter, sans-serif', overflow: 'hidden' }}>
+    <div
+      className="ml-mcq-root"
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        minHeight: '100vh',
+        width: '100%',
+        maxWidth: '100%',
+        backgroundColor: theme.bg,
+        color: theme.text,
+        fontFamily: 'Inter, sans-serif',
+        overflow: 'hidden',
+      }}
+    >
 
       {/* SIDEBAR NAVIGATION */}
-      <aside style={{ width: '25%', borderRight: `1px solid ${theme.border}`, padding: '40px 30px', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a' }}>
+      <aside
+        className="ml-mcq-sidebar"
+        style={{
+          width: '25%',
+          borderRight: `1px solid ${theme.border}`,
+          padding: '32px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#0a0a0a',
+          flexShrink: 0,
+        }}
+      >
         <h2 style={{ color: theme.accent, fontSize: '1.2rem', fontWeight: '800', marginBottom: '40px', letterSpacing: '2px' }}>LEARNING HUB</h2>
 
         <div style={{ marginBottom: '30px' }}>
@@ -94,7 +118,16 @@ export default function MCQRound() {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main style={{ flex: 1, padding: '60px', overflowY: 'auto', display: 'flex', justifyContent: 'center' }}>
+      <main
+        className="ml-mcq-main"
+        style={{
+          flex: 1,
+          padding: '32px',
+          overflowY: 'auto',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
         <div style={{ width: '100%', maxWidth: '850px' }}>
 
           {/* STEP 1: INPUT */}
@@ -207,6 +240,31 @@ export default function MCQRound() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Layout responsiveness */
+        .ml-mcq-root {
+          flex-direction: column;
+        }
+
+        @media (min-width: 1024px) {
+          .ml-mcq-root {
+            flex-direction: row;
+          }
+          .ml-mcq-sidebar {
+            width: 25%;
+          }
+          .ml-mcq-main {
+            padding: 60px;
+          }
+        }
+
+        @media (max-width: 1023px) {
+          .ml-mcq-sidebar {
+            width: 100%;
+            border-right: none;
+            border-bottom: 1px solid ${theme.border};
+          }
+        }
       `}</style>
     </div>
   )

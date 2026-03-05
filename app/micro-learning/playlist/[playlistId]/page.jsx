@@ -93,7 +93,7 @@ export default async function PlaylistVideos({ params }) {
         <h1 style={styles.pageTitle}>Course Content</h1>
         <p style={styles.subtitle}>Select a lesson to begin your self-development journey</p>
 
-        <div style={styles.videoGrid}>
+        <div style={styles.videoGrid} className="ml-playlist-video-grid">
           {videos.map((video, index) => (
             <a
               key={video.id}
@@ -140,7 +140,7 @@ export default async function PlaylistVideos({ params }) {
           ))}
         </div>
 
-        {/* CSS-only entrance animations + hover effects */}
+        {/* CSS-only entrance animations, hover effects, and responsive grid */}
         <style>{`
           @keyframes cardEntrance {
             from {
@@ -173,6 +173,18 @@ export default async function PlaylistVideos({ params }) {
           }
           .video-card-item:hover h3 {
             color: #934CF0 !important;
+          }
+
+          /* Responsive grid for playlist videos */
+          @media (max-width: 1024px) {
+            .ml-playlist-video-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+          }
+          @media (max-width: 640px) {
+            .ml-playlist-video-grid {
+              grid-template-columns: 1fr;
+            }
           }
         `}</style>
       </div>

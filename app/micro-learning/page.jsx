@@ -60,13 +60,15 @@ export default function SplashPage() {
 
 const styles = {
   splashWrapper: {
-    height: '100vh',
+    minHeight: '100vh',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     textAlign: 'center',
-    width: '100vw',
-    backgroundColor: '#000'
+    width: '100%',
+    maxWidth: '100%',
+    backgroundColor: '#000',
+    overflow: 'hidden',
   },
   descriptionBox: {
     maxWidth: '700px',

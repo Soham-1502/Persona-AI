@@ -165,39 +165,45 @@ export default function ArticulationRound() {
   }
 
   return (
-    <div style={{
-      backgroundColor: '#181022',
-      color: '#fff',
-      width: '100vw',
-      height: '100vh',
-      display: 'flex',
-      alignItems: 'stretch',
-      justifyContent: 'center',
-      position: 'relative',
-      overflow: 'hidden',
-      margin: 0,
-      padding: '16px',
-    }}>
+    <div
+      className="ml-articulation-root"
+      style={{
+        backgroundColor: '#181022',
+        color: '#fff',
+        width: '100%',
+        maxWidth: '100%',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'stretch',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+        margin: 0,
+        padding: '16px',
+      }}
+    >
       {/* Theme overlays */}
       <div className="scanline" />
       <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -100, left: -100 }} />
       <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -50, right: -50 }} />
 
       {/* Main content */}
-      <main style={{
-        position: 'relative',
-        zIndex: 10,
-        width: '100%',
-        maxWidth: '900px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px 32px',
-        flex: 1,
-        minHeight: 0,
-        animation: 'fadeSlideIn 1s ease-out forwards',
-      }}>
+      <main
+        style={{
+          position: 'relative',
+          zIndex: 10,
+          width: '100%',
+          maxWidth: '900px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px 16px 32px 16px',
+          flex: 1,
+          minHeight: 0,
+          animation: 'fadeSlideIn 1s ease-out forwards',
+        }}
+      >
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <h1 style={{
@@ -485,6 +491,17 @@ export default function ArticulationRound() {
         textarea {
           scrollbar-width: thin;
           scrollbar-color: rgba(147, 76, 240, 0.3) transparent;
+        }
+
+        /* Layout responsiveness */
+        .ml-articulation-root {
+          flex-direction: column;
+        }
+
+        @media (min-width: 768px) {
+          .ml-articulation-root {
+            flex-direction: row;
+          }
         }
       `}</style>
     </div>

@@ -19,8 +19,9 @@ export default function VideoPlayerPage() {
   const [videoDetails, setVideoDetails] = useState(null);
   const [activeRightTab, setActiveRightTab] = useState('course');
 
-  // Video end state
+  // Video playback state
   const [isVideoEnded, setIsVideoEnded] = useState(false);
+  const [isVideoPaused, setIsVideoPaused] = useState(false);
 
   // Transcript states
   const hasTriggeredGladia = useRef(false);
@@ -194,15 +195,24 @@ export default function VideoPlayerPage() {
           autoplay: 1,
           modestbranding: 1,
           rel: 0,
+          iv_load_policy: 3,
+          cc_load_policy: 0,
           origin: typeof window !== 'undefined' ? window.location.origin : '',
           disablekb: 1
         },
         events: {
           onReady: () => console.log("YouTube Player ready"),
           onStateChange: (event) => {
-            if (event.data === window.YT.PlayerState.ENDED) {
+            const state = event.data;
+            if (state === window.YT.PlayerState.ENDED) {
               setIsVideoEnded(true);
+              setIsVideoPaused(false);
               handleAutoNext();
+            } else if (state === window.YT.PlayerState.PAUSED) {
+              setIsVideoPaused(true);
+            } else if (state === window.YT.PlayerState.PLAYING) {
+              setIsVideoPaused(false);
+              setIsVideoEnded(false);
             }
           }
         }
@@ -284,15 +294,20 @@ export default function VideoPlayerPage() {
   const isAssessmentEnabled = isVideoEnded && mcqStatus === 'ready';
 
   return (
-    <div style={{
-      display: 'flex',
-      height: '100vh',
-      width: '100vw',
-      backgroundColor: theme.bg,
-      color: '#fff',
-      overflow: 'hidden',
-      position: 'relative',
-    }}>
+    <div
+      className="ml-video-root"
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        minHeight: '100vh',
+        width: '100%',
+        maxWidth: '100%',
+        backgroundColor: theme.bg,
+        color: '#fff',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
       {/* ── Theme Overlays ── */}
       <div className="scanline" />
       <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -192, left: -192 }} />
@@ -300,13 +315,17 @@ export default function VideoPlayerPage() {
       <div className="orb" style={{ background: '#934CF0', width: 400, height: 400, top: '50%', right: 0, opacity: 0.15 }} />
 
       {/* Left: Video + Info */}
-      <div style={{
-        flex: 1,
-        padding: '40px',
-        overflowY: 'auto',
-        position: 'relative',
-        zIndex: 10,
-      }} className="custom-scrollbar-area">
+      <div
+        style={{
+          flex: 1,
+          padding: '24px',
+          paddingTop: '32px',
+          overflowY: 'auto',
+          position: 'relative',
+          zIndex: 10,
+        }}
+        className="custom-scrollbar-area ml-video-main"
+      >
         <div style={{
           position: 'relative',
           width: '100%',
@@ -319,7 +338,68 @@ export default function VideoPlayerPage() {
           backdropFilter: 'blur(12px)',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '20%', zIndex: 10, background: 'transparent' }} />
+          {/* Smart overlay: blocks YouTube suggested video clicks when paused/ended */}
+          {(isVideoPaused || isVideoEnded) && (
+            <div
+              onClick={() => {
+                if (player) {
+                  if (isVideoEnded) {
+                    player.seekTo(0, true);
+                    player.playVideo();
+                  } else {
+                    player.playVideo();
+                  }
+                }
+              }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 10,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(0, 0, 0, 0.45)',
+                backdropFilter: 'blur(2px)',
+                transition: 'opacity 0.3s ease',
+              }}
+            >
+              <div style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                background: 'rgba(147, 76, 240, 0.85)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 30px rgba(147, 76, 240, 0.5)',
+                transition: 'transform 0.2s ease',
+              }}>
+                {isVideoEnded ? (
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                  </svg>
+                ) : (
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="#fff">
+                    <polygon points="6,3 20,12 6,21"></polygon>
+                  </svg>
+                )}
+              </div>
+              <span style={{
+                position: 'absolute',
+                bottom: '20px',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                letterSpacing: '0.05em',
+              }}>
+                {isVideoEnded ? 'Click to Replay' : 'Click to Resume'}
+              </span>
+            </div>
+          )}
+          {/* Top bar overlay to block YouTube logo click */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '42px', zIndex: 9, background: 'transparent' }} />
           <div id="youtube-player" style={{ width: '100%', height: '100%' }} />
         </div>
 
@@ -449,16 +529,21 @@ export default function VideoPlayerPage() {
       </div>
 
       {/* Right: Sidebar */}
-      <div style={{
-        width: '400px',
-        background: 'rgba(147, 76, 240, 0.05)',
-        backdropFilter: 'blur(12px)',
-        borderLeft: `1px solid ${theme.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        zIndex: 10,
-      }}>
+      <div
+        className="ml-video-sidebar"
+        style={{
+          width: '400px',
+          maxWidth: '100%',
+          background: 'rgba(147, 76, 240, 0.05)',
+          backdropFilter: 'blur(12px)',
+          borderLeft: `1px solid ${theme.border}`,
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          zIndex: 10,
+          flexShrink: 0,
+        }}
+      >
         <div style={{
           padding: '24px',
           borderBottom: `1px solid ${theme.border}`,
@@ -569,11 +654,37 @@ export default function VideoPlayerPage() {
         </div>
       </div>
 
-      {/* Scoped CSS for scrollbar, hover effects, animations */}
+      {/* Scoped CSS for layout, scrollbar, hover effects, animations */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+
+        /* Layout responsiveness */
+        .ml-video-root {
+          flex-direction: column;
+        }
+
+        @media (min-width: 1024px) {
+          .ml-video-root {
+            flex-direction: row;
+          }
+          .ml-video-main {
+            padding: 40px;
+          }
+          .ml-video-sidebar {
+            width: 400px;
+          }
+        }
+
+        @media (max-width: 1023px) {
+          .ml-video-sidebar {
+            width: 100%;
+            border-left: none;
+            border-top: 1px solid ${theme.border};
+          }
+        }
+
         .custom-scrollbar-area::-webkit-scrollbar {
           width: 4px;
         }

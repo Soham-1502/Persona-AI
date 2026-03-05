@@ -3,6 +3,16 @@ import Link from 'next/link';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Space_Grotesk } from 'next/font/google';
+import {
+  MessageCircle, UserRound, BrainCircuit, Sparkles, Heart,
+  Flame, ShieldCheck, Hourglass, Crown,
+  Monitor, Lock, Bot, Cpu, Zap,
+  Ruler, BarChart3, Sigma, Infinity,
+  Atom, FlaskConical, Dna, Globe,
+  Megaphone, Coins, Rocket, ClipboardList,
+  Scroll, Microscope, Users, Lightbulb,
+  Palette, Smartphone, Landmark, Music,
+} from 'lucide-react';
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -13,55 +23,55 @@ const personalityCategories = [
   {
     name: 'Communication',
     slug: 'communication',
-    icon: '💬',
+    icon: MessageCircle,
     description: 'Master clear expression, storytelling, voice tone, active listening & persuasive speaking.'
   },
   {
     name: 'Posture & Presence',
     slug: 'posture',
-    icon: '🧍',
+    icon: UserRound,
     description: 'Develop powerful body language, confident stance, eye contact and physical charisma.'
   },
   {
     name: 'Confidence & Self-Belief',
     slug: 'confidence',
-    icon: '🧠',
+    icon: BrainCircuit,
     description: 'Build unshakeable inner confidence, overcome self-doubt, and radiate self-worth.'
   },
   {
     name: 'Charisma & Magnetism',
     slug: 'charisma',
-    icon: '🌟',
+    icon: Sparkles,
     description: 'Become naturally magnetic — warmth, likability, social energy & instant connection.'
   },
   {
     name: 'Emotional Intelligence',
     slug: 'emotional-intelligence',
-    icon: '❤️',
+    icon: Heart,
     description: 'Understand & manage emotions — yours and others — empathy, self-regulation & social awareness.'
   },
   {
     name: 'Motivation & Mindset',
     slug: 'motivation',
-    icon: '🔥',
+    icon: Flame,
     description: 'Cultivate growth mindset, daily drive, resilience and peak mental performance.'
   },
   {
     name: 'Resilience & Mental Toughness',
     slug: 'resilience',
-    icon: '🛡️',
+    icon: ShieldCheck,
     description: 'Bounce back from failure, handle stress, develop grit and emotional endurance.'
   },
   {
     name: 'Self-Discipline & Habits',
     slug: 'self-discipline',
-    icon: '⏳',
+    icon: Hourglass,
     description: 'Create unbreakable consistency, strong routines, willpower and long-term focus.'
   },
   {
     name: 'Leadership & Influence',
     slug: 'leadership',
-    icon: '👑',
+    icon: Crown,
     description: 'Inspire, guide, make decisions, build trust and lead without formal authority.'
   },
 ];
@@ -71,61 +81,61 @@ const academicSections = [
     title: 'Technology & Engineering',
     description: 'This is where your Programming sits. It covers how to build and use digital or physical systems.',
     items: [
-      { name: 'Software Development', slug: 'software-development', icon: '💻', description: 'Coding, web, apps, DevOps' },
-      { name: 'Cybersecurity', slug: 'cybersecurity', icon: '🔒', description: 'Hacking prevention, encryption, security' },
-      { name: 'Robotics', slug: 'robotics', icon: '🤖', description: 'Automation, drones, mechanical AI' },
-      { name: 'AI & Machine Learning', slug: 'ai', icon: '🧠', description: 'Neural networks, LLMs, data science' },
-      { name: 'Electronics', slug: 'electronics', icon: '⚡', description: 'Circuits, embedded systems, IoT' },
+      { name: 'Software Development', slug: 'software-development', icon: Monitor, description: 'Coding, web, apps, DevOps' },
+      { name: 'Cybersecurity', slug: 'cybersecurity', icon: Lock, description: 'Hacking prevention, encryption, security' },
+      { name: 'Robotics', slug: 'robotics', icon: Bot, description: 'Automation, drones, mechanical AI' },
+      { name: 'AI & Machine Learning', slug: 'ai', icon: Cpu, description: 'Neural networks, LLMs, data science' },
+      { name: 'Electronics', slug: 'electronics', icon: Zap, description: 'Circuits, embedded systems, IoT' },
     ]
   },
   {
     title: 'Mathematics & Logic',
     description: 'This is the foundation for technical work.',
     items: [
-      { name: 'Algebra', slug: 'algebra', icon: '📐', description: 'Equations, functions, polynomials' },
-      { name: 'Statistics & Probability', slug: 'statistics', icon: '📊', description: 'Data analysis, inference, distributions' },
-      { name: 'Calculus', slug: 'calculus', icon: '∫', description: 'Limits, derivatives, integrals' },
-      { name: 'Discrete Mathematics', slug: 'discrete-math', icon: '♾️', description: 'Logic, sets, graphs, algorithms' },
+      { name: 'Algebra', slug: 'algebra', icon: Ruler, description: 'Equations, functions, polynomials' },
+      { name: 'Statistics & Probability', slug: 'statistics', icon: BarChart3, description: 'Data analysis, inference, distributions' },
+      { name: 'Calculus', slug: 'calculus', icon: Sigma, description: 'Limits, derivatives, integrals' },
+      { name: 'Discrete Mathematics', slug: 'discrete-math', icon: Infinity, description: 'Logic, sets, graphs, algorithms' },
     ]
   },
   {
     title: 'Natural Sciences',
     description: 'This covers the study of the physical universe.',
     items: [
-      { name: 'Physics', slug: 'physics', icon: '⚛️', description: 'Mechanics, electricity, quantum' },
-      { name: 'Chemistry', slug: 'chemistry', icon: '🧪', description: 'Reactions, organic, periodic table' },
-      { name: 'Biology', slug: 'biology', icon: '🧬', description: 'Cells, genetics, evolution' },
-      { name: 'Environmental Science', slug: 'environment', icon: '🌍', description: 'Ecology, climate, sustainability' },
+      { name: 'Physics', slug: 'physics', icon: Atom, description: 'Mechanics, electricity, quantum' },
+      { name: 'Chemistry', slug: 'chemistry', icon: FlaskConical, description: 'Reactions, organic, periodic table' },
+      { name: 'Biology', slug: 'biology', icon: Dna, description: 'Cells, genetics, evolution' },
+      { name: 'Environmental Science', slug: 'environment', icon: Globe, description: 'Ecology, climate, sustainability' },
     ]
   },
   {
     title: 'Business & Management',
     description: 'This is about how organizations and money work.',
     items: [
-      { name: 'Marketing', slug: 'marketing', icon: '📣', description: 'Branding, ads, consumer behavior' },
-      { name: 'Finance', slug: 'finance', icon: '💰', description: 'Investing, accounting, markets' },
-      { name: 'Entrepreneurship', slug: 'entrepreneurship', icon: '🚀', description: 'Startups, business models' },
-      { name: 'Project Management', slug: 'project-management', icon: '📋', description: 'Agile, Scrum, planning' },
+      { name: 'Marketing', slug: 'marketing', icon: Megaphone, description: 'Branding, ads, consumer behavior' },
+      { name: 'Finance', slug: 'finance', icon: Coins, description: 'Investing, accounting, markets' },
+      { name: 'Entrepreneurship', slug: 'entrepreneurship', icon: Rocket, description: 'Startups, business models' },
+      { name: 'Project Management', slug: 'project-management', icon: ClipboardList, description: 'Agile, Scrum, planning' },
     ]
   },
   {
     title: 'Humanities & Social Sciences',
     description: 'This covers how people think, live, and interact.',
     items: [
-      { name: 'History', slug: 'history', icon: '📜', description: 'Events, civilizations, timelines' },
-      { name: 'Psychology', slug: 'psychology', icon: '🧑‍🔬', description: 'Behavior, mind, mental health' },
-      { name: 'Sociology', slug: 'sociology', icon: '👥', description: 'Society, groups, institutions' },
-      { name: 'Philosophy', slug: 'philosophy', icon: '🤔', description: 'Ethics, logic, existence' },
+      { name: 'History', slug: 'history', icon: Scroll, description: 'Events, civilizations, timelines' },
+      { name: 'Psychology', slug: 'psychology', icon: Microscope, description: 'Behavior, mind, mental health' },
+      { name: 'Sociology', slug: 'sociology', icon: Users, description: 'Society, groups, institutions' },
+      { name: 'Philosophy', slug: 'philosophy', icon: Lightbulb, description: 'Ethics, logic, existence' },
     ]
   },
   {
     title: 'Arts & Design',
     description: 'This is the creative and visual side of study.',
     items: [
-      { name: 'Graphic Design', slug: 'graphic-design', icon: '🎨', description: 'Visual communication, branding' },
-      { name: 'UI/UX Design', slug: 'ui-ux', icon: '📱', description: 'User interfaces, experience design' },
-      { name: 'Architecture', slug: 'architecture', icon: '🏛️', description: 'Buildings, spaces, urban planning' },
-      { name: 'Music', slug: 'music', icon: '🎵', description: 'Theory, production, instruments' },
+      { name: 'Graphic Design', slug: 'graphic-design', icon: Palette, description: 'Visual communication, branding' },
+      { name: 'UI/UX Design', slug: 'ui-ux', icon: Smartphone, description: 'User interfaces, experience design' },
+      { name: 'Architecture', slug: 'architecture', icon: Landmark, description: 'Buildings, spaces, urban planning' },
+      { name: 'Music', slug: 'music', icon: Music, description: 'Theory, production, instruments' },
     ]
   },
 ];
@@ -312,7 +322,7 @@ function CategoriesContent() {
                     <div className="glass-card group" style={{ ...styles.card, '--card-border-color': g.border }}>
                       <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
                         <div className="icon-glow" style={{ background: g.glow }} />
-                        <span className="icon-symbol" style={styles.icon}>{item.icon}</span>
+                        <item.icon className="icon-symbol" size={48} strokeWidth={1.5} style={{ color: '#fff', filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }} />
                       </div>
                       <h3 style={styles.name}>{item.name}</h3>
                       <p style={styles.desc}>{item.description}</p>
@@ -346,7 +356,7 @@ function CategoriesContent() {
                         <div className="glass-card group" style={{ ...styles.card, '--card-border-color': g.border }}>
                           <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
                             <div className="icon-glow" style={{ background: g.glow }} />
-                            <span className="icon-symbol" style={styles.icon}>{item.icon}</span>
+                            <item.icon className="icon-symbol" size={48} strokeWidth={1.5} style={{ color: '#fff', filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }} />
                           </div>
                           <h3 style={styles.name}>{item.name}</h3>
                           <p style={styles.desc}>{item.description}</p>
@@ -437,6 +447,7 @@ const styles = {
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gridAutoRows: '1fr',
     gap: '28px',
   },
   section: {
@@ -462,7 +473,9 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',                              // ← KEPT centered
+    justifyContent: 'center',
     height: '100%',
+    minHeight: '280px',
     // glass-card CSS class handles: background, border, backdrop-filter, hover effects
   },
   icon: {
