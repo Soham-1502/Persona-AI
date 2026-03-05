@@ -44,3 +44,20 @@ next-env.d.ts
 test-groq-api*.js
 test-local-api.js
 build_output*.txt
+
+# Antigravity & GSD
+/.gemini/
+/.gsd/
+/.agent/
+/.agents/
+/plugins/
+/adapters/
+/docs/
+.coderabbit.yaml
+.cursorrules
+GSD-STYLE.md
+PROJECT_RULES.md
+model_capabilities.yaml
+/scripts/search_repo.*
+/scripts/setup_search.*
+/scripts/validate-*

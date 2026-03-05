@@ -1,16 +1,6 @@
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Providers from "./components/shared/provider/providers";;
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import Providers from "./components/shared/provider/providers";
+import CustomCursor from "./components/shared/CustomCursor/CustomCursor";
 
 export const metadata = {
   title: "PersonaAI",
@@ -20,10 +10,11 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Providers>{children}</Providers>
+      <body className="antialiased">
+        <Providers>
+          <CustomCursor />
+          {children}
+        </Providers>
       </body>
     </html>
   );

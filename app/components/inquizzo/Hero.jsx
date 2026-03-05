@@ -1,17 +1,15 @@
-"use client"; // Added to enable hooks (useState, useEffect) in Next.js
+"use client";
 
 import React, { useState, useEffect } from "react";
-// Remove react-router-dom imports
-// import { Link } from "react-router-dom";
-// import { useNavigate } from "react-router-dom";
-
-// Add Next.js navigation imports
 import Link from "next/link";
-import { useRouter } from "next/navigation"; 
-import axios from "axios";
+import { useRouter } from "next/navigation";
+import CursorGlow from './effects/CursorGlow';
+import CursorTrail from './effects/CursorTrail';
+import ParallaxBlob from './effects/ParallaxBlob';
+import MagneticButton from './effects/MagneticButton';
 
 const Hero = () => {
-  const router = useRouter(); // Use this if you need manual navigation later
+  const router = useRouter();
   const messages = ["Welcome to InQuizo,", "Fuel Your Mind. Flex Your Voice."];
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [currentText, setCurrentText] = useState("");
@@ -20,7 +18,6 @@ const Hero = () => {
   const [allComplete, setAllComplete] = useState(false);
 
   useEffect(() => {
-    // Check if window is defined to avoid errors during SSR
     if (typeof window === "undefined") return;
 
     const loadVoices = () => {
@@ -101,13 +98,12 @@ const Hero = () => {
       return (
         <>
           <div className="text-white mb-1">Welcome to InQuizo</div>
-          <span className="text-yellow-400">
+          <span className="bg-gradient-to-r from-[#7303C0] to-[#EC38BC] bg-clip-text text-transparent">
             {currentText}
             {(isTyping || !allComplete) && (
               <span
-                className={`${
-                  showCursor ? "opacity-100" : "opacity-0"
-                } transition-opacity duration-150`}
+                className={`${showCursor ? "opacity-100" : "opacity-0"
+                  } text-[#EC38BC] transition-opacity duration-150`}
               >
                 |
               </span>
@@ -122,9 +118,8 @@ const Hero = () => {
         {currentText}
         {(isTyping || !allComplete) && (
           <span
-            className={`${
-              showCursor ? "opacity-100" : "opacity-0"
-            } text-yellow-400 transition-opacity duration-150`}
+            className={`${showCursor ? "opacity-100" : "opacity-0"
+              } text-[#EC38BC] transition-opacity duration-150`}
           >
             |
           </span>
@@ -134,27 +129,43 @@ const Hero = () => {
   };
 
   return (
-    <div className="radial-animated-bg min-h-screen flex items-center justify-center text-white text-center px-4 bg-[radial-gradient(ellipse_at_bottom_right,var(--tw-gradient-stops))] from-[#070e1d] via-[#1b176b] to-[#000000]">
-      <div>
-        <h1 className="text-6xl text-white md:text-7xl font-bold mb-6 leading-tight font-inter">
+    <div className="relative min-h-screen flex items-center justify-center text-white text-center px-4 overflow-hidden bg-gradient-to-br from-[#03001E] via-[#7303C0]/20 to-[#03001E]">
+
+      {/* Effect layers */}
+      <CursorTrail />
+      <CursorGlow />
+
+      {/* Parallax blobs */}
+      <ParallaxBlob offsetFactor={0.025} className="top-0 left-1/3 w-[500px] h-[300px] bg-[#7303C0]/15" />
+      <ParallaxBlob offsetFactor={0.015} className="bottom-0 right-1/4 w-[400px] h-[200px] bg-[#EC38BC]/10" />
+      <ParallaxBlob offsetFactor={0.035} className="top-1/2 left-0 w-[300px] h-[300px] bg-[#03001E]/80" />
+
+      {/* Grid overlay texture */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(115,3,192,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(115,3,192,0.03)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none" />
+
+      {/* Content */}
+      <div className="relative z-10">
+        {/* Badge chip above heading */}
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#7303C0]/30 bg-[#7303C0]/10 backdrop-blur-sm mb-6">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#EC38BC] animate-pulse" />
+          <span className="text-xs font-semibold text-[#FDEFF9] uppercase tracking-widest">
+            Voice-Controlled Quiz Platform
+          </span>
+        </div>
+
+        <h1 className="text-6xl md:text-8xl font-bold mb-6 leading-tight">
           {renderMessage()}
         </h1>
 
         {allComplete && (
-          <div className="animate-fade-in mt-12 flex flex-col items-center space-y-4">
-            {/* 🚀 Changed 'to' to 'href' for Next.js Link */}
-            <Link href="/inquizzo/Home">
-              <button className="bg-yellow-500 hover:bg-yellow-400 text-black font-semibold py-4 px-10 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
-                Start Quiz 🚀
-              </button>
-            </Link>
-
-            {/* 🔐 Changed 'to' to 'href' for Next.js Link */}
-            {/* <Link href="/(auth)login">
-              <button className="bg-white hover:bg-gray-200 text-black font-medium py-3 px-8 rounded-full transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105">
-                Login 🔐
-              </button>
-            </Link> */}
+          <div className="animate-fade-in mt-12 flex flex-col items-center gap-4">
+            <MagneticButton>
+              <Link href="/inquizzo/Home">
+                <button className="bg-gradient-to-r from-[#7303C0] to-[#EC38BC] text-white font-semibold py-4 px-10 rounded-full shadow-[0_0_40px_rgba(236,56,188,0.4)] hover:shadow-[0_0_60px_rgba(236,56,188,0.5)] transition-all duration-300 transform hover:scale-105">
+                  Initialize Quiz 🚀
+                </button>
+              </Link>
+            </MagneticButton>
           </div>
         )}
       </div>
