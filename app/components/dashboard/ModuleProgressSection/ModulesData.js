@@ -9,4 +9,10 @@ export const modulesData = [
       { id: "sessions", name: "Sessions Played", progress: 0 },
     ],
   },
+  {
+    id: "microlearning",
+    name: "Micro-Learning",
+    icon: "GraduationCap",
+    submodules: [],
+  },
 ];

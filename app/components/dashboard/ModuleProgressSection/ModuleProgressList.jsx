@@ -14,6 +14,8 @@ export default function ModuleProgressList({ modules, selectedCategory, statusFi
 
     if (statusFilter && statusFilter !== 'all') {
         submodulerows = submodulerows.filter(({ submodule }) => {
+            // Virtual rows (Continue / Review) always show regardless of filter
+            if (submodule.isVirtual) return true;
             const progress = submodule.progress;
             if (statusFilter === 'completed') return progress === 100;
             if (statusFilter === 'inprogress') return progress > 0 && progress < 100;

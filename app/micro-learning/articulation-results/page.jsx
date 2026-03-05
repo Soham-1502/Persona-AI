@@ -38,9 +38,6 @@ export default function ArticulationResults() {
         const parsed = JSON.parse(savedData);
         setAnalysisData(parsed.analysis);
         setUserText(parsed.userText || "");
-
-        // Optional: clean up after loading to avoid stale data
-        localStorage.removeItem('articulationResult');
       } catch (err) {
         console.error("Failed to parse saved articulation result:", err);
       }
@@ -821,7 +818,7 @@ export default function ArticulationResults() {
             // window.location.href = '/next-page';
 
             // For now — going to categories as before
-            window.location.href = '/categories';
+            window.location.href = '/micro-learning/categories';
           }}
           className="restart-btn"
           style={{
