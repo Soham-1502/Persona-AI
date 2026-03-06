@@ -17,11 +17,12 @@ export class AudioAnalyzer {
         this.currentEnergy = 0;
     }
 
-    async start() {
+    async start(externalStream = null) {
         if (this.isRecording) return;
 
         try {
-            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.isExternalStream = !!externalStream;
+            this.stream = externalStream || await navigator.mediaDevices.getUserMedia({ audio: true });
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             this.analyser = this.audioContext.createAnalyser();
 
@@ -55,8 +56,8 @@ export class AudioAnalyzer {
         }
         const rms = Math.sqrt(sumSquares / dataArray.length);
         // Scale RMS: 0.01 is a whisper, 0.1 is normal speech, 0.3 is loud.
-        // We'll normalize 0.2 to 100% for the UI.
-        this.currentEnergy = Math.min(100, (rms / 0.2) * 100);
+        // We'll normalize 0.12 to 100% for the UI (increased sensitivity)
+        this.currentEnergy = Math.min(100, (rms / 0.12) * 100);
         this.energies.push(this.currentEnergy);
 
         // 2. Calculate Pitch (Auto-correlation)
@@ -135,7 +136,9 @@ export class AudioAnalyzer {
         }
 
         if (this.stream) {
-            this.stream.getTracks().forEach(track => track.stop());
+            if (!this.isExternalStream) {
+                this.stream.getTracks().forEach(track => track.stop());
+            }
             this.stream = null;
         }
 

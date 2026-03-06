@@ -69,40 +69,47 @@ export async function initMediaPipeModels() {
             numHands: 2
         });
     } catch (err) {
-        console.error("MediaPipe initialization error:", err);
+        console.error("❌ MediaPipe initialization error:", err);
     } finally {
         isInitializing = false;
+        console.log(`✅ MediaPipe Init Complete. Models loaded: Face(${!!faceLandmarker}) Pose(${!!poseLandmarker}) Hand(${!!handLandmarker})`);
     }
 }
 
-// Sitting vs Standing heuristic
-function determinePosture(poseLandmarks) {
-    if (!poseLandmarks || poseLandmarks.length === 0) return "unknown";
+// Posture heuristic for desk/webcam users - returns 0-100 continuous score
+// Uses nose-to-shoulder relationship since hips/knees are rarely visible in desk webcam shots
+function determinePostureScore(poseLandmarks) {
+    if (!poseLandmarks || poseLandmarks.length < 17) return -1; // sentinel: no person
 
-    const leftHip = poseLandmarks[23];
-    const rightHip = poseLandmarks[24];
-    const leftKnee = poseLandmarks[25];
-    const rightKnee = poseLandmarks[26];
+    const nose = poseLandmarks[0];
+    const leftShoulder = poseLandmarks[11];
+    const rightShoulder = poseLandmarks[12];
 
-    const hipsVisible = leftHip?.visibility > 0.5 || rightHip?.visibility > 0.5;
-    const kneesVisible = leftKnee?.visibility > 0.5 || rightKnee?.visibility > 0.5;
+    const noseVisible = nose?.visibility > 0.5;
+    const leftShoulderVisible = leftShoulder?.visibility > 0.3;
+    const rightShoulderVisible = rightShoulder?.visibility > 0.3;
 
-    if (!hipsVisible) return "unknown";
-
-    if (kneesVisible) {
-        const leftHipY = leftHip?.y || 0;
-        const rightHipY = rightHip?.y || 0;
-        const leftKneeY = leftKnee?.y || 0;
-        const rightKneeY = rightKnee?.y || 0;
-
-        const hipY = (leftHipY + rightHipY) / 2;
-        const kneeY = (leftKneeY + rightKneeY) / 2;
-
-        const yDiff = kneeY - hipY;
-        if (yDiff > 0.15) return "standing";
+    if (!noseVisible || (!leftShoulderVisible && !rightShoulderVisible)) {
+        return -1; // not enough landmarks
     }
 
-    return "sitting";
+    const shoulderMidY = (
+        ((leftShoulderVisible ? leftShoulder.y : 0) + (rightShoulderVisible ? rightShoulder.y : 0)) /
+        ((leftShoulderVisible ? 1 : 0) + (rightShoulderVisible ? 1 : 0))
+    );
+
+    // In MediaPipe, Y increases downward. Nose should be above (lower Y) than shoulders.
+    const nosePctAboveShoulders = shoulderMidY - nose.y; // positive = nose is higher than shoulders
+
+    // Centering: nose X should be near middle
+    const distFromCenter = Math.abs(nose.x - 0.5); // 0 = perfect center, 0.5 = edge
+    const centerScore = Math.max(0, 1 - (distFromCenter / 0.4)); // 100% at center, 0% at edge
+
+    // Vertical score: scale nosePctAboveShoulders. ~0.05 is bad, ~0.25 is great.
+    const verticalRaw = (nosePctAboveShoulders - 0.05) / (0.25 - 0.05); // 0 to 1
+    const verticalScore = Math.max(0, Math.min(1, verticalRaw));
+
+    return Math.round(verticalScore * 0.7 * 100 + centerScore * 0.3 * 100); // weighted combo
 }
 
 function evaluateEmotion(faceBlendshapes) {
@@ -131,7 +138,11 @@ export function startMediaPipeStream(videoElement, onResults) {
 
     async function detectFrame() {
         if (!active || !videoElement || videoElement.readyState < 2) {
-            if (active) requestAnimationFrame(detectFrame);
+            if (active) {
+                // Throttle logs slightly to not spam on idle, but verify it's checking
+                if (Math.random() < 0.05) console.log("⏳ MediaPipe waiting: videoElement readyState=", videoElement?.readyState);
+                requestAnimationFrame(detectFrame);
+            }
             return;
         }
 
@@ -143,7 +154,7 @@ export function startMediaPipeStream(videoElement, onResults) {
             let faceResult = null;
             let poseResult = null;
             let handResult = null;
-            let posture = "unknown";
+            let postureScore = -1; // -1 = no person detected
             let emotion = "neutral";
 
             if (faceLandmarker) {
@@ -155,7 +166,7 @@ export function startMediaPipeStream(videoElement, onResults) {
             if (poseLandmarker) {
                 poseResult = poseLandmarker.detectForVideo(videoElement, currentTimeMs);
                 if (poseResult && poseResult.landmarks && poseResult.landmarks.length > 0) {
-                    posture = determinePosture(poseResult.landmarks[0]);
+                    postureScore = determinePostureScore(poseResult.landmarks[0]);
                 }
             }
             if (handLandmarker) {
@@ -167,7 +178,7 @@ export function startMediaPipeStream(videoElement, onResults) {
                 face: faceResult,
                 pose: poseResult,
                 hand: handResult,
-                posture,
+                postureScore,
                 emotion,
                 handsVisible: handResult?.landmarks?.length > 0
             });

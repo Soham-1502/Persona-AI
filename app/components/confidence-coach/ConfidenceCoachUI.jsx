@@ -1,15 +1,27 @@
 import { useState, useEffect, useRef } from "react";
 import { Mic, Video, Square, Play, CheckCircle, Loader2, Eye, Activity, Zap, TrendingUp, Timer } from "lucide-react";
-import { usePorcupine } from '@picovoice/porcupine-react';
+// Porcupine removed to use native SpeechRecognition commands
 import { startMediaPipeStream } from "./MediaPipeAnalyzer";
 import { AudioAnalyzer } from "./AudioAnalyzer";
 import { getAuthToken } from "@/lib/auth-client";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
+const SCENARIO_WEIGHTS = {
+    "Job Interview": { eyeContact: 4.0, posture: 3.0, emotion: 1.5, vocal: 0.8, pacing: 0.7 },
+    "Presentation": { eyeContact: 2.0, posture: 1.5, emotion: 1.5, vocal: 3.0, pacing: 2.0 },
+    "Negotiation": { eyeContact: 3.0, posture: 1.0, emotion: 3.0, vocal: 2.0, pacing: 1.0 },
+    "Crisis Management": { eyeContact: 2.0, posture: 1.0, emotion: 3.5, vocal: 2.5, pacing: 1.0 },
+    "Networking": { eyeContact: 3.5, posture: 1.5, emotion: 2.0, vocal: 1.5, pacing: 1.5 },
+    "Salary Discussion": { eyeContact: 3.0, posture: 2.0, emotion: 2.5, vocal: 1.5, pacing: 1.0 },
+    "Hostile Q&A": { eyeContact: 3.0, posture: 1.5, emotion: 2.5, vocal: 2.0, pacing: 1.0 },
+    "Impromptu Pitch": { eyeContact: 2.5, posture: 1.0, emotion: 1.5, vocal: 2.5, pacing: 2.5 }
+};
+
 export function ConfidenceCoachUI() {
     // Video state
     const videoRef = useRef(null);
+    const streamRef = useRef(null);
     const [stream, setStream] = useState(null);
 
     // Session state
@@ -25,6 +37,7 @@ export function ConfidenceCoachUI() {
     // Transcript state
     const [userAnswer, setUserAnswer] = useState("");
     const [interimAnswer, setInterimAnswer] = useState("");
+    const [recognitionLang, setRecognitionLang] = useState("en-IN"); // Changed to en-IN for better Indian accent detection
     const recognitionRef = useRef(null);
 
     // ML Analyzers
@@ -57,47 +70,125 @@ export function ConfidenceCoachUI() {
     // Final Payload
     const [finalScore, setFinalScore] = useState(null);
     const [finalDataPayload, setFinalDataPayload] = useState(null);
+    const [aiFeedback, setAiFeedback] = useState([]);
+    const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+    const [aiFeedbackError, setAiFeedbackError] = useState(false);
+
+    // Latest State Refs (to avoid hook dependency loops)
+    const mlStatsRef = useRef(mlStats);
+    const userAnswerRef = useRef(userAnswer);
+    const interimAnswerRef = useRef(interimAnswer);
+
+    useEffect(() => { mlStatsRef.current = mlStats; }, [mlStats]);
+    useEffect(() => { userAnswerRef.current = userAnswer; }, [userAnswer]);
+    useEffect(() => { interimAnswerRef.current = interimAnswer; }, [interimAnswer]);
 
     const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
 
     useEffect(() => {
         // Initialize camera
         const initCamera = async () => {
+            if (streamRef.current) return;
+
+            console.log("🎥 Requesting Camera/Mic Access...");
             try {
+                // First get basic stream to trigger permission prompt so labels become visible
+                const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoInputs = devices.filter(d => d.kind === 'videoinput');
+
+                // Stop the temporary stream to free up the hardware
+                tempStream.getTracks().forEach(track => track.stop());
+
+                // Find the requested built-in camera or fall back
+                const targetCamera = videoInputs.find(d =>
+                    d.label.toLowerCase().includes('usb2.0') ||
+                    d.label.toLowerCase().includes('uvc webcam')
+                );
+
+                console.log("📸 Available cameras:", videoInputs.map(d => d.label));
+
+                const videoConstraints = targetCamera ? {
+                    deviceId: { exact: targetCamera.deviceId },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } : {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                };
+
+                if (targetCamera) {
+                    console.log(`🎯 Using specific camera: ${targetCamera.label}`);
+                } else {
+                    console.log(`⚠️ Specific camera not found, using generic constraints.`);
+                }
+
                 const mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
+                    video: videoConstraints,
                     audio: true
                 });
+
+                console.log("✅ Camera/Mic Access Granted:", mediaStream.id);
+                streamRef.current = mediaStream;
                 setStream(mediaStream);
+
                 if (videoRef.current) {
                     videoRef.current.srcObject = mediaStream;
                 }
             } catch (err) {
-                console.error("Failed to access camera/mic:", err);
+                console.error("❌ Failed to access camera/mic:", err);
+                try {
+                    console.log("🔄 Retrying with absolute basic constraints...");
+                    const basicStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    streamRef.current = basicStream;
+                    setStream(basicStream);
+                } catch (fallbackErr) {
+                    if (err.name === 'NotAllowedError') {
+                        alert("Camera/Mic access was denied. Please enable permissions in your browser settings and refresh.");
+                    } else if (err.name === 'NotFoundError') {
+                        alert("No camera or microphone found. Please connect your hardware.");
+                    }
+                }
             }
         };
 
-        if (sessionStatus === "idle") {
-            initCamera();
-        }
+        initCamera();
 
         return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+            if (streamRef.current) {
+                console.log("🎥 Cleaning up media tracks on unmount");
+                streamRef.current.getTracks().forEach(track => {
+                    track.stop();
+                    console.log(`  - Stopped ${track.kind} track`);
+                });
+                streamRef.current = null;
             }
         };
-    }, [sessionStatus]);
+    }, []);
+
+    // Sync stream with video element
+    useEffect(() => {
+        if (stream && videoRef.current) {
+            console.log("📺 Attaching stream to video element");
+            videoRef.current.srcObject = stream;
+            videoRef.current.onloadedmetadata = () => {
+                videoRef.current.play().catch(e => console.error("Video play failed:", e));
+            };
+        }
+    }, [stream]);
 
     // Live Metrics Update Loop
     useEffect(() => {
         let interval;
         if (sessionStatus === "analyzing" && startTime) {
+            console.log("📈 Starting Live Metrics Loop");
             interval = setInterval(() => {
                 const now = Date.now();
                 const durationMinutes = (now - startTime) / 60000;
 
-                // Calculate WPM
-                const words = userAnswer.trim().split(/\s+/).filter(w => w.length > 0).length;
+                // Calculate WPM from ref
+                const words = userAnswerRef.current.trim().split(/\s+/).filter(w => w.length > 0).length;
                 const wpm = durationMinutes > 0 ? Math.round(words / durationMinutes) : 0;
 
                 // Sync with audio analyzer
@@ -105,125 +196,170 @@ export function ConfidenceCoachUI() {
                 let energy = 0;
                 if (audioAnalyzerRef.current) {
                     const metrics = audioAnalyzerRef.current.getMetrics();
-                    pitch = Math.min(100, (metrics.currentPitch / 300) * 100); // Scale pitch approx 0-300Hz
+                    pitch = Math.min(100, (metrics.currentPitch / 300) * 100);
                     energy = metrics.currentEnergy;
+                }
+
+                const currentMl = mlStatsRef.current;
+
+                // Real-time instantaneous metrics (last 10-30 frames ~ 1 second)
+                const recentFaces = currentMl.recentFaces || [];
+                const faceRatio = recentFaces.length > 0 ? (recentFaces.filter(Boolean).length / recentFaces.length) : 0;
+
+                const recentPostures = currentMl.postures.slice(-20); // numeric scores, last 20 frames
+                let livePosture = 0;
+                if (recentPostures.length > 0) {
+                    // -1 means no one detected = 0 points
+                    const total = recentPostures.reduce((s, v) => s + Math.max(0, v), 0);
+                    livePosture = Math.round(total / recentPostures.length);
                 }
 
                 setLiveMetrics(prev => ({
                     ...prev,
-                    // Eye contact: higher sensitivity, human contact is rarely 100% stable
-                    eyeContact: mlStats.faceFrames > 0 ? Math.min(100, Math.round((mlStats.visibleFaceFrames / mlStats.faceFrames) * 110)) : 0,
-                    // Posture: already smoothed by alpha-beta filter in MediaPipeAnalyzer
-                    posture: Math.round(mlStats.currentPostureRatio * 100),
-                    // Pitch scaling: 80Hz - 250Hz is normal range. Scale 150Hz as 50%
-                    pitch: pitch > 0 ? Math.min(100, Math.round((pitch / 300) * 100)) : 0,
-                    // Energy is already normalized 0-100 in AudioAnalyzer
-                    energy: Math.round(energy),
+                    eyeContact: Math.round(faceRatio * 100),
+                    posture: livePosture,
+                    pitch: Math.round(pitch),
+                    energy: Math.min(100, Math.round(energy * 1.5)), // Added sensitivity boost for live bar
                     wpm: wpm,
-                    // Pacing: 120-150 WPM is ideal (100%). Penalize extremes.
-                    pace: wpm < 80 ? Math.round((wpm / 120) * 100) : (wpm > 180 ? Math.max(0, 100 - (wpm - 180)) : 100),
-                    isSpeaking: interimAnswer.length > 0 || (Date.now() - prev.lastSpeechTime < 2000),
-                    lastSpeechTime: interimAnswer.length > 0 ? Date.now() : (prev.lastSpeechTime || 0)
+                    pace: wpm === 0 ? 0 : (wpm < 95 ? Math.round((wpm / 120) * 100) : (wpm > 170 ? Math.max(0, 100 - (wpm - 170)) : 100)),
+                    isSpeaking: interimAnswerRef.current.length > 0 || (Date.now() - prev.lastSpeechTime < 2000),
+                    lastSpeechTime: interimAnswerRef.current.length > 0 ? Date.now() : (prev.lastSpeechTime || 0)
                 }));
             }, 500);
         }
-        return () => clearInterval(interval);
-    }, [sessionStatus, startTime, userAnswer, interimAnswer, mlStats]);
-
-    // Porcupine Wake Word Engine
-    const { keywordDetection, isLoaded: isPorcupineLoaded, isListening: isPorcupineListening, init: initPorcupine, start: startPorcupine } = usePorcupine();
-
-    useEffect(() => {
-        const setupPorcupine = async () => {
-            const accessKey = process.env.NEXT_PUBLIC_PICOVOICE_ACCESS_KEY;
-            if (!accessKey || isPorcupineLoaded) return;
-            try {
-                await initPorcupine(
-                    accessKey,
-                    { publicPath: "/porcupine_params.pv", forceWrite: true },
-                    [
-                        { builtin: "Porcupine", sensitivity: 0.7 },
-                        { builtin: "Bumblebee", sensitivity: 0.7 }
-                    ]
-                );
-            } catch (err) {
-                console.warn("Porcupine fallback logic triggered", err);
+        return () => {
+            if (interval) {
+                console.log("📉 Clearing Live Metrics Loop");
+                clearInterval(interval);
             }
         };
-        setupPorcupine();
-    }, [isPorcupineLoaded, initPorcupine]);
+    }, [sessionStatus, startTime]); // Removed userAnswer, interimAnswer, mlStats dependencies
+
+    // Voice Command Detection via SpeechRecognition
+    // (Porcupine removed to avoid external API key dependency)
 
     useEffect(() => {
-        if (isPorcupineLoaded && !isPorcupineListening) {
-            startPorcupine().catch(e => console.warn(e));
-        }
-    }, [isPorcupineLoaded, isPorcupineListening, startPorcupine]);
-
-    // Command Parser
-    useEffect(() => {
-        if (keywordDetection !== null) {
-            if (keywordDetection.index === 0 && sessionStatus === "idle") {
-                startSession();
-            } else if (keywordDetection.index === 1 && sessionStatus === "analyzing") {
-                endSession();
+        // Run listener in idle and analyzing states
+        if (sessionStatus === "ended" || isGeneratingQuestion) {
+            if (recognitionRef.current) {
+                try { recognitionRef.current.stop(); } catch (e) { }
             }
+            return;
         }
-    }, [keywordDetection, sessionStatus]);
 
-    useEffect(() => {
         let active = true;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
+        if (!SpeechRecognition) {
+            console.warn("Speech recognition not supported in this browser.");
+            return;
+        }
 
         let recognition = recognitionRef.current;
         if (!recognition) {
+            console.log("🎤 Initializing Speech Recognition for Active Session");
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.lang = "en-US";
+            recognition.maxAlternatives = 3; // Allow more context for phonetic matching
+            recognition.lang = recognitionLang;
             recognitionRef.current = recognition;
+        } else {
+            // Update language if it changed
+            recognition.lang = recognitionLang;
         }
 
         recognition.onresult = (event) => {
-            let finalPiece = '';
-            let interimPiece = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalPiece += event.results[i][0].transcript;
-                } else {
-                    interimPiece += event.results[i][0].transcript;
+            if (!active) return;
+            let interimTranscript = '';
+            let finalTranscriptParts = [];
+
+            const sanitize = (text) => {
+                return text
+                    .replace(/artificial integration/gi, "artificial intelligence")
+                    .replace(/deployment computer/gi, "diploma in computer")
+                    .replace(/deployment in computer/gi, "diploma in computer")
+                    .replace(/purchasing my/gi, "pursuing my")
+                    .replace(/purchasing the/gi, "pursuing a")
+                    .replace(/pulse parser/gi, "resume parser")
+                    .replace(/regiment pulse/gi, "resume")
+                    .replace(/80 score/gi, "ATS score")
+                    .replace(/within 80/gi, "with an ATS")
+                    .replace(/genital/gi, "generator")
+                    .replace(/Christmas/gi, "Kharpude");
+            };
+
+            for (let i = 0; i < event.results.length; ++i) {
+                const result = event.results[i];
+                const rawText = result[0].transcript.toLowerCase().trim();
+
+                // --- COMMAND SCANNER ---
+                if (sessionStatus === "idle" && (rawText === "start" || rawText === "begin" || rawText.includes("begin session"))) {
+                    console.log("🗣️ Voice Command detected: START");
+                    startSession();
+                    return;
+                }
+
+                if (sessionStatus === "analyzing" && (rawText.includes("end this speech") || rawText === "finish" || rawText === "stop session")) {
+                    console.log("🗣️ Voice Command detected: END");
+                    endSession();
+                    return;
+                }
+
+                if (sessionStatus === "analyzing") {
+                    if (result.isFinal) {
+                        const cleaned = sanitize(result[0].transcript);
+                        if (result[0].confidence > 0.05 || cleaned.length > 5) {
+                            finalTranscriptParts.push(cleaned.trim());
+                        }
+                    } else {
+                        interimTranscript += result[0].transcript;
+                    }
                 }
             }
-            const combined = (finalPiece + interimPiece).toLowerCase();
-            if (sessionStatus === "idle" && combined.includes("start")) {
-                startSession();
-            } else if (sessionStatus === "analyzing") {
-                if (combined.includes("end this speech")) {
-                    endSession();
-                } else {
-                    if (finalPiece) {
-                        setUserAnswer(prev => prev + (prev && finalPiece ? " " : "") + finalPiece);
-                    }
-                    setInterimAnswer(interimPiece);
+
+            if (sessionStatus === "analyzing") {
+                const currentFinal = finalTranscriptParts.join(" ");
+                if (currentFinal.trim() !== userAnswerRef.current.trim()) {
+                    setUserAnswer(currentFinal);
+                    userAnswerRef.current = currentFinal;
                 }
+                setInterimAnswer(interimTranscript);
+                interimAnswerRef.current = interimTranscript;
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.warn("Speech Recognition Error:", event.error);
+            if (event.error === 'not-allowed') {
+                console.error("🎤 Speech Recognition blocked by user/browser.");
+            } else if (event.error === 'language-not-supported') {
+                console.warn(`🎤 Language ${recognitionLang} not supported, falling back to en-US`);
+                setRecognitionLang("en-US");
             }
         };
 
         recognition.onend = () => {
-            if (active && sessionStatus !== "ended") {
-                try { recognition.start(); } catch (e) { }
+            if (active && (sessionStatus === "idle" || sessionStatus === "analyzing")) {
+                setTimeout(() => { if (active) try { recognition.start(); } catch (e) { } }, 300);
             }
         };
 
-        if (sessionStatus !== "ended") {
+        if (stream && (sessionStatus === "idle" || sessionStatus === "analyzing")) {
             try { recognition.start(); } catch (e) { }
         }
 
         return () => {
             active = false;
-            try { recognition.stop(); } catch (e) { }
+            if (recognitionRef.current) {
+                try {
+                    recognitionRef.current.onresult = null;
+                    recognitionRef.current.onend = null;
+                    recognitionRef.current.onerror = null;
+                    recognitionRef.current.stop();
+                } catch (e) { }
+            }
         };
-    }, [sessionStatus]);
+    }, [sessionStatus, recognitionLang]);
 
     // AI Question Generation
     useEffect(() => {
@@ -286,32 +422,43 @@ export function ConfidenceCoachUI() {
             handFrames: 0,
             visibleHandFrames: 0
         });
+        setAiFeedback([]);
+        setAiFeedbackError(false);
         setLiveMetrics({ eyeContact: 0, posture: 0, pitch: 0, energy: 0, pace: 0, wpm: 0, isSpeaking: false });
 
-        if (recognitionRef.current) {
-            try { recognitionRef.current.abort(); } catch (e) { }
-        }
-
+        console.log("🚀 Initializing session analysis components...");
         setSessionStatus("analyzing");
 
         const audioAnalyzer = new AudioAnalyzer();
         audioAnalyzerRef.current = audioAnalyzer;
-        try { await audioAnalyzer.start(); } catch (e) { console.error(e); }
+        try {
+            console.log("🎤 Starting Audio Analyzer with shared stream");
+            await audioAnalyzer.start(stream);
+        } catch (e) {
+            console.error("Audio Analyzer Start Error:", e);
+        }
 
         if (videoRef.current) {
+            console.log("🎥 Starting MediaPipe stream analysis. Video readyState:", videoRef.current.readyState);
             mediaPipeCleanupRef.current = startMediaPipeStream(videoRef.current, (results) => {
+                // DEBUG: enable this line to spam logs if needed
+                // console.log("🧠 MediaPipe Frame processed:", results.focus, results.emotion);
+
                 setMlStats(prev => {
                     const isFaceVisible = results.face && results.face.faceBlendshapes && results.face.faceBlendshapes.length > 0;
-                    const validPostures = [...prev.postures, results.posture].filter(p => p !== "unknown");
-                    // Treat both sitting and standing as "Strong" presence for desk users
-                    const presenceCount = validPostures.filter(p => p === "standing" || p === "sitting").length;
-                    const presenceRatio = validPostures.length > 0 ? (presenceCount / validPostures.length) : 0;
+                    const allPostures = [...prev.postures, results.postureScore !== undefined ? results.postureScore : -1];
+                    const recentFaces = [...(prev.recentFaces || []), isFaceVisible].slice(-30);
+
+                    // Cumulative ratio for final results (treat -1 as 0)
+                    const postureSum = allPostures.reduce((s, v) => s + Math.max(0, v), 0);
+                    const presenceRatio = allPostures.length > 0 ? (postureSum / (allPostures.length * 100)) : 0;
 
                     return {
                         ...prev,
+                        recentFaces,
                         faceFrames: prev.faceFrames + 1,
                         visibleFaceFrames: prev.visibleFaceFrames + (isFaceVisible ? 1 : 0),
-                        postures: [...prev.postures, results.posture],
+                        postures: allPostures.slice(-100), // numeric scores now
                         positiveFrames: prev.positiveFrames + (results.emotion === "positive" ? 1 : 0),
                         tenseFrames: prev.tenseFrames + (results.emotion === "tense" ? 1 : 0),
                         emotionMeasuredFrames: prev.emotionMeasuredFrames + (results.emotion !== "neutral" ? 1 : 0),
@@ -321,6 +468,35 @@ export function ConfidenceCoachUI() {
                     };
                 });
             });
+        }
+    };
+
+    const fetchAiFeedback = async (metrics) => {
+        if (!metrics) return;
+        setIsGeneratingFeedback(true);
+        setAiFeedbackError(false);
+        setAiFeedback([]); // Clear old feedback immediately
+        try {
+            const res = await fetch('/api/confidence-coach/generate-feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    metrics,
+                    scenarioType: scenarioCategory,
+                    difficulty: difficulty
+                })
+            });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.feedback) && data.feedback.length > 0) {
+                setAiFeedback(data.feedback);
+            } else {
+                setAiFeedbackError(true);
+            }
+        } catch (err) {
+            console.error("❌ Failed to fetch AI feedback:", err);
+            setAiFeedbackError(true);
+        } finally {
+            setIsGeneratingFeedback(false);
         }
     };
 
@@ -344,49 +520,74 @@ export function ConfidenceCoachUI() {
         const timeTaken = Math.floor((endTimeStamp - startTime) / 1000);
 
         // Filler Word Detection
-        const fillerWords = ["um", "uh", "err", "like", "actually", "basically", "you know"];
-        const transcript = userAnswer.toLowerCase();
+        const fillerWords = ["um", "uh", "err", "like", "actually", "basically", "you know", "literally", "sort of", "kind of", "i mean"];
+        const fillerTranscript = userAnswerRef.current.toLowerCase();
         let fillerCount = 0;
         fillerWords.forEach(word => {
             const regex = new RegExp(`\\b${word}\\b`, 'g');
-            const matches = transcript.match(regex);
+            const matches = fillerTranscript.match(regex);
             if (matches) fillerCount += matches.length;
         });
 
-        const wordCount = userAnswer.trim().split(/\s+/).filter(w => w.length > 0).length;
+        // Combine state, ref, AND interim (words being processed but not committed as 'final').
+        // At session end, the last spoken words often sit in the interim buffer.
+        const stateTranscript = userAnswer || "";
+        const refTranscript = userAnswerRef.current || "";
+        const interimAtEnd = interimAnswerRef.current || "";
+
+        // Use longest confirmed transcript, then append interim words
+        const baseTranscript = stateTranscript.length >= refTranscript.length ? stateTranscript : refTranscript;
+        const finalTranscript = (baseTranscript + " " + interimAtEnd).trim();
+
+        const wordCount = finalTranscript.length > 0 ? finalTranscript.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
         const durationMin = timeTaken / 60;
-        const finalWPM = durationMin > 0 ? wordCount / durationMin : 0;
+        const finalWPM = durationMin > 0 ? Math.round(wordCount / durationMin) : 0;
 
-        // 1. Eye Contact (3.5 points max)
-        // Scale: 70% visibility = 100% score (3.5 pts)
+        // --- SCENARIO-BASED WEIGHTED SCORING ---
+        const weights = SCENARIO_WEIGHTS[scenarioCategory] || SCENARIO_WEIGHTS["Job Interview"];
+        const difficultyMultiplier = difficulty === "Expert" ? 2.0 : (difficulty === "Intermediate" ? 1.5 : 1.0);
+
+        // 1. Eye Contact (EC)
+        // Beginner: 70% EC = 1.0 score. Expert: 90% EC = 1.0 score.
+        const ecThreshold = difficulty === "Expert" ? 0.9 : (difficulty === "Intermediate" ? 0.8 : 0.7);
         const faceVisRatio = mlStats.faceFrames > 0 ? (mlStats.visibleFaceFrames / mlStats.faceFrames) : 0;
-        const eyeContactScore = Math.min(1.0, faceVisRatio / 0.7);
-        const eyeContactPts = eyeContactScore * 3.5;
+        const eyeContactScore = Math.min(1.0, faceVisRatio / ecThreshold);
+        const eyeContactPts = eyeContactScore * weights.eyeContact;
 
-        // 2. Presence & Posture (2.5 points max)
-        const posturePts = mlStats.currentPostureRatio * 2.5;
+        // 2. Presence & Posture (P)
+        const posturePts = mlStats.currentPostureRatio * weights.posture;
 
-        // 3. Emotion Calibration (2.0 points max)
-        let emotionPts = 1.0; // standard neutral start
+        // 3. Emotion Calibration (E)
+        let emotionScore = 0.5; // neutral start
         if (mlStats.faceFrames > 0) {
             const positiveRatio = mlStats.positiveFrames / mlStats.faceFrames;
             const tenseRatio = mlStats.tenseFrames / mlStats.faceFrames;
-            emotionPts = Math.min(2.0, Math.max(0.5, 1.0 + (positiveRatio * 2.0) - (tenseRatio * 1.5)));
+            // Expert is stricter on tense expressions
+            const tensePenaltyFactor = difficulty === "Expert" ? 2.0 : 1.5;
+            emotionScore = Math.min(1.0, Math.max(0.2, 0.5 + (positiveRatio * 2.0) - (tenseRatio * tensePenaltyFactor)));
         }
+        const emotionPts = emotionScore * weights.emotion;
 
-        // 4. Vocal Performance (1.2 points max)
-        const vocalPts = (audioMetrics.pitchStability / 100) * 1.2;
+        // 4. Vocal Performance (V)
+        const vocalPts = (audioMetrics.pitchStability / 100) * weights.vocal;
 
-        // 5. Pacing Performance (0.8 points max)
-        // Ideal range: 110 - 160 WPM
-        let pacingPts = 0.4;
-        if (finalWPM >= 110 && finalWPM <= 160) pacingPts = 0.8;
-        else if (finalWPM > 160) pacingPts = Math.max(0.2, 0.8 - (finalWPM - 160) / 100);
-        else pacingPts = Math.max(0.1, (finalWPM / 110) * 0.8);
+        // 5. Pacing Performance (W)
+        // Adjusted range: 40 - 65 WPM is "Good/Very Good" (1.0)
+        let pacingScore = 0.5;
+        if (finalWPM >= 40 && finalWPM <= 65) pacingScore = 1.0;
+        else if (finalWPM > 65) pacingScore = 1.0;
+        else if (finalWPM >= 20) pacingScore = 0.8; // Moderate
+        else if (finalWPM >= 15) pacingScore = 0.5; // Slow
+        else pacingScore = 0.2; // Too Slow
+        const pacingPts = pacingScore * weights.pacing;
 
         // Deductions for fillers
+        // Filler penalty is much harsher on Expert
+        const fillerRate = (fillerCount / (wordCount || 1));
+        const baseFillerPenalty = fillerRate * 50;
+        const fillerPenalty = Math.min(3.0, baseFillerPenalty * difficultyMultiplier);
+
         let totalScore = eyeContactPts + posturePts + emotionPts + vocalPts + pacingPts;
-        const fillerPenalty = Math.min(2.0, (fillerCount / (wordCount || 1)) * 50);
         totalScore -= fillerPenalty;
 
         const finalCalculatedScore = Math.min(10.0, Math.max(1.0, Math.round(totalScore * 10) / 10));
@@ -408,10 +609,13 @@ export function ConfidenceCoachUI() {
                 emotion: emotionPts > 1.5 ? "Confident" : (emotionPts < 0.8 ? "Tense" : "Neutral"),
                 vocalStability: audioMetrics.pitchStability,
                 pacing: Math.round((pacingPts / 0.8) * 100),
-                wpm: Math.round(finalWPM)
+                wpm: Math.round(finalWPM),
+                fillers: fillerCount // Added fillers here
             },
             meta: {
                 fillers: fillerCount,
+                wordCount: wordCount,
+                wpm: Math.round(finalWPM),
                 pitchStability: audioMetrics.pitchStability,
                 energyTrend: audioMetrics.energyTrend
             }
@@ -419,6 +623,8 @@ export function ConfidenceCoachUI() {
 
         const token = getAuthToken();
         setFinalDataPayload(payload);
+        fetchAiFeedback(payload.metrics);
+
         // Fire-and-forget asynchronous save to JWT-protected backend (Plan 4.3)
         fetch('/api/confidence-coach/session', {
             method: 'POST',
@@ -452,6 +658,7 @@ export function ConfidenceCoachUI() {
                     <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white border border-white/10 text-sm">
                         <Video size={16} className={stream ? "text-green-400" : "text-red-400"} />
                         <span>{stream ? "Camera Active" : "No Camera"}</span>
+                        {/* DEBUG: {stream?.id} */}
                     </div>
                 </div>
 
@@ -531,10 +738,15 @@ export function ConfidenceCoachUI() {
 
                         <button
                             onClick={startSession}
-                            className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black text-lg shadow-xl hover:translate-y-[-2px] active:translate-y-[0] transition-all flex justify-center items-center gap-3 group"
+                            disabled={!stream || isGeneratingQuestion}
+                            className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black text-lg shadow-xl hover:translate-y-[-2px] active:translate-y-[0] transition-all flex justify-center items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                         >
-                            <Play fill="currentColor" size={24} className="group-hover:scale-110 transition-transform" />
-                            BEGIN SESSION
+                            {isGeneratingQuestion ? (
+                                <Loader2 size={24} className="animate-spin" />
+                            ) : (
+                                <Play fill="currentColor" size={24} className="group-hover:scale-110 transition-transform" />
+                            )}
+                            {isGeneratingQuestion ? "PREPARING..." : "BEGIN SESSION"}
                         </button>
                     </div>
                 )}
@@ -584,11 +796,13 @@ export function ConfidenceCoachUI() {
                                 </div>
                             </div>
 
-                            <div className="bg-secondary/30 rounded-2xl p-5 border border-border h-[200px] overflow-y-auto relative">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-3 sticky top-0 bg-secondary/30 backdrop-blur-sm -mt-5 pt-5 pb-2">Live Transcript</h3>
-                                <p className="text-sm font-medium leading-relaxed">
-                                    {userAnswer} <span className="text-primary italic animate-pulse">{interimAnswer}</span>
-                                </p>
+                            <div className="bg-secondary/30 rounded-2xl border border-border overflow-hidden flex flex-col">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground px-5 pt-4 pb-2 bg-secondary/50 border-b border-border">Live Transcript</h3>
+                                <div className="p-5 overflow-y-auto max-h-[160px]">
+                                    <p className="text-sm font-medium leading-relaxed">
+                                        {userAnswer} <span className="text-primary italic animate-pulse">{interimAnswer}</span>
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -636,27 +850,42 @@ export function ConfidenceCoachUI() {
                                     <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
                                         <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Expression</span>
                                         <span className="text-2xl font-black text-primary mb-1">
-                                            {mlStats.positiveFrames > mlStats.tenseFrames ? "Confident" : (mlStats.tenseFrames > mlStats.faceFrames * 0.2 ? "Tense" : "Neutral")}
+                                            {(() => {
+                                                if (mlStats.faceFrames === 0) return "Neutral";
+                                                const posRatio = mlStats.positiveFrames / mlStats.faceFrames;
+                                                const tenseRatio = mlStats.tenseFrames / mlStats.faceFrames;
+                                                if (posRatio > 0.08) return "Confident";
+                                                if (tenseRatio > 0.1) return "Tense";
+                                                return "Neutral";
+                                            })()}
                                         </span>
                                         <span className="text-[9px] text-muted-foreground font-bold opacity-60">Dominant facial emotion</span>
                                     </div>
 
-                                    {/* Vocal Pacing */}
+                                    {/* Vocal Energy - matches Vocal Pacing Details */}
                                     <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Vocal Pacing</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Vocal Energy</span>
                                         <span className="text-2xl font-black text-primary mb-1">
-                                            {audioStats?.volumeVariance < 20 ? "Stable" : "Dynamic"}
+                                            {(() => {
+                                                const wpm = finalDataPayload?.meta?.wpm || 0;
+                                                if (wpm === 0) return "No Speech";
+                                                if (wpm < 15) return "Too Slow";
+                                                if (wpm < 20) return "Slow";
+                                                if (wpm < 40) return "Moderate";
+                                                if (wpm < 65) return "Good";
+                                                return "Very Good";
+                                            })()}
                                         </span>
-                                        <span className="text-[9px] text-muted-foreground font-bold opacity-60">Volume stability over time</span>
+                                        <span className="text-[9px] text-muted-foreground font-bold opacity-60">{Math.round(finalDataPayload?.meta?.wpm || 0)} WPM average</span>
                                     </div>
 
                                     {/* Posture */}
                                     <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
                                         <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Posture</span>
                                         <span className="text-2xl font-black text-primary mb-1">
-                                            {mlStats.currentPostureRatio > 0.6 ? "Strong" : (mlStats.currentPostureRatio > 0.3 ? "Moderate" : "Weak")}
+                                            {Math.round(mlStats.currentPostureRatio * 100) > 60 ? "Strong" : (Math.round(mlStats.currentPostureRatio * 100) > 30 ? "Moderate" : "Weak")}
                                         </span>
-                                        <span className="text-[9px] text-muted-foreground font-bold opacity-60">Body posture quality</span>
+                                        <span className="text-[9px] text-muted-foreground font-bold opacity-60">{Math.round(mlStats.currentPostureRatio * 100)}% session average</span>
                                     </div>
 
                                     {/* Fillers */}
@@ -672,7 +901,14 @@ export function ConfidenceCoachUI() {
                                     <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
                                         <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Clarity</span>
                                         <span className="text-2xl font-black text-primary mb-1">
-                                            {Math.round((audioStats?.pitchStability || 80) * (userAnswer.length > 50 ? 1 : 0.8))}%
+                                            {(() => {
+                                                const wordsCount = (finalDataPayload?.meta?.wordCount || 1);
+                                                const fillersPerWord = (finalDataPayload?.meta?.fillers || 0) / wordsCount;
+                                                // Clarity = pitch stability minus filler penalty
+                                                const pitchBase = Math.min(100, audioStats?.pitchStability || 50);
+                                                const fillerPenalty = Math.round(fillersPerWord * 200); // each 1% filler rate = 2pt penalty
+                                                return Math.max(0, Math.round(pitchBase - fillerPenalty)) + "%";
+                                            })()}
                                         </span>
                                         <span className="text-[9px] text-muted-foreground font-bold opacity-60">Linguistic clarity</span>
                                     </div>
@@ -682,11 +918,19 @@ export function ConfidenceCoachUI() {
                                 <div className="bg-secondary/10 rounded-2xl p-5 border border-border mt-2">
                                     <div className="flex justify-between items-center mb-4">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vocal Pacing Details</span>
-                                        <span className="text-xs font-black text-primary">{Math.round(userAnswer.split(' ').length / (finalDataPayload?.timeTaken / 60)) || 0} WPM</span>
+                                        <span className="text-xs font-black text-primary">{Math.round(finalDataPayload?.meta?.wpm || 0)} WPM</span>
                                     </div>
                                     <div className="flex items-center gap-4 mb-4">
                                         <span className="text-2xl font-black text-yellow-500">
-                                            {(userAnswer.split(' ').length / (finalDataPayload?.timeTaken / 60)) < 110 ? "Too Slow" : ((userAnswer.split(' ').length / (finalDataPayload?.timeTaken / 60)) > 160 ? "Too Fast" : "Ideal")}
+                                            {(() => {
+                                                const wpm = finalDataPayload?.meta?.wpm || 0;
+                                                if (wpm === 0) return "No Speech";
+                                                if (wpm < 15) return "Too Slow";
+                                                if (wpm < 20) return "Slow";
+                                                if (wpm < 40) return "Moderate";
+                                                if (wpm < 65) return "Good";
+                                                return "Very Good";
+                                            })()}
                                         </span>
                                     </div>
                                     <div className="grid grid-cols-2 gap-x-8 gap-y-3">
@@ -696,7 +940,7 @@ export function ConfidenceCoachUI() {
                                         </div>
                                         <div className="flex justify-between items-center text-[10px]">
                                             <span className="text-muted-foreground font-bold">Fillers / 100 words</span>
-                                            <span className="text-green-500 font-black">{(finalDataPayload?.meta?.fillers / (userAnswer.split(' ').length / 100)).toFixed(1)}</span>
+                                            <span className="text-green-500 font-black">{((finalDataPayload?.meta?.fillers || 0) / (Math.max(1, (finalDataPayload?.meta?.wordCount || 1)) / 100)).toFixed(1)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-[10px]">
                                             <span className="text-muted-foreground font-bold">Volume</span>
@@ -734,41 +978,78 @@ export function ConfidenceCoachUI() {
                                     </div>
                                 </div>
 
-                                {/* RECOMMENDATIONS SECTION */}
                                 <div className="space-y-4">
-                                    <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mt-4">Areas for Improvement</h3>
+                                    <div className="flex items-center justify-between mt-4">
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Areas for Improvement</h3>
+                                        {aiFeedback.length > 0 && !isGeneratingFeedback && (
+                                            <button
+                                                onClick={() => fetchAiFeedback(finalDataPayload.metrics)}
+                                                className="text-[10px] font-black text-primary hover:underline flex items-center gap-1"
+                                            >
+                                                <Zap size={10} /> REGENERATE
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="grid gap-3">
-                                        {mlStats.visibleFaceFrames / mlStats.faceFrames < 0.7 && (
-                                            <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-xl flex gap-4 items-start">
-                                                <div className="bg-orange-500/10 p-2 rounded-lg text-orange-600">
-                                                    <Eye size={18} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-xs font-black uppercase opacity-60">Eye Contact</p>
-                                                    <p className="text-sm font-medium">Try to look directly at the camera lens more often to establish better rapport with your audience.</p>
-                                                </div>
+                                        {isGeneratingFeedback ? (
+                                            <div className="space-y-3">
+                                                {[1, 2, 3].map(i => (
+                                                    <div key={i} className="h-24 bg-secondary/5 rounded-xl animate-pulse flex gap-4 p-4 border border-border/50">
+                                                        <div className="w-10 h-10 rounded-lg bg-secondary/10 shrink-0" />
+                                                        <div className="flex-1 space-y-2">
+                                                            <div className="h-3 w-24 bg-secondary/10 rounded" />
+                                                            <div className="h-4 w-full bg-secondary/10 rounded" />
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        )}
-                                        {finalDataPayload?.meta?.fillers > 5 && (
-                                            <div className="bg-red-500/5 border border-red-500/20 p-4 rounded-xl flex gap-4 items-start">
-                                                <div className="bg-red-500/10 p-2 rounded-lg text-red-600">
-                                                    <Zap size={18} />
+                                        ) : aiFeedback.length > 0 ? (
+                                            aiFeedback.map((item, idx) => (
+                                                <div key={idx} className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex gap-4 items-start shadow-sm hover:shadow-md transition-shadow group">
+                                                    <div className="bg-primary/10 p-2 rounded-lg text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                        {(() => {
+                                                            const iconType = (item.iconType || "zap").toLowerCase();
+                                                            if (iconType.includes("camera") || iconType.includes("video")) return <Video size={18} />;
+                                                            if (iconType.includes("mic") || iconType.includes("voice")) return <Mic size={18} />;
+                                                            if (iconType.includes("activity")) return <Activity size={18} />;
+                                                            if (iconType.includes("eye")) return <Eye size={18} />;
+                                                            if (iconType.includes("trending")) return <TrendingUp size={18} />;
+                                                            return <Zap size={18} />;
+                                                        })()}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-black uppercase opacity-60 tracking-tight">{item.title}</p>
+                                                        <p className="text-sm font-medium leading-relaxed">{item.description}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-xs font-black uppercase opacity-60">Filler Words</p>
-                                                    <p className="text-sm font-medium">You used {finalDataPayload.meta.fillers} filler words. Try to embrace pauses instead of using "um" or "like" while thinking.</p>
+                                            ))
+                                        ) : (isGeneratingFeedback || (finalScore !== null && aiFeedback.length === 0 && !aiFeedbackError)) ? (
+                                            <div className="p-10 border-2 border-dashed border-primary/30 rounded-3xl flex flex-col items-center justify-center text-center bg-primary/5">
+                                                <div className="bg-primary/10 p-4 rounded-full mb-4">
+                                                    <Loader2 size={32} className="text-primary animate-spin" />
                                                 </div>
+                                                <p className="text-sm font-black text-primary uppercase tracking-widest mb-1">AI COACHING TIPS</p>
+                                                <p className="text-[10px] text-muted-foreground font-bold animate-pulse">GENERATING ANALYTICS...</p>
                                             </div>
-                                        )}
-                                        {mlStats.visibleHandFrames / mlStats.handFrames < 0.3 && (
-                                            <div className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-xl flex gap-4 items-start">
-                                                <div className="bg-blue-500/10 p-2 rounded-lg text-blue-600">
-                                                    <Activity size={18} />
+                                        ) : aiFeedbackError ? (
+                                            <div className="p-8 border-2 border-dashed border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center bg-red-500/5">
+                                                <div className="bg-red-500/10 p-4 rounded-full mb-4">
+                                                    <Zap size={32} className="text-red-500" />
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-xs font-black uppercase opacity-60">Hand Gestures</p>
-                                                    <p className="text-sm font-medium">Use more open-palm hand gestures to signal transparency and confidence during your high-impact points.</p>
+                                                <p className="text-sm font-bold text-red-500 uppercase tracking-widest mb-2">AI Connection Failed</p>
+                                                <button
+                                                    onClick={() => fetchAiFeedback(finalDataPayload.metrics)}
+                                                    className="px-6 py-2 bg-red-500 text-white rounded-xl font-bold text-xs hover:scale-105 transition-transform shadow-lg"
+                                                >
+                                                    Tap to Try Again
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="p-10 border-2 border-dashed border-border rounded-3xl flex flex-col items-center justify-center text-center bg-secondary/5">
+                                                <div className="bg-primary/10 p-4 rounded-full mb-4">
+                                                    <CheckCircle size={32} className="text-muted-foreground opacity-20" />
                                                 </div>
+                                                <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Feedback ready</p>
                                             </div>
                                         )}
                                     </div>
@@ -805,6 +1086,7 @@ export function ConfidenceCoachUI() {
                                     onClick={() => {
                                         setSessionStatus("idle");
                                         setFinalScore(null);
+                                        setAiFeedback([]);
                                     }}
                                     className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black hover:brightness-110 active:scale-[0.98] transition-all flex justify-center items-center gap-3 mt-6 shadow-xl shadow-primary/20"
                                 >
