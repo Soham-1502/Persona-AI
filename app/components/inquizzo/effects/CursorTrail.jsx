@@ -8,12 +8,20 @@ export default function CursorTrail() {
 
     useEffect(() => {
         let id = 0
+        const lastTouchTime = { current: 0 }
+        const handleTouch = () => { lastTouchTime.current = Date.now() }
+        window.addEventListener("touchstart", handleTouch, { passive: true })
+
         const move = (e) => {
+            if (Date.now() - lastTouchTime.current < 2000) return;
             const dot = { id: id++, x: e.clientX, y: e.clientY }
             setDots(prev => [...prev.slice(-12), dot])
         }
         window.addEventListener("mousemove", move)
-        return () => window.removeEventListener("mousemove", move)
+        return () => {
+            window.removeEventListener("mousemove", move)
+            window.removeEventListener("touchstart", handleTouch)
+        }
     }, [])
 
     return (

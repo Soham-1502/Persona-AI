@@ -11,7 +11,7 @@ export function ReminderFilters({ value, onValueChange }) {
                 <ToggleGroupItem
                     value="all"
                     aria-label="Toggle All"
-                    className="data-[state=on]:bg-red-500/20 data-[state=on]:text-red-500 [&[data-state=on]>svg]:fill-red-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-red-800"
+                    className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-red-500/20 data-[state=on]:text-red-500 [&[data-state=on]>svg]:fill-red-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-red-800"
                 >
                     <Star className="shrink-0" />
                     <span className="truncate">All</span>
@@ -19,7 +19,7 @@ export function ReminderFilters({ value, onValueChange }) {
                 <ToggleGroupItem
                     value="completed"
                     aria-label="Toggle Completed"
-                    className="data-[state=on]:bg-green-500/20 data-[state=on]:text-green-500 [&[data-state=on]>svg]:fill-green-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-green-800"
+                    className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-green-500/20 data-[state=on]:text-green-500 [&[data-state=on]>svg]:fill-green-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-green-800"
                 >
                     <CircleCheck className="shrink-0" />
                     <span className="truncate">Completed</span>
@@ -27,7 +27,7 @@ export function ReminderFilters({ value, onValueChange }) {
                 <ToggleGroupItem
                     value="upcoming"
                     aria-label="Toggle Upcoming"
-                    className="data-[state=on]:bg-blue-500/20 data-[state=on]:text-blue-400 [&[data-state=on]>svg]:fill-blue-400 data-[state=on]:border-blue-800 [&[data-state=on]>svg]:text-white"
+                    className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-blue-500/20 data-[state=on]:text-blue-400 [&[data-state=on]>svg]:fill-blue-400 data-[state=on]:border-blue-800 [&[data-state=on]>svg]:text-white"
                 >
                     <CalendarArrowUp className="shrink-0" />
                     <span className="truncate">Upcoming</span>
@@ -35,7 +35,7 @@ export function ReminderFilters({ value, onValueChange }) {
                 <ToggleGroupItem
                     value="pending"
                     aria-label="Toggle Pending"
-                    className="data-[state=on]:bg-yellow-500/20 data-[state=on]:text-white [&[data-state=on]>svg]:fill-yellow-400 [&[data-state=on]>svg]:stroke-white data-[state=on]:border-yellow-800 [&[data-state=on]>svg]:text-white"
+                    className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-yellow-500/20 data-[state=on]:text-white [&[data-state=on]>svg]:fill-yellow-400 [&[data-state=on]>svg]:stroke-white data-[state=on]:border-yellow-800 [&[data-state=on]>svg]:text-white"
                 >
                     <Clock className="shrink-0" />
                     <span className="truncate">Pending</span>
@@ -43,7 +43,7 @@ export function ReminderFilters({ value, onValueChange }) {
                 <ToggleGroupItem
                     value="overdue"
                     aria-label="Toggle Overdue"
-                    className="data-[state=on]:bg-orange-500/20 data-[state=on]:text-orange-500 [&[data-state=on]>svg]:fill-orange-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-orange-800"
+                    className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-orange-500/20 data-[state=on]:text-orange-500 [&[data-state=on]>svg]:fill-orange-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-orange-800"
                 >
                     <AlertCircle className="shrink-0" />
                     <span className="truncate">Overdue</span>

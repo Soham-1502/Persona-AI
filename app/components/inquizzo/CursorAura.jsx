@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useMotionValue, useSpring } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 export default function CursorAura() {
     const [hoverType, setHoverType] = useState('default');
@@ -13,17 +13,36 @@ export default function CursorAura() {
     const ax = useSpring(mx, { stiffness: 120, damping: 25 });
     const ay = useSpring(my, { stiffness: 120, damping: 25 });
 
+    const lastTouchTime = useRef(0);
+
+    useEffect(() => {
+        if (visible) {
+            document.body.classList.add("custom-cursor-active");
+        } else {
+            document.body.classList.remove("custom-cursor-active");
+        }
+        return () => {
+            document.body.classList.remove("custom-cursor-active");
+        };
+    }, [visible]);
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        if (window.matchMedia('(pointer: coarse)').matches) return;
 
         const move = (e) => {
+            if (Date.now() - lastTouchTime.current < 2000) return;
             mx.set(e.clientX);
             my.set(e.clientY);
             if (!visible) setVisible(true);
         };
 
+        const hide = () => {
+            lastTouchTime.current = Date.now();
+            setVisible(false);
+        };
+
         const checkHover = (e) => {
+            if (Date.now() - lastTouchTime.current < 2000) return;
             const el = e.target;
             if (el.closest('[data-cursor="card"]')) setHoverType('card');
             else if (el.closest('[data-cursor="button"]')) setHoverType('button');
@@ -33,16 +52,18 @@ export default function CursorAura() {
 
         window.addEventListener('mousemove', move, { passive: true });
         window.addEventListener('mouseover', checkHover, { passive: true });
+        window.addEventListener('touchstart', hide, { passive: true });
         return () => {
             window.removeEventListener('mousemove', move);
             window.removeEventListener('mouseover', checkHover);
+            window.removeEventListener('touchstart', hide);
         };
-    }, [visible, mx, my]);
+    }, [mx, my]); // removed visible dependency here to avoid listener thrashing
 
     if (!visible) return null;
 
-    const auraSize = hoverType === 'card' ? 80 : hoverType === 'button' ? 50 : hoverType === 'text' ? 60 : 40;
-    const dotSize = hoverType === 'button' ? 12 : 6;
+    const auraSize = hoverType === 'card' ? 64 : hoverType === 'button' ? 40 : hoverType === 'text' ? 48 : 32;
+    const dotSize = hoverType === 'button' ? 10 : 5;
 
     return (
         <div className="fixed inset-0 pointer-events-none z-[9999]">
