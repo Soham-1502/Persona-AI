@@ -33,6 +33,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 import { sidebarItems } from "./SidebarItems";
 import {
   Avatar,
@@ -41,24 +49,32 @@ import {
 } from "@/components/ui/avatar"
 import { Assets } from "../../../../assets/assets";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { EllipsisVertical, PanelRightOpen, PanelLeftOpen, UserPen, LogOut, Settings, MessageCircleQuestionMark } from "lucide-react";
+import { EllipsisVertical, PanelRightOpen, PanelLeftOpen, UserPen, LogOut, Settings, MessageCircleQuestionMark, Camera, User as UserIcon, AtSign, FileText, Save, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import SettingsModal from "./SettingsModal";
+import ProfileModal from "./ProfileModal";
 
 export default function AppSidebar() {
   const pathname = usePathname();
-  const { toggleSidebar, state } = useSidebar();
+  const { toggleSidebar, state, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
   const router = useRouter();
 
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [openSettingsModal, setOpenSettingsModal] = useState(false);
+
+  // Profile modal states
+  const [openProfileModal, setOpenProfileModal] = useState(false);
 
   // ✅ ADD USER STATE
   const [user, setUser] = useState({
@@ -87,7 +103,14 @@ export default function AppSidebar() {
     }
   }, []);
 
-  const isDarkMode = theme === "dark";
+  const isDarkMode = resolvedTheme === "dark";
+
+  // Glassmorphism styles matching the header
+  const glassStyle = {
+    backgroundColor: isLight ? 'rgba(235, 230, 255, 1)' : 'rgba(10, 8, 16, 0.1)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+  };
 
   // ✅ GET INITIALS FOR AVATAR FALLBACK
   const getInitials = (name) => {
@@ -109,25 +132,35 @@ export default function AppSidebar() {
     // Show success message
     toast.success('Logged out successfully');
 
-    // Small delay for UX, then redirect
-    setTimeout(() => {
-      setIsLoggingOut(false);
-      setOpenLogoutDialog(false);
-      router.push('/login');
-    }, 500);
+    // Instant redirect
+    setIsLoggingOut(false);
+    setOpenLogoutDialog(false);
+    router.push('/');
   }
+
+  if (!mounted) return null;
 
   return (
     <Sidebar
       data-sidebar="sidebar"
-      className="h-screen border-r dark:border-white/10"
+      className="h-screen"
       collapsible="icon"
+      style={{
+        ...glassStyle,
+        borderRight: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.06)',
+      }}
     >
       {/* HEADER */}
-      <SidebarHeader className="h-20 py-4 border-b dark:border-white/10 bg-sidebar-foreground dark:bg-sidebar">
-        <div className="h-full flex items-center justify-between px-2 group-data-[collapsible=icon]:px-0">
-          {/* Logo + text */}
-          <div className="flex items-center gap-2 overflow-hidden">
+      <SidebarHeader
+        className="h-20 py-4 group/header"
+        style={{
+          borderBottom: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'transparent',
+        }}
+      >
+        <div className="h-full flex items-center justify-between px-2 group-data-[collapsible=icon]:px-0 relative">
+          {/* Logo + text - hides on hover ONLY when collapsed */}
+          <div className="flex items-center gap-2 overflow-hidden transition-opacity duration-300 group-data-[collapsible=icon]:group-hover/header:opacity-0 group-data-[collapsible=icon]:mx-auto">
             {/* Logo icon - suppress hydration warning for theme-dependent rendering */}
             <div className="w-10 h-10 rounded-xl dark:bg-background flex items-center justify-center border border-primary shrink-0 group/logo" suppressHydrationWarning>
               {mounted ? (
@@ -146,16 +179,23 @@ export default function AppSidebar() {
             </div>
 
             {/* Brand text – hide when collapsed */}
-            <span className="text-persona-dark dark:text-foreground text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden">
+            <span className={cn(
+              "text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden",
+              isLight ? "text-foreground" : "text-white"
+            )}>
               Persona
               <span className="font-bold text-sidebar-primary">AI</span>
             </span>
           </div>
 
-          {/* Toggle button */}
+          {/* Toggle button - shows on hover when collapsed, or always when expanded */}
           <button
             onClick={toggleSidebar}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-black/20 dark:hover:bg-white/10 dark:text-persona-cream/70 text-foreground shrink-0 cursor-pointer group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:-translate-x-1/2"
+            className={cn(
+              "w-8 h-8 flex items-center justify-center rounded-lg hover:bg-black/20 dark:hover:bg-white/10 shrink-0 cursor-pointer transition-all duration-300",
+              isLight ? "text-foreground" : "text-white",
+              "group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:-translate-x-1/2 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:group-hover/header:opacity-100"
+            )}
             aria-label="Toggle sidebar"
           >
             {/* expanded icon */}
@@ -167,7 +207,7 @@ export default function AppSidebar() {
       </SidebarHeader>
 
       {/* NAV */}
-      <SidebarContent className="py-1 bg-sidebar-foreground dark:bg-sidebar px-1">
+      <SidebarContent className="py-1 px-1" style={{ background: 'transparent' }}>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
@@ -182,9 +222,14 @@ export default function AppSidebar() {
                       asChild
                       isActive={isActive}
                       tooltip={item.title}
-                      className={`text-foreground dark:text-foreground gap-3 relative rounded-lg hover:bg-primary/50 hover:border-persona-indigo dark:hover:bg-accent/30 dark:active:bg-accent/50 ${isActive ? "bg-primary hover:bg-primary dark:bg-accent dark:hover:bg-accent font-semibold border-persona-indigo dark:text-persona-cream h-10" : "h-10"}`}
+                      className={cn(
+                        "gap-3 relative rounded-lg transition-colors h-10 w-full flex items-center shadow-none",
+                        isActive
+                          ? "bg-secondary hover:bg-secondary/90 text-white font-semibold"
+                          : "font-medium hover:bg-primary/10 hover:text-primary dark:hover:bg-white/5 dark:hover:text-persona-cream text-muted-foreground dark:text-white/80"
+                      )}
                     >
-                      <a
+                      <Link
                         href={item.href}
                         className="flex w-fit items-center px-2"
                       >
@@ -194,7 +239,7 @@ export default function AppSidebar() {
                         <span className={`text-[15px] font-medium truncate ${isActive ? "font-semibold" : "font-normal"} ${isCollapsed ? "hidden" : ""}`}>
                           {item.title}
                         </span>
-                      </a>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -205,14 +250,24 @@ export default function AppSidebar() {
       </SidebarContent>
 
       {/* FOOTER */}
-      <SidebarFooter className="border-t border-black/20 dark:border-white/15 bg-sidebar-foreground dark:bg-sidebar group/footer">
-        <SidebarMenu>
+      <SidebarFooter
+        className="group/footer"
+        style={{
+          borderTop: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'transparent',
+        }}
+      >
+        <SidebarMenu className="group-data-[collapsible=icon]:ml-1">
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="flex items-center h-auto hover:bg-black/20 text-foreground active:bg-white/10"
+              className={cn(
+                "flex items-center h-auto rounded-lg transition-colors group-data-[collapsible=icon]:justify-center",
+                "hover:bg-primary/10 dark:hover:bg-white/10 active:bg-primary/15 dark:active:bg-white/15",
+                isLight ? "text-foreground" : "text-white/80"
+              )}
             >
-              <div className="relative flex items-center w-full rounded-lg group-hover/footer:bg-white/10 cursor-pointer">
+              <div className="relative flex items-center w-full rounded-lg cursor-pointer group-data-[collapsible=icon]:justify-center">
 
                 {/* LEFT: Avatar + text */}
                 <div className="flex items-center gap-3 flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
@@ -232,12 +287,15 @@ export default function AppSidebar() {
 
                   {/* Text block (flexible, truncates) */}
                   <div className="flex flex-col flex-1 min-w-0 text-left">
-                    <span className="text-sm font-semibold truncate" title={user.name}>
+                    <span
+                      className={cn("text-sm font-semibold truncate", isLight ? "text-foreground" : "text-white")}
+                      title={user.name}
+                    >
                       {user.name}
                     </span>
 
                     <span
-                      className="text-xs truncate text-muted-foreground"
+                      className={cn("text-xs truncate", isLight ? "text-muted-foreground" : "text-white/60")}
                       title={user.email}
                     >
                       {user.email}
@@ -250,34 +308,41 @@ export default function AppSidebar() {
                   <DropdownMenuTrigger asChild>
                     <button
                       aria-label="User options"
-                      className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center hover:bg-black/20 active:bg-black/30 dark:hover:bg-white/5 dark:active:bg-white/10"
+                      className={cn(
+                        "w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-colors",
+                        "hover:bg-primary/10 dark:hover:bg-white/10 active:bg-primary/20 dark:active:bg-white/15",
+                        isLight ? "text-foreground" : "text-white/70"
+                      )}
                     >
                       <EllipsisVertical className="w-5 h-5" />
                     </button>
                   </DropdownMenuTrigger>
 
                   <DropdownMenuContent
-                    className="w-56 dark:bg-persona-dark border dark:border-white/10 dark:text-persona-cream shadow-persona-purple"
-                    side="right"
-                    align="end"
-                    sideOffset={isCollapsed ? 17 : 23}
-                    alignOffset={isCollapsed ? 2 : -12}
+                    className="w-56 border dark:border-white/10 dark:text-persona-cream shadow-xl backdrop-blur-[12px] bg-background/80"
+                    side={isMobile ? "top" : "right"}
+                    align={isMobile ? "center" : "end"}
+                    sideOffset={isMobile ? 26 : (isCollapsed ? 23 : 29)}
+                    alignOffset={isMobile ? 0 : (isCollapsed ? 0 : -12)}
                   >
-                    <DropdownMenuLabel className="dark:text-persona-cream/90 font-semibold">
+                    <DropdownMenuLabel className="font-semibold text-foreground dark:text-persona-cream/90">
                       My Account
                     </DropdownMenuLabel>
 
                     <DropdownMenuGroup>
-                      <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <UserPen className="dark:text-white" /> Profile
+                      <DropdownMenuItem onClick={() => setOpenProfileModal(true)} className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                        <UserPen className="size-4" /> Profile
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <Settings className="dark:text-white" /> Settings
+                      <DropdownMenuItem
+                        onClick={() => setOpenSettingsModal(true)}
+                        className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors"
+                      >
+                        <Settings className="size-4" /> Settings
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-persona-cream/80 hover:bg-black/20 hover:text-persona-cream focus:bg-black/20 focus:text-persona-cream cursor-pointer">
-                        <MessageCircleQuestionMark className="dark:text-white" />
+                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                        <MessageCircleQuestionMark className="size-4" />
                         Help & Support
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
@@ -329,6 +394,22 @@ export default function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      {/* ─── PROFILE MODAL ─── */}
+      <ProfileModal
+        isOpen={openProfileModal}
+        onClose={() => setOpenProfileModal(false)}
+        onProfileUpdate={(updatedUser) => {
+          setUser({
+            name: updatedUser.name,
+            email: updatedUser.email || user.email,
+            picture: updatedUser.picture || null,
+          });
+        }}
+      />
+
+      {/* ─── SETTINGS MODAL ─── */}
+      <SettingsModal isOpen={openSettingsModal} onClose={() => setOpenSettingsModal(false)} />
 
     </Sidebar>
   );

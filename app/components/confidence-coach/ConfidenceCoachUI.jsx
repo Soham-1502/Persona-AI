@@ -23,6 +23,7 @@ export function ConfidenceCoachUI() {
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const [stream, setStream] = useState(null);
+    const streamRef = useRef(null); // Ref to always hold the live stream — avoids stale closure on cleanup
 
     // Session state
     const [sessionStatus, setSessionStatus] = useState("idle"); // idle, analyzing, ended
@@ -86,7 +87,7 @@ export function ConfidenceCoachUI() {
     const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
 
     useEffect(() => {
-        // Initialize camera
+        // Initialize camera for preview when idle
         const initCamera = async () => {
             if (streamRef.current) return;
 

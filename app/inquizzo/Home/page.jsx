@@ -1,8 +1,10 @@
+// location : app/inquizzo/Home/page.jsx
 'use client'
 
 import React, { useState } from "react";
-// Change this import:
-import Link from "next/link"; 
+import Link from "next/link";
+import ParallaxBlob from '@/app/components/inquizzo/effects/ParallaxBlob';
+import MagneticButton from '@/app/components/inquizzo/effects/MagneticButton';
 
 const ShowcaseSection = () => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
@@ -36,16 +38,15 @@ const ShowcaseSection = () => {
   ];
 
   return (
-    <div className="relative min-h-screen bg-gray-900 overflow-hidden">
-      {/* Background overlay */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <img
-          src="https://img.freepik.com/free-photo/young-smiling-man-working-with-laptop-office_1268-21465.jpg?t=st=1753264392~exp=1753267992~hmac=997643843143685a5e2c49dde98e7f89e9604c3cd36c894e005ac889da3dffba&w=1380"
-          alt="Background"
-          className="w-full h-full object-cover opacity-40"
-        />
-      </div>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#03001E] via-[#7303C0]/20 to-[#03001E]">
+
+      {/* Parallax blobs */}
+      <ParallaxBlob offsetFactor={0.025} className="top-1/4 left-1/4 w-[500px] h-[300px] bg-[#7303C0]/15" />
+      <ParallaxBlob offsetFactor={0.015} className="bottom-1/3 right-1/4 w-[400px] h-[200px] bg-[#EC38BC]/10" />
+      <ParallaxBlob offsetFactor={0.035} className="top-1/2 left-0 w-[300px] h-[300px] bg-[#03001E]/80" />
+
+      {/* Grid overlay texture */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(115,3,192,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(115,3,192,0.03)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none" />
 
       {/* Navbar */}
       <nav className="relative z-20 flex justify-between items-center px-8 py-6">
@@ -54,39 +55,48 @@ const ShowcaseSection = () => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] px-8 text-center">
-        <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 leading-tight ">
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-[60vh] md:min-h-[80vh] px-4 md:px-8 text-center">
+        {/* Badge chip */}
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#7303C0]/30 bg-[#7303C0]/10 backdrop-blur-sm mb-6">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#EC38BC] animate-pulse" />
+          <span className="text-xs font-semibold text-[#FDEFF9] uppercase tracking-widest">
+            Voice-Controlled Quiz Platform
+          </span>
+        </div>
+
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-6 leading-tight">
           InQuizo
         </h1>
-        <h2 className="text-2xl md:text-3xl text-white/90 mb-4 font-light">
+        <h2 className="text-xl md:text-2xl lg:text-3xl text-white/90 mb-4 font-light">
           Voice-Controlled Quiz Platform
         </h2>
-        <p className="text-lg text-white/80 mb-12 max-w-2xl">
+        <p className="text-base md:text-lg text-white/80 mb-12 max-w-2xl px-2">
           Experience the future of learning with our advanced voice-controlled quiz system
         </p>
 
-        <button
-          onClick={scrollToCards} 
-          className="border-orange-200 bg-purple-600 hover:bg-purple-800 text-white font-semibold py-4 px-8 rounded-lg text-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
-        >
-          View Demo
-        </button>
+        <MagneticButton>
+          <button
+            onClick={scrollToCards}
+            className="bg-gradient-to-r from-[#7303C0] to-[#EC38BC] text-white font-semibold py-4 px-8 rounded-full text-lg shadow-[0_0_40px_rgba(236,56,188,0.4)] hover:shadow-[0_0_60px_rgba(236,56,188,0.5)] transition-all duration-300 transform hover:scale-105"
+          >
+            View Demo
+          </button>
+        </MagneticButton>
       </div>
 
       {/* Cards Section */}
       <div id="cards" className="relative z-10 py-20">
-        <div className="container mx-auto px-8">
-          <h3 className="text-3xl font-bold text-white text-center mb-12">
+        <div className="container mx-auto px-4 md:px-8">
+          <h3 className="text-2xl md:text-3xl font-bold text-white text-center mb-8 md:mb-12">
             Explore InQuizo Features
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
             {items.map((item, index) => (
-              /* Use Next.js Link with 'href' instead of 'to' */
               <Link
                 href={item.link}
                 key={index}
-                className="group relative overflow-hidden rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 transition-all duration-500 transform hover:scale-105 cursor-pointer"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md shadow-xl shadow-black/20 hover:border-[#7303C0]/40 hover:shadow-[#7303C0]/20 transition-all duration-500 transform hover:scale-105 cursor-pointer"
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
@@ -96,7 +106,7 @@ const ShowcaseSection = () => {
                     alt={item.title}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
-                  <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-6">
                   <h4 className="text-xl font-bold text-white mb-2">
@@ -105,26 +115,20 @@ const ShowcaseSection = () => {
                   <p className="text-white/80 text-sm">{item.subtitle}</p>
                 </div>
                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="w-10 h-10 bg-purple-700 rounded-full flex items-center justify-center">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#7303C0] to-[#EC38BC] rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(236,56,188,0.4)]">
                     <span className="text-white text-lg">→</span>
                   </div>
                 </div>
+                {/* Hover Border Glow */}
+                <div className="absolute inset-0 border-2 border-[#7303C0]/0 group-hover:border-[#7303C0]/30 rounded-2xl transition-colors duration-300"></div>
               </Link>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Wave at bottom */}
-      <div className="absolute bottom-0 left-0 right-0">
-        <svg
-          className="w-full h-24 fill-white"
-          viewBox="0 0 1200 120"
-          preserveAspectRatio="none"
-        >
-          <path d="M0,0V46.29c47.79,22.2,103.59,32.17,158,28,70.36-5.37,136.33-33.31,206.8-37.5C438.64,32.43,512.34,53.67,583,72.05c69.27,18,138.3,24.88,209.4,13.08,36.15-6,69.85-17.84,104.45-29.34C989.49,25,1113-14.29,1200,52.47V0Z" />
-        </svg>
-      </div>
+      {/* Gradient fade at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#03001E] to-transparent pointer-events-none" />
     </div>
   );
 };

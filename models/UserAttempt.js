@@ -44,7 +44,7 @@ const userAttemptSchema = new mongoose.Schema({
   },
   gameType: {
     type: String,
-    enum: ['quiz', 'mcq', 'voice'],
+    enum: ['quiz', 'mcq', 'voice', 'chat'],
     default: 'quiz'
   },
 
@@ -125,9 +125,9 @@ const userAttemptSchema = new mongoose.Schema({
 });
 
 // Index for better query performance
+userAttemptSchema.index({ userId: 1, moduleId: 1, timestamp: -1 });
 userAttemptSchema.index({ userId: 1, timestamp: -1 });
 userAttemptSchema.index({ sessionId: 1 });
-userAttemptSchema.index({ username: 1, gameType: 1 });
 
 // Virtual for score percentage
 userAttemptSchema.virtual('scorePercentage').get(function () {
@@ -151,5 +151,5 @@ userAttemptSchema.statics.getSessionAttempts = function (sessionId) {
 
 userAttemptSchema.set('toJSON', { virtuals: true });
 
-const UserAttempt = mongoose.model("UserAttempt", userAttemptSchema);
+const UserAttempt = mongoose.models.UserAttempt || mongoose.model("UserAttempt", userAttemptSchema);
 export default UserAttempt;
