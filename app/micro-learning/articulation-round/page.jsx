@@ -14,6 +14,7 @@ export default function ArticulationRound() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
   const mediaRecorderRef = useRef(null);
@@ -31,6 +32,31 @@ export default function ArticulationRound() {
     ? localStorage.getItem('quizTranscript') || ''
     : '';
 
+  // Mark the active session as being in the "articulation" stage
+  useEffect(() => {
+    const markArticulationStage = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token || !sessionId) return;
+        await fetch('/api/micro-learning/active-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            sessionId,
+            gameType: 'voice',
+            title: videoTitle,
+            quizState: {
+              stage: 'articulation',
+              videoTitle
+            }
+          })
+        });
+      } catch { /* silent */ }
+    };
+    markArticulationStage();
+  }, []);
+
+  // Speech recognition setup
   useEffect(() => {
     const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
     if (SpeechRecognition) {
@@ -134,11 +160,56 @@ export default function ArticulationRound() {
       const data = await res.json();
 
       if (data.success) {
-        // Store analysis + user text for the results page
+        // Store analysis + user text for the results page (REQUIRED for /articulation-results page to show data)
         localStorage.setItem('articulationResult', JSON.stringify({
           analysis: data.analysis,
           userText: text
         }));
+
+        // Retrieve or generate sessionId
+        const sessionId = localStorage.getItem('ml_sessionId') || `ml_art_${Date.now()}`;
+        const token = localStorage.getItem('token');
+        setIsSaving(true);
+
+        // ─── PERSIST TO BACKEND ───
+        try {
+          await fetch('/api/micro-learning/attempt', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              moduleId: 'microLearning',
+              gameType: 'voice',
+              sessionId,
+              question: 'Neural Articulation Round',
+              userAnswer: text,
+              correctAnswer: 'Synthesized explanation based on transcript',
+              isCorrect: data.analysis.accuracy >= 60,
+              score: Math.round(data.analysis.accuracy),
+              difficulty: 'hard',
+              timeTaken: 60 // Fixed estimate for articulation
+            })
+          });
+          console.log('✅ Articulation results persisted to backend');
+        } catch (persistErr) {
+          console.error('❌ Persistence error:', persistErr);
+        } finally {
+          setIsSaving(false);
+        }
+
+        // ─── CLEAR ACTIVE SESSION ON COMPLETION ───
+        try {
+          if (token) {
+            await fetch('/api/micro-learning/active-session', {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+          }
+        } catch (err) {
+          console.error('Failed to clear active session:', err);
+        }
 
         // Redirect to results page
         router.push('/micro-learning/articulation-results');
@@ -452,7 +523,7 @@ export default function ArticulationRound() {
             }}
           >
             <span>
-              {isAnalyzing ? 'Processing Neural Audit...' : error ? 'Retry Audit' : 'Analyze My Explanation'}
+              {isAnalyzing ? 'Processing Neural Audit...' : isSaving ? 'Syncing results...' : error ? 'Retry Audit' : 'Analyze My Explanation'}
             </span>
             {!isAnalyzing && <span>✨</span>}
           </button>

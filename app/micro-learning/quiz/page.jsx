@@ -19,6 +19,8 @@ function QuizContent() {
   const [error, setError] = useState(null);
   const [skipped, setSkipped] = useState(new Set());
   const [maxReached, setMaxReached] = useState(0);
+  const [sessionId] = useState(() => `ml_q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -41,9 +43,49 @@ function QuizContent() {
   };
 
   useEffect(() => {
-    async function fetchQuiz() {
+    async function initSession() {
+      // 1. Check for URL session ID (Resume from dashboard)
+      const urlSessionId = searchParams.get('sessionId');
+      if (urlSessionId) {
+        // We could explicitly set it, but we'll try to load the latest microLearning session
+        // Assuming there's only one active microLearning session per user
+      }
+
+      // 2. Try to load existing active session
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const res = await fetch('/api/micro-learning/active-session', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data?.session) {
+            const s = data.session;
+            // Restore state
+            if (s.questions && s.questions.length > 0) {
+              setMcqs(s.questions);
+              if (s.quizState) {
+                setSelectedAnswers(s.quizState.selectedAnswers || {});
+                setSkipped(new Set(s.quizState.skipped || []));
+                setCurrentIndex(s.quizState.currentIndex || 0);
+                setMaxReached(s.quizState.maxReached || 0);
+              }
+              // If we already finished the quiz part of this session, fast forward or show results
+              if (s.questionsAnswered >= s.questions.length) {
+                setSubmitted(true);
+              }
+              setLoading(false);
+              return; // Successfully restored, don't fetch new
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load active session:', err);
+      }
+
+      // 3. If no active session, fetch a new quiz
       if (!videoId) {
-        setError('No videoId found in URL');
+        setError('No videoId found in URL or Active Session');
         setLoading(false);
         return;
       }
@@ -54,6 +96,8 @@ function QuizContent() {
 
         if (data.success && data.mcqs?.length > 0) {
           setMcqs(data.mcqs);
+          // Initial save of the new session
+          saveActiveSession(data.mcqs, {}, [], 0, 0);
         } else {
           setError(data.message || 'No quiz data available');
         }
@@ -65,35 +109,96 @@ function QuizContent() {
       }
     }
 
-    fetchQuiz();
-  }, [videoId]);
+    initSession();
+  }, [videoId, searchParams]);
+
+  // Helper to sync state to backend
+  const saveActiveSession = async (
+    currentMcqs = mcqs,
+    answers = selectedAnswers,
+    skipSet = skipped,
+    idx = currentIndex,
+    maxAcc = maxReached
+  ) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const answeredCount = Object.keys(answers).length + skipSet.size;
+      // Carry over title/videoId from localStorage if stored by video page
+      const videoTitle = localStorage.getItem('ml_videoTitle') || 'Micro-Learning Quiz';
+
+      await fetch('/api/micro-learning/active-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sessionId,
+          gameType: 'mcq',
+          title: videoTitle,
+          questions: currentMcqs,
+          questionsAnswered: answeredCount,
+          quizState: {
+            stage: 'quiz',
+            selectedAnswers: answers,
+            skipped: Array.from(skipSet),
+            currentIndex: idx,
+            maxReached: maxAcc,
+            videoId: videoId,
+            videoTitle
+          }
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save active session:', err);
+    }
+  };
 
   const handleOptionSelect = (questionIndex, option) => {
     if (submitted) return;
-    setSelectedAnswers(prev => ({ ...prev, [questionIndex]: option }));
-    setSkipped(prev => {
-      const next = new Set(prev);
-      next.delete(questionIndex);
-      return next;
+    setSelectedAnswers(prev => {
+      const nextAnswers = { ...prev, [questionIndex]: option };
+
+      setSkipped(prevSkipped => {
+        const nextSkipped = new Set(prevSkipped);
+        nextSkipped.delete(questionIndex);
+
+        // Save immediately with next state
+        saveActiveSession(mcqs, nextAnswers, nextSkipped, currentIndex, maxReached);
+
+        return nextSkipped;
+      });
+
+      return nextAnswers;
     });
   };
 
   const handlePrevious = () => {
-    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+    if (currentIndex > 0) {
+      const nextIdx = currentIndex - 1;
+      setCurrentIndex(nextIdx);
+      saveActiveSession(mcqs, selectedAnswers, skipped, nextIdx, maxReached);
+    }
   };
 
   const handleNext = () => {
+    let nextSkipped = new Set(skipped);
     if (!selectedAnswers.hasOwnProperty(currentIndex)) {
-      setSkipped(prev => new Set(prev).add(currentIndex));
+      nextSkipped = new Set(skipped).add(currentIndex);
+      setSkipped(nextSkipped);
     }
     if (currentIndex < mcqs.length - 1) {
       const nextIdx = currentIndex + 1;
+      const nextMax = Math.max(maxReached, nextIdx);
       setCurrentIndex(nextIdx);
-      setMaxReached(prev => Math.max(prev, nextIdx));
+      setMaxReached(nextMax);
+      saveActiveSession(mcqs, selectedAnswers, nextSkipped, nextIdx, nextMax);
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Mark any unanswered as skipped
     const finalSkipped = new Set(skipped);
     mcqs.forEach((_, idx) => {
@@ -103,6 +208,7 @@ function QuizContent() {
     });
     setSkipped(finalSkipped);
     setSubmitted(true);
+    setIsSaving(true);
 
     // Calculate correct count for XP
     const correctCount = mcqs.filter(
@@ -111,6 +217,55 @@ function QuizContent() {
 
     // Save to localStorage for articulation-results page
     localStorage.setItem('mainMcqPoints', correctCount.toString());
+
+    // ─── PERSIST TO BACKEND ───
+    try {
+      const startTime = Date.now();
+      const promises = mcqs.map((q, i) => {
+        const userAnswer = selectedAnswers[i] || 'Skipped';
+        const isCorrect = userAnswer === q.answer;
+
+        return fetch('/api/micro-learning/attempt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            moduleId: 'microLearning',
+            gameType: 'mcq',
+            sessionId,
+            question: q.question,
+            userAnswer,
+            correctAnswer: q.answer,
+            isCorrect,
+            score: isCorrect ? 10 : 2, // 10 XP for correct, 2 for attempt
+            difficulty: 'medium',
+            timeTaken: Math.round((Date.now() - startTime) / 1000 / mcqs.length) // Rough estimate per Q
+          })
+        });
+      });
+
+      await Promise.all(promises);
+      console.log('✅ Micro-learning results persisted to backend');
+
+      // ─── CLEAR ACTIVE SESSION ON COMPLETION ───
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          await fetch('/api/micro-learning/active-session', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to clear active session:', err);
+      }
+    } catch (err) {
+      console.error('❌ Failed to persist results:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!mounted) return null;
@@ -358,6 +513,7 @@ function QuizContent() {
             onClick={() => {
               const transcript = localStorage.getItem(`transcript_${videoId}`) || '';
               localStorage.setItem('quizTranscript', transcript);
+              localStorage.setItem('ml_sessionId', sessionId);
               router.push('/micro-learning/articulation-round');
             }}
             style={{

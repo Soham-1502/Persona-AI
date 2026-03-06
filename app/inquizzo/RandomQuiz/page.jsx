@@ -68,21 +68,52 @@ const Quiz = () => {
 
   // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userStr = localStorage.getItem("user");
-    if (token && userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        setUsername(userData.name || userData.username || userData.email || "");
-        setIsAuthenticated(true);
-      } catch { setUsername(""); setIsAuthenticated(false); }
-    } else {
-      setUsername(localStorage.getItem("username") || "");
-      setIsAuthenticated(false);
-    }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) setIsBrowserSupported(false);
-    setMounted(true);
+    const init = async () => {
+      // Check for review mode first
+      const params = new URLSearchParams(window.location.search);
+      const reviewSessionId = params.get('review');
+
+      if (reviewSessionId) {
+        try {
+          const token = getAuthToken();
+          const response = await fetch(`/api/inquizzo/session-results?sessionId=${reviewSessionId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setScore(data.totalScore);
+            setSessionScore(data.totalScore);
+            setQuestionsAnswered(data.totalQuestions);
+            setSessionQCount(data.totalQuestions);
+            setCorrectCount(data.correctCount);
+            setShowSessionEnd(true);
+            return; // Exit init if review mode is active and loaded
+          }
+        } catch (err) {
+          console.error("Failed to load review session:", err);
+        }
+      }
+
+      // Original authentication logic
+      const token = localStorage.getItem("token");
+      const userStr = localStorage.getItem("user");
+      if (token && userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          setUsername(userData.name || userData.username || userData.email || "");
+          setIsAuthenticated(true);
+        } catch { setUsername(""); setIsAuthenticated(false); }
+      } else {
+        setUsername(localStorage.getItem("username") || "");
+        setIsAuthenticated(false);
+      }
+
+      // Original browser support check
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) setIsBrowserSupported(false);
+      setMounted(true);
+    };
+    init();
     return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
   }, []);
 
@@ -300,7 +331,10 @@ const Quiz = () => {
       setShowResult(true);
 
       await saveAttempt({ question, userAnswer: spokenText, correctAnswer: answer, isCorrect, score: gainedScore, timeTaken });
-      if (sessionQCount + 1 >= SESSION_LENGTH) setShowSessionEnd(true);
+      if (sessionQCount + 1 >= SESSION_LENGTH) {
+        setShowSessionEnd(true);
+        await deleteActiveSession();
+      }
     } catch { setFeedback("Something went wrong during evaluation."); setShowResult(true); }
     finally { setIsAnswering(false); }
   };
@@ -382,7 +416,8 @@ const Quiz = () => {
     getAIQuestion(actualOverride);
   };
 
-  const startNewSession = () => {
+  const startNewSession = async () => {
+    await deleteActiveSession();
     sessionIdRef.current = crypto.randomUUID();
     setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0);
     setCorrectCount(0);
@@ -427,6 +462,7 @@ const Quiz = () => {
 
         if (sessionQIdx + 1 >= SESSION_LENGTH) {
           setShowSessionEnd(true);
+          deleteActiveSession();
         }
       }
     }
@@ -453,7 +489,85 @@ const Quiz = () => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ moduleId: "inQuizzo", gameType: "voice", sessionId: sessionIdRef.current, question, userAnswer, correctAnswer, isCorrect, score, difficulty: selectedDifficulty, timeTaken }),
       });
+
+      // Also update active session state
+      await saveActiveSession();
     } catch { }
+  };
+
+  const saveActiveSession = async (overrideData = {}) => {
+    try {
+      const token = getAuthToken();
+      if (!token || !sessionIdRef.current || showSessionEnd) return;
+
+      const sessionData = {
+        sessionId: sessionIdRef.current,
+        gameType: 'voice',
+        config: {
+          topic: 'Random Quiz',
+          difficulty: selectedDifficulty
+        },
+        questionsAnswered,
+        correctCount,
+        totalScore: score,
+        chatHistory: chatHistory.slice(-5), // Keep last 5 for context
+        ...overrideData
+      };
+
+      await fetch("/api/inquizzo/active-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(sessionData),
+      });
+    } catch (err) {
+      console.error("Failed to save active session:", err);
+    }
+  };
+
+  const loadActiveSession = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) return false;
+
+      const data = await makeAuthenticatedRequest("/api/inquizzo/active-session");
+      if (data?.session) {
+        const s = data.session;
+        sessionIdRef.current = s.sessionId;
+        setQuestionsAnswered(s.questionsAnswered);
+        setCorrectCount(s.correctCount);
+        setScore(s.totalScore);
+        setSessionScore(s.totalScore);
+        setSessionQCount(s.questionsAnswered);
+        setSelectedDifficulty(s.config?.difficulty || "medium");
+        setChatHistory(s.chatHistory || []);
+
+        if (s.questionsAnswered >= SESSION_LENGTH) {
+          setShowSessionEnd(true);
+          return true;
+        }
+
+        // Fetch a new question to continue
+        getAIQuestion(s.config?.difficulty);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Failed to load active session:", err);
+      return false;
+    }
+  };
+
+  const deleteActiveSession = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+      await fetch("/api/inquizzo/active-session", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error("Failed to delete active session:", err);
+    }
   };
 
   const getAIQuestion = async (diffOverride = null) => {
@@ -517,7 +631,16 @@ const Quiz = () => {
     finally { setIsLoading(false); }
   };
 
-  useEffect(() => { sessionIdRef.current = crypto.randomUUID(); getAIQuestion(); }, []);
+  useEffect(() => {
+    const init = async () => {
+      const restored = await loadActiveSession();
+      if (!restored) {
+        sessionIdRef.current = crypto.randomUUID();
+        getAIQuestion();
+      }
+    };
+    init();
+  }, []);
 
   // ── Downloads ──────────────────────────────────────────────
   const downloadCSV = () => {

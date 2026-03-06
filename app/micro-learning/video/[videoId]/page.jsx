@@ -6,6 +6,37 @@ import DigitalSmartNotesTab from '@/app/components/micro-learning/DigitalSmartNo
 import { segmentTranscript } from '@/lib/segmenter';
 import { useTheme } from 'next-themes';
 
+// Saves current video progress to the active session API
+// Guard prevents multiple concurrent requests from stacking up
+let _videoSaveInFlight = false;
+async function saveVideoSession({ sessionId, videoId, playlistId, videoTitle, currentTime }) {
+  if (_videoSaveInFlight) return; // Skip if a save is already running
+  _videoSaveInFlight = true;
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token || !sessionId) return;
+    await fetch('/api/micro-learning/active-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        sessionId,
+        gameType: 'mcq',
+        moduleId: 'microLearning',
+        title: videoTitle || 'Micro-Learning Video',
+        quizState: {
+          stage: 'video',
+          videoId,
+          playlistId,
+          progress: Math.round(currentTime || 0),
+          videoTitle: videoTitle || 'Micro-Learning Video'
+        }
+      })
+    });
+  } catch { /* silent */ } finally {
+    _videoSaveInFlight = false;
+  }
+}
+
 export default function VideoPlayerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -15,6 +46,7 @@ export default function VideoPlayerPage() {
 
   const videoId = params.videoId;
   const playlistId = searchParams.get('list');
+  const urlSessionId = searchParams.get('sessionId');
 
   const [videos, setVideos] = useState([]);
   const [player, setPlayer] = useState(null);
@@ -69,6 +101,15 @@ export default function VideoPlayerPage() {
 
         if (duration > 0) {
           const progress = (currentTime / duration) * 100;
+
+          // ─── Persist video progress to ActiveSession (every 5s) ───
+          saveVideoSession({
+            sessionId: sessionIdRef.current,
+            videoId,
+            playlistId,
+            videoTitle: videoDetails?.title,
+            currentTime
+          });
 
           if (progress >= 70 && !hasTriggeredGladia.current && transcriptStatus === 'not_started') {
             hasTriggeredGladia.current = true;
@@ -137,7 +178,11 @@ export default function VideoPlayerPage() {
   // Fetch playlist
   useEffect(() => {
     async function fetchPlaylist() {
-      if (!playlistId) return;
+      if (!playlistId) {
+        // No playlist — still need to stop the loading spinner
+        setLoading(false);
+        return;
+      }
       try {
         const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
         const res = await fetch(
@@ -181,6 +226,8 @@ export default function VideoPlayerPage() {
             title: item.title,
             description: item.description || "No description available."
           });
+          // Store title so quiz/articulation pages can carry it forward as session label
+          localStorage.setItem('ml_videoTitle', item.title);
         }
       } catch (err) {
         console.error("Video details error:", err);

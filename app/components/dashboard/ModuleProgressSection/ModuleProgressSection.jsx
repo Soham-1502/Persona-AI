@@ -6,7 +6,8 @@ import { ProgressStatusFilter, CategoryFilter, SortSelect } from './ModuleProgre
 import ModuleProgressList from './ModuleProgressList.jsx'
 import { modulesData } from './ModulesData.js'
 import { useState, useMemo } from 'react'
-import { LayoutList } from 'lucide-react'
+import { LayoutList, Play, ChevronRight, Zap } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 /**
  * Props
@@ -37,21 +38,98 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
     textMuted: '#94A3B8',
   };
 
-  // Merge live InQuizzo progress into base module data
+  // Merge live progress and active session virtual rows into the correct modules
   const mergedModules = useMemo(() => {
     if (!liveData) return modulesData;
 
     return modulesData.map((module) => {
-      if (module.id !== 'inquizzo') return module;
-      return {
-        ...module,
-        submodules: module.submodules.map((sub) => {
-          if (sub.id === 'accuracy') return { ...sub, progress: liveData.accuracyProgress ?? 0 };
-          if (sub.id === 'questions') return { ...sub, progress: liveData.questionsProgress ?? 0 };
-          if (sub.id === 'sessions') return { ...sub, progress: liveData.sessionsProgress ?? 0 };
+      const virtualSubmodules = [];
+
+      // Inject InQuizzo live progress bars
+      if (module.id === 'inquizzo') {
+        const baseSubmodules = module.submodules.map((sub) => {
+          if (sub.id === 'accuracy') return { ...sub, progress: liveData.moduleProgress?.accuracyProgress ?? 0 };
+          if (sub.id === 'questions') return { ...sub, progress: liveData.moduleProgress?.questionsProgress ?? 0 };
+          if (sub.id === 'sessions') return { ...sub, progress: liveData.moduleProgress?.sessionsProgress ?? 0 };
           return sub;
-        }),
-      };
+        });
+
+        // Add InQuizzo "Continue" row
+        const activeForInquizzo = liveData.activeSession?.moduleId == null || liveData.activeSession?.moduleId === 'inQuizzo'
+          ? liveData.activeSession
+          : null;
+        if (activeForInquizzo) {
+          virtualSubmodules.push({
+            id: 'active-session',
+            name: activeForInquizzo.title,
+            progress: Math.round((activeForInquizzo.progress / 10) * 100),
+            displayLabel: `${activeForInquizzo.progress}/10 Questions`,
+            isVirtual: true,
+            type: 'continue',
+            sessionId: activeForInquizzo.sessionId,
+            moduleId: activeForInquizzo.moduleId || 'inQuizzo',
+          });
+        }
+
+        // Add InQuizzo "Review" row
+        if (liveData.lastCompletedSession && liveData.lastCompletedSession.moduleId !== 'microLearning') {
+          virtualSubmodules.push({
+            id: 'last-completed',
+            name: liveData.lastCompletedSession.title,
+            progress: 100,
+            displayLabel: '10/10 Questions',
+            isVirtual: true,
+            type: 'review',
+            sessionId: liveData.lastCompletedSession.sessionId,
+            moduleId: liveData.lastCompletedSession.moduleId || 'inQuizzo',
+          });
+        }
+
+        return { ...module, submodules: [...virtualSubmodules, ...baseSubmodules] };
+      }
+
+      // Inject Micro-Learning active/review rows
+      if (module.id === 'microlearning') {
+        const activeForML = liveData.activeSession?.moduleId === 'microLearning' ? liveData.activeSession : null;
+        if (activeForML) {
+          const stageLabel =
+            activeForML.stage === 'video' ? '🎬 Watching Video' :
+              activeForML.stage === 'quiz' ? '📝 Quiz in Progress' :
+                activeForML.stage === 'articulation' ? '🎤 Articulation Round' :
+                  'In Progress';
+
+          virtualSubmodules.push({
+            id: 'ml-active-session',
+            name: activeForML.title || 'Micro-Learning',
+            progress: activeForML.stage === 'video' ? 30 : activeForML.stage === 'quiz' ? 60 : 85,
+            displayLabel: stageLabel,
+            isVirtual: true,
+            type: 'continue',
+            sessionId: activeForML.sessionId,
+            moduleId: 'microlearning',
+            stage: activeForML.stage,
+            videoId: activeForML.videoId,
+            playlistId: activeForML.playlistId,
+          });
+        }
+
+        if (liveData.lastCompletedSession?.moduleId === 'microlearning') {
+          virtualSubmodules.push({
+            id: 'ml-last-completed',
+            name: liveData.lastCompletedSession.title,
+            progress: 100,
+            displayLabel: 'Completed ✓',
+            isVirtual: true,
+            type: 'review',
+            sessionId: liveData.lastCompletedSession.sessionId,
+            moduleId: 'microLearning',
+          });
+        }
+
+        return { ...module, submodules: virtualSubmodules };
+      }
+
+      return module;
     });
   }, [liveData]);
 
@@ -113,6 +191,8 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
             </div>
           </div>
         </div>
+
+
 
         <div className='flex-1 overflow-y-auto custom-scroll pr-2 min-h-0'>
           {liveLoading ? (

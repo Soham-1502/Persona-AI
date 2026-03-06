@@ -50,7 +50,7 @@ export default function MCQRound() {
     }
   }
 
-  const handleFinalSubmit = () => {
+  const handleFinalSubmit = async () => {
     // 1. Calculate Results
     const attemptedCount = Object.keys(userAnswers).length;
     let correctCount = 0;
@@ -59,7 +59,7 @@ export default function MCQRound() {
     });
 
     // 2. OUTPUT TO CONSOLE TAB ONLY
-    console.clear(); // Cleans previous logs for a fresh report
+    console.clear();
     console.log("%c 📊 QUIZ PERFORMANCE REPORT ", `background: ${theme.accent}; color: white; font-weight: bold; padding: 4px; border-radius: 4px;`);
     console.log(`Total Questions: ${totalQuestions}`);
     console.log(`Questions Attempted: ${attemptedCount}`);
@@ -69,6 +69,44 @@ export default function MCQRound() {
 
     // 3. Update UI State
     setSubmitted(true);
+    setIsSaving(true);
+
+    // 4. PERSIST TO BACKEND
+    try {
+      const startTime = Date.now();
+      const promises = mcqs.map((q, i) => {
+        const userAnswerKey = userAnswers[i];
+        const userAnswer = userAnswerKey ? q.options[userAnswerKey] : 'Skipped';
+        const isCorrect = userAnswerKey === q.answer; // In this component, answer is the key (A, B, C, D)
+
+        return fetch('/api/micro-learning/attempt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            moduleId: 'microLearning',
+            gameType: 'mcq',
+            sessionId,
+            question: q.question,
+            userAnswer,
+            correctAnswer: q.options[q.answer], // Map key to text
+            isCorrect,
+            score: isCorrect ? 10 : 2,
+            difficulty: 'medium',
+            timeTaken: Math.round((Date.now() - startTime) / 1000 / mcqs.length)
+          })
+        });
+      });
+
+      await Promise.all(promises);
+      console.log('✅ Micro-learning MCQ results persisted to backend');
+    } catch (err) {
+      console.error('❌ Failed to persist results:', err);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (!mounted) return null
@@ -223,7 +261,9 @@ export default function MCQRound() {
             <div style={{ animation: 'fadeIn 0.6s ease' }}>
               <div style={{ backgroundColor: theme.card, padding: '50px', borderRadius: '24px', border: `1px solid ${theme.border}`, textAlign: 'center', marginBottom: '40px', backdropFilter: 'blur(12px)' }}>
                 <div style={{ fontSize: '4rem', marginBottom: '10px' }}>🎯</div>
-                <h2 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '15px' }}>Stage 1 Verified</h2>
+                <h2 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '15px' }}>
+                  Stage 1 Verified {isSaving && <span style={{ fontSize: '0.9rem', color: theme.accent, display: 'block', marginTop: '8px', fontWeight: '400' }}>(Syncing to Neural Cloud...)</span>}
+                </h2>
                 <p style={{ color: theme.textMuted, maxWidth: '500px', margin: '0 auto 30px auto', lineHeight: '1.6' }}>
                   You have completed the initial recall assessment. Your detailed score has been logged to the system console.
                 </p>
