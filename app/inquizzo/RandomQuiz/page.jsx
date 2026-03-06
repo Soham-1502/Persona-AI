@@ -46,12 +46,17 @@ const Quiz = () => {
 
   // Session tracking (10 questions per session)
   const SESSION_LENGTH = 10;
+  const STORAGE_KEY = 'inquizzo_active_session';
   const sessionIdRef = useRef(null);
   const [sessionQCount, setSessionQCount] = useState(0);
   const [sessionScore, setSessionScore] = useState(0);
   const [showSessionEnd, setShowSessionEnd] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
   const questionStartTimeRef = useRef(Date.now());
+  const isRestoringSessionRef = useRef(false);
+  const hasRestoredRef = useRef(false);  // guard against StrictMode double-fire
+  // Refs for session persistence (used to read latest state in saveSession)
+  const allQuestionsRef = useRef([]);  // stores all fetched {question, answer} objects
 
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -68,54 +73,98 @@ const Quiz = () => {
 
   // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
-    const init = async () => {
-      // Check for review mode first
-      const params = new URLSearchParams(window.location.search);
-      const reviewSessionId = params.get('review');
-
-      if (reviewSessionId) {
-        try {
-          const token = getAuthToken();
-          const response = await fetch(`/api/inquizzo/session-results?sessionId=${reviewSessionId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setScore(data.totalScore);
-            setSessionScore(data.totalScore);
-            setQuestionsAnswered(data.totalQuestions);
-            setSessionQCount(data.totalQuestions);
-            setCorrectCount(data.correctCount);
-            setShowSessionEnd(true);
-            return; // Exit init if review mode is active and loaded
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+    if (token && userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setUsername(userData.name || userData.username || userData.email || "");
+        setIsAuthenticated(true);
+      } catch { setUsername(""); setIsAuthenticated(false); }
+    } else {
+      setUsername(localStorage.getItem("username") || "");
+      setIsAuthenticated(false);
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) setIsBrowserSupported(false);
+    setMounted(true);
+    // Auto-restore session if one exists (prompt is shown on dashboard)
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const session = JSON.parse(saved);
+        if (session && session.quiz_id === 'random' && Array.isArray(session.questions) && session.questions.length > 0 && session.current_index > 0 && session.current_index < SESSION_LENGTH) {
+          if (!hasRestoredRef.current) {
+            hasRestoredRef.current = true;
+            restoreSession(session);
           }
-        } catch (err) {
-          console.error("Failed to load review session:", err);
         }
       }
-
-      // Original authentication logic
-      const token = localStorage.getItem("token");
-      const userStr = localStorage.getItem("user");
-      if (token && userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          setUsername(userData.name || userData.username || userData.email || "");
-          setIsAuthenticated(true);
-        } catch { setUsername(""); setIsAuthenticated(false); }
-      } else {
-        setUsername(localStorage.getItem("username") || "");
-        setIsAuthenticated(false);
-      }
-
-      // Original browser support check
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) setIsBrowserSupported(false);
-      setMounted(true);
-    };
-    init();
+    } catch (e) {
+      console.warn('Failed to check saved session:', e);
+    }
     return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
   }, []);
+
+  // ── Session Persistence Helpers ────────────────────────────
+  const saveSession = (overrides = {}) => {
+    try {
+      const sessionData = {
+        quiz_id: 'random',
+        session_id: sessionIdRef.current,
+        questions: overrides.questions || allQuestionsRef.current,
+        current_index: overrides.current_index ?? sessionQCount,
+        answers_map: overrides.answers_map ?? chatHistory,
+        score: overrides.score ?? score,
+        accuracy: questionsAnswered > 0 ? Math.round((correctCount / questionsAnswered) * 100) : 0,
+        start_time: overrides.start_time || Date.now(),
+        difficulty: selectedDifficulty,
+        correct_count: overrides.correct_count ?? correctCount,
+        questions_answered: overrides.questions_answered ?? questionsAnswered,
+        session_score: overrides.session_score ?? sessionScore,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    } catch (e) {
+      console.warn('Failed to save session:', e);
+    }
+  };
+
+  const clearSession = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { console.warn('Failed to clear session:', e); }
+  };
+
+  const restoreSession = (session) => {
+    isRestoringSessionRef.current = true;
+    sessionIdRef.current = session.session_id || crypto.randomUUID();
+    allQuestionsRef.current = session.questions;
+    const idx = session.current_index || 0;
+    const currentQ = session.questions[idx];
+
+    setSessionQCount(idx);
+    setSessionScore(session.session_score || 0);
+    setScore(session.score || 0);
+    setCorrectCount(session.correct_count || 0);
+    setQuestionsAnswered(session.questions_answered || idx);
+    setChatHistory(session.answers_map || []);
+    setSelectedDifficulty(session.difficulty || 'medium');
+
+    if (currentQ) {
+      setCurrentQuestion(currentQ.question);
+      setCorrectAnswer(currentQ.answer);
+      currentQuestionRef.current = { question: currentQ.question, answer: currentQ.answer };
+    }
+    setIsLoading(false);
+    setTimer(30);
+    setTimerActive(false);
+    setTranscript('');
+    setFeedback('');
+    setShowResult(false);
+    setIsAnswering(false);
+    setError('');
+    questionStartTimeRef.current = Date.now();
+    isRestoringSessionRef.current = false;
+    toast.success(`Quiz resumed at question ${idx + 1}/${SESSION_LENGTH}`);
+  };
 
   // ── Helpers ────────────────────────────────────────────────
   const getSeenQuestionsKey = () => {
@@ -306,8 +355,15 @@ const Quiz = () => {
       setSessionQCount(prev => prev + 1);
       setQuestionsAnswered((prev) => prev + 1);
       setShowResult(true); setIsAnswering(false);
+      // Auto-save session after skip
+      const newIdx = sessionQCount + 1;
+      saveSession({
+        current_index: newIdx,
+        answers_map: [...chatHistory, resultData],
+        questions_answered: questionsAnswered + 1,
+      });
       await saveAttempt({ question, userAnswer: spokenText, correctAnswer: answer, isCorrect: false, score: 0, timeTaken });
-      if (sessionQCount + 1 >= SESSION_LENGTH) setShowSessionEnd(true);
+      if (newIdx >= SESSION_LENGTH) { setShowSessionEnd(true); clearSession(); }
       return;
     }
 
@@ -330,11 +386,19 @@ const Quiz = () => {
       setQuestionsAnswered((prev) => prev + 1);
       setShowResult(true);
 
+      // Auto-save session after answering
+      const newIdx = sessionQCount + 1;
+      saveSession({
+        current_index: newIdx,
+        answers_map: [...chatHistory, resultData],
+        score: score + (gainedScore > 0 ? gainedScore : 0),
+        correct_count: correctCount + (isCorrect ? 1 : 0),
+        questions_answered: questionsAnswered + 1,
+        session_score: sessionScore + (gainedScore > 0 ? gainedScore : 0),
+      });
+
       await saveAttempt({ question, userAnswer: spokenText, correctAnswer: answer, isCorrect, score: gainedScore, timeTaken });
-      if (sessionQCount + 1 >= SESSION_LENGTH) {
-        setShowSessionEnd(true);
-        await deleteActiveSession();
-      }
+      if (newIdx >= SESSION_LENGTH) { setShowSessionEnd(true); clearSession(); }
     } catch { setFeedback("Something went wrong during evaluation."); setShowResult(true); }
     finally { setIsAnswering(false); }
   };
@@ -416,8 +480,9 @@ const Quiz = () => {
     getAIQuestion(actualOverride);
   };
 
-  const startNewSession = async () => {
-    await deleteActiveSession();
+  const startNewSession = () => {
+    clearSession();
+    allQuestionsRef.current = [];
     sessionIdRef.current = crypto.randomUUID();
     setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0);
     setCorrectCount(0);
@@ -450,6 +515,15 @@ const Quiz = () => {
         setQuestionsAnswered((prev) => prev + 1);
         setSessionQCount(prev => prev + 1);
 
+        // Auto-save session after timeout
+        const timeoutResult = { question: currentQuestion, userAnswer: '(Timeout)', correctAnswer, isCorrect: false, score: 0 };
+        const newIdx = sessionQIdx + 1;
+        saveSession({
+          current_index: newIdx,
+          answers_map: [...chatHistory, timeoutResult],
+          questions_answered: questionsAnswered + 1,
+        });
+
         // Record as failed attempt
         saveAttempt({
           question: currentQuestion,
@@ -460,9 +534,9 @@ const Quiz = () => {
           timeTaken
         });
 
-        if (sessionQIdx + 1 >= SESSION_LENGTH) {
+        if (newIdx >= SESSION_LENGTH) {
           setShowSessionEnd(true);
-          deleteActiveSession();
+          clearSession();
         }
       }
     }
@@ -597,8 +671,12 @@ const Quiz = () => {
       if (currentData?.question) {
         setCurrentQuestion(currentData.question); setCorrectAnswer(currentData.answer);
         saveSeenQuestion(currentData.question);
+        // Track question for session persistence
+        allQuestionsRef.current = [...allQuestionsRef.current, { question: currentData.question, answer: currentData.answer }];
         setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsAnswering(false);
         questionStartTimeRef.current = Date.now();
+        // Auto-save session after fetching a new question
+        saveSession({ questions: allQuestionsRef.current });
       } else throw new Error("Invalid data");
     } catch (err) {
       console.warn("API failed or timed out. Initiating fallback...", err);
@@ -632,14 +710,21 @@ const Quiz = () => {
   };
 
   useEffect(() => {
-    const init = async () => {
-      const restored = await loadActiveSession();
-      if (!restored) {
+    // Only fetch initial question if we're not restoring a session
+    if (!isRestoringSessionRef.current) {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const hasValidSession = (() => {
+        try {
+          if (!saved) return false;
+          const s = JSON.parse(saved);
+          return s && s.quiz_id === 'random' && Array.isArray(s.questions) && s.questions.length > 0 && s.current_index > 0 && s.current_index < SESSION_LENGTH;
+        } catch { return false; }
+      })();
+      if (!hasValidSession) {
         sessionIdRef.current = crypto.randomUUID();
         getAIQuestion();
       }
-    };
-    init();
+    }
   }, []);
 
   // ── Downloads ──────────────────────────────────────────────
