@@ -232,12 +232,10 @@ export default function AppSidebar() {
     // Show success message
     toast.success('Logged out successfully');
 
-    // Small delay for UX, then redirect
-    setTimeout(() => {
-      setIsLoggingOut(false);
-      setOpenLogoutDialog(false);
-      router.push('/login');
-    }, 500);
+    // Instant redirect
+    setIsLoggingOut(false);
+    setOpenLogoutDialog(false);
+    router.push('/');
   }
 
   if (!mounted) return null;
