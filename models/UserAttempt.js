@@ -44,7 +44,7 @@ const userAttemptSchema = new mongoose.Schema({
   },
   gameType: {
     type: String,
-    enum: ['quiz', 'mcq', 'voice'],
+    enum: ['quiz', 'mcq', 'voice', 'chat'],
     default: 'quiz'
   },
 
