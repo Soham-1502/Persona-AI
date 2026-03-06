@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CATEGORY_MAP, ACADEMIC_PLAYLIST_MAP } from "@/lib/data";
 import { Space_Grotesk } from "next/font/google";
 import { useTheme } from "next-themes";
+import BackButton from "@/app/components/micro-learning/BackButton";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -78,6 +79,7 @@ function CategoryPlaylists() {
 
   return (
     <main className={spaceGrotesk.className} style={{ ...styles.main, color: t.textPrimary }}>
+      <BackButton target="/micro-learning" />
       <h1 style={{ ...styles.title, color: t.textPrimary, textShadow: `0 0 25px ${t.glow}` }}>{displayTitle}</h1>
 
       {loading ? (

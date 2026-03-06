@@ -2,6 +2,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Highlighter from "react-highlight-words";
 import { useTheme } from "next-themes";
+import BackButton from "@/app/components/micro-learning/BackButton";
 
 function ArticulationResultsContent() {
   const { resolvedTheme } = useTheme();
@@ -183,6 +184,7 @@ function ArticulationResultsContent() {
       position: 'relative',
       overflowX: 'hidden',
     }}>
+      <BackButton target="/micro-learning" />
       <main style={{
         position: 'relative',
         zIndex: 20,
@@ -522,7 +524,7 @@ function ArticulationResultsContent() {
 
         {/* ═══ 7. RESTART BUTTON ═══ */}
         <button
-          onClick={() => { window.location.href = '/micro-learning/categories'; }}
+          onClick={() => { window.location.href = '/micro-learning'; }}
           className="restart-btn"
           style={{
             marginTop: '64px',
