@@ -26,11 +26,8 @@ export default async function PlaylistVideos({ params }) {
   if (!apiKey) {
     return (
       <div style={styles.container}>
-        <div className="scanline" />
-        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
-        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
         <h1 style={styles.pageTitle}>Configuration Error</h1>
-        <p style={{ textAlign: "center", color: '#94A3B8' }}>API Key is missing from environment variables.</p>
+        <p style={{ textAlign: "center", color: 'var(--ml-text-muted)' }}>API Key is missing from environment variables.</p>
       </div>
     );
   }
@@ -49,9 +46,6 @@ export default async function PlaylistVideos({ params }) {
     if (items.length === 0) {
       return (
         <div style={styles.container}>
-          <div className="scanline" />
-          <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
-          <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
           <h1 style={styles.pageTitle}>No videos found in this playlist.</h1>
         </div>
       );
@@ -85,12 +79,7 @@ export default async function PlaylistVideos({ params }) {
 
     return (
       <div style={styles.container}>
-        {/* ── Theme overlays ── */}
-        <div className="scanline" />
-        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
-        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
-
-        <h1 style={styles.pageTitle}>Course Content</h1>
+        <h1 style={styles.pageTitle} className="gradient-text">Course Content</h1>
         <p style={styles.subtitle}>Select a lesson to begin your self-development journey</p>
 
         <div style={styles.videoGrid} className="ml-playlist-video-grid">
@@ -101,7 +90,7 @@ export default async function PlaylistVideos({ params }) {
               style={styles.cardLink}
             >
               <div
-                className="video-card-item"
+                className="video-card-item glass-card"
                 style={{
                   ...styles.videoCard,
                   animationDelay: `${300 + index * 100}ms`,
@@ -114,7 +103,7 @@ export default async function PlaylistVideos({ params }) {
                     alt={video.snippet.title}
                   />
                   {/* Thumbnail gradient overlay */}
-                  <div style={styles.thumbnailOverlay} />
+                  <div style={styles.thumbnailOverlay} className="ml-thumb-overlay" />
                   <span style={styles.duration}>
                     {formatYouTubeDuration(video.contentDetails.duration)}
                   </span>
@@ -165,14 +154,23 @@ export default async function PlaylistVideos({ params }) {
           .video-card-item {
             animation: cardEntrance 1s cubic-bezier(0.23, 1, 0.32, 1) forwards;
             opacity: 0;
+            background: var(--ml-card-bg) !important;
+            border: 1px solid var(--ml-card-border) !important;
           }
           .video-card-item:hover {
             transform: scale(1.03) translateY(-5px) !important;
-            border-color: #934CF0 !important;
-            box-shadow: 0 10px 40px -10px rgba(147, 76, 240, 0.4) !important;
+            border-color: var(--ml-primary) !important;
+            box-shadow: 0 10px 40px -10px rgba(144, 103, 198, 0.3) !important;
           }
           .video-card-item:hover h3 {
-            color: #934CF0 !important;
+            color: var(--ml-primary) !important;
+          }
+
+          .ml-thumb-overlay {
+             background: linear-gradient(to top, rgba(0,0,0,0.6), transparent 70%);
+          }
+          .light .ml-thumb-overlay {
+             background: linear-gradient(to top, rgba(255,255,255,0.4), transparent 70%);
           }
 
           /* Responsive grid for playlist videos */
@@ -193,11 +191,8 @@ export default async function PlaylistVideos({ params }) {
     console.error("Playlist Page Error:", error);
     return (
       <div style={styles.container}>
-        <div className="scanline" />
-        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -200, right: -100 }} />
-        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -150, left: -100 }} />
         <h1 style={styles.pageTitle}>Error</h1>
-        <p style={{ textAlign: "center", color: '#94A3B8' }}>{error.message || "Something went wrong while loading the playlist."}</p>
+        <p style={{ textAlign: "center", color: 'var(--ml-text-muted)' }}>{error.message || "Something went wrong while loading the playlist."}</p>
       </div>
     );
   }
@@ -205,10 +200,10 @@ export default async function PlaylistVideos({ params }) {
 
 const styles = {
   container: {
-    backgroundColor: "#181022",
+    backgroundColor: "transparent",
     minHeight: "100vh",
     padding: "80px 4% 40px 4%",
-    color: "#fff",
+    color: "var(--ml-text-primary)",
     position: "relative",
     overflow: "hidden",
   },
@@ -218,17 +213,13 @@ const styles = {
     marginBottom: "10px",
     fontWeight: "800",
     letterSpacing: "-0.02em",
-    background: "linear-gradient(to right, #FFFFFF 30%, #934CF0 100%)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    backgroundClip: "text",
     position: "relative",
     zIndex: 10,
     animation: "headerEntrance 0.8s ease-out forwards",
   },
   subtitle: {
     textAlign: "center",
-    color: "#94A3B8",
+    color: "var(--ml-text-muted)",
     marginBottom: "50px",
     fontSize: "1.1rem",
     fontWeight: "500",
@@ -255,8 +246,8 @@ const styles = {
   videoCard: {
     width: "100%",
     cursor: "pointer",
-    background: "rgba(147, 76, 240, 0.05)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
+    background: "var(--ml-card-bg)",
+    border: "1px solid var(--ml-card-border)",
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
     borderRadius: "16px",
@@ -273,7 +264,7 @@ const styles = {
     borderRadius: "12px",
     overflow: "hidden",
     marginBottom: "16px",
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "rgba(0,0,0,0.1)",
   },
   thumbnail: {
     width: "100%",
@@ -284,7 +275,6 @@ const styles = {
   thumbnailOverlay: {
     position: "absolute",
     inset: 0,
-    background: "linear-gradient(to top, rgba(24, 16, 34, 0.6), transparent 50%)",
     pointerEvents: "none",
     borderRadius: "inherit",
   },
@@ -312,7 +302,7 @@ const styles = {
     borderRadius: "50%",
     objectFit: "cover",
     flexShrink: 0,
-    border: "2px solid #934CF0",
+    border: "2px solid var(--ml-primary)",
   },
   textContainer: {
     flex: 1,
@@ -328,16 +318,16 @@ const styles = {
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
     marginBottom: "4px",
-    color: "#fff",
+    color: "var(--ml-text-primary)",
     transition: "color 0.3s ease",
   },
   channelText: {
-    color: "#94A3B8",
+    color: "var(--ml-text-muted)",
     fontSize: "12px",
     margin: "0 0 2px 0",
   },
   metaText: {
-    color: "#94A3B8",
+    color: "var(--ml-text-muted)",
     fontSize: "11px",
     margin: 0,
   },

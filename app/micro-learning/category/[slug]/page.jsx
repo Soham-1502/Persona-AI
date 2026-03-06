@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CATEGORY_MAP, ACADEMIC_PLAYLIST_MAP } from "@/lib/data";
 import { Space_Grotesk } from "next/font/google";
+import { useTheme } from "next-themes";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -27,6 +28,8 @@ export default function CategoryPlaylistsPage() {
 function CategoryPlaylists() {
   const { slug } = useParams();
   const searchParams = useSearchParams();
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const mode = searchParams.get("mode") || "personality";
   const isAcademic = mode === "academic";
@@ -35,6 +38,7 @@ function CategoryPlaylists() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setMounted(true);
     setLoading(true);
     const ids = isAcademic ? ACADEMIC_PLAYLIST_MAP[slug] : CATEGORY_MAP[slug];
 
@@ -56,26 +60,30 @@ function CategoryPlaylists() {
       });
   }, [slug, isAcademic]);
 
+  if (!mounted) return null;
+
+  const isLight = resolvedTheme === "light";
+
+  const t = {
+    primary: isLight ? "#9067C6" : "#934CF0",
+    textPrimary: isLight ? "#242038" : "#ffffff",
+    textMuted: isLight ? "#655A7C" : "#94A3B8",
+    cardBorder: isLight ? "rgba(144, 103, 198, 0.15)" : "rgba(255, 255, 255, 0.1)",
+    glow: isLight ? "rgba(144, 103, 198, 0.4)" : "rgba(147, 76, 240, 0.6)",
+  };
+
   const displayTitle = isAcademic
     ? `${slug.replace(/-/g, " ")} Playlists & Courses`
     : `${slug.charAt(0).toUpperCase() + slug.slice(1)} Specialists`;
 
   return (
-    <main className={spaceGrotesk.className} style={styles.main}>
-      {/* ── Scanline overlay ── */}
-      <div className="scanline" />
-
-      {/* ── Background orbs ── */}
-      <div className="orb" style={{ background: '#6B21A8', width: 800, height: 800, top: -384, left: -192 }} />
-      <div className="orb" style={{ background: '#4F46E5', width: 900, height: 900, bottom: -192, right: -192 }} />
-      <div className="orb" style={{ background: '#934CF0', width: 400, height: 400, top: '50%', left: '33%', opacity: 0.1 }} />
-
-      <h1 style={styles.title}>{displayTitle}</h1>
+    <main className={spaceGrotesk.className} style={{ ...styles.main, color: t.textPrimary }}>
+      <h1 style={{ ...styles.title, color: t.textPrimary, textShadow: `0 0 25px ${t.glow}` }}>{displayTitle}</h1>
 
       {loading ? (
-        <div style={styles.loading}>Loading playlists...</div>
+        <div style={{ ...styles.loading, color: t.textMuted }}>Loading playlists...</div>
       ) : playlists.length === 0 ? (
-        <div style={styles.empty}>
+        <div style={{ ...styles.empty, color: t.textMuted }}>
           No playlists found for this {isAcademic ? "subject" : "category"}.
         </div>
       ) : (
@@ -97,17 +105,27 @@ function CategoryPlaylists() {
                     style={styles.thumbnail}
                   />
                   {/* Gradient overlay on thumbnail */}
-                  <div style={styles.thumbnailOverlay} />
+                  <div style={{
+                    ...styles.thumbnailOverlay,
+                    background: isLight 
+                      ? "linear-gradient(to top, rgba(255,255,255,0.8), transparent, transparent)"
+                      : "linear-gradient(to top, #181022, transparent, transparent)"
+                  }} />
                   {/* Video count badge */}
                   {pl.contentDetails?.itemCount != null && (
-                    <div style={styles.videoBadge}>
+                    <div style={{
+                      ...styles.videoBadge,
+                      backgroundColor: isLight ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.6)",
+                      color: isLight ? "#242038" : "#fff",
+                      borderColor: t.cardBorder,
+                    }}>
                       {String(pl.contentDetails.itemCount).padStart(2, "0")} Videos
                     </div>
                   )}
                 </div>
                 <div style={styles.cardContent}>
-                  <h3 style={styles.cardTitle}>{pl.snippet.title}</h3>
-                  <p style={styles.channelName}>{pl.snippet.channelTitle}</p>
+                  <h3 style={{ ...styles.cardTitle, color: t.textPrimary }}>{pl.snippet.title}</h3>
+                  <p style={{ ...styles.channelName, color: t.primary }}>{pl.snippet.channelTitle}</p>
                 </div>
               </div>
             </Link>
@@ -131,14 +149,10 @@ function CategoryPlaylists() {
   );
 }
 
-// ────────────────────────────────────────────────
-// Styles — EXACT same sizes, alignment, padding, grid as original.
-// Only visual skin values changed to match glass theme.
 const styles = {
   main: {
     minHeight: "100vh",
-    backgroundColor: "#181022",                        // ← upgraded from #050505
-    color: "#ffffff",
+    backgroundColor: "transparent",
     padding:
       "clamp(80px, 10vh, 140px) clamp(16px, 5vw, 80px) clamp(40px, 8vh, 80px)",
     boxSizing: "border-box",
@@ -147,27 +161,25 @@ const styles = {
   },
 
   title: {
-    fontSize: "clamp(2rem, 6vw, 3.5rem)",              // ← KEPT exact same
+    fontSize: "clamp(2rem, 6vw, 3.5rem)",
     fontWeight: 800,
-    color: "#fff",
     textAlign: "center",
-    marginBottom: "clamp(32px, 6vh, 60px)",             // ← KEPT exact same
+    marginBottom: "clamp(32px, 6vh, 60px)",
     lineHeight: 1.2,
     textTransform: "capitalize",
-    textShadow: "0 0 25px rgba(147, 76, 240, 0.6)",    // ← glass theme glow
     position: "relative",
     zIndex: 10,
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",              // desktop: 4 columns
+    gridTemplateColumns: "repeat(4, 1fr)",
     gridAutoRows: "1fr",
-    gap: "clamp(16px, 2vw, 28px)",                      // ← KEPT exact same
+    gap: "clamp(16px, 2vw, 28px)",
     width: "100%",
-    maxWidth: "1600px",                                 // ← KEPT exact same
+    maxWidth: "1600px",
     margin: "0 auto",
-    justifyContent: "center",                           // ← KEPT exact same
+    justifyContent: "center",
     position: "relative",
     zIndex: 10,
   },
@@ -180,19 +192,18 @@ const styles = {
   },
 
   card: {
-    borderRadius: "24px",                               // ← upgraded to rounded-3xl
+    borderRadius: "24px",
     overflow: "hidden",
     height: "100%",
     display: "flex",
     flexDirection: "column",
     width: "100%",
-    maxWidth: "420px",                                  // ← KEPT exact same
-    // glass-card CSS class handles: background, border, backdrop-filter, hover
+    maxWidth: "420px",
   },
 
   thumbnailWrapper: {
     width: "100%",
-    aspectRatio: "16 / 9",                              // ← KEPT exact same
+    aspectRatio: "16 / 9",
     overflow: "hidden",
     position: "relative",
   },
@@ -207,7 +218,6 @@ const styles = {
   thumbnailOverlay: {
     position: "absolute",
     inset: 0,
-    background: "linear-gradient(to top, #181022, transparent, transparent)",
     opacity: 0.6,
     pointerEvents: "none",
   },
@@ -216,7 +226,6 @@ const styles = {
     position: "absolute",
     bottom: 16,
     right: 16,
-    background: "rgba(0,0,0,0.6)",
     backdropFilter: "blur(12px)",
     padding: "4px 8px",
     borderRadius: "4px",
@@ -225,21 +234,19 @@ const styles = {
     letterSpacing: "0.1em",
     textTransform: "uppercase",
     border: "1px solid rgba(255,255,255,0.1)",
-    color: "#fff",
   },
 
   cardContent: {
-    padding: "clamp(14px, 2vw, 20px)",                  // ← KEPT exact same
-    paddingTop: "clamp(20px, 3vw, 32px)",               // ← slightly more top for glass style
+    padding: "clamp(14px, 2vw, 20px)",
+    paddingTop: "clamp(20px, 3vw, 32px)",
     flex: 1,
   },
 
   cardTitle: {
-    fontSize: "clamp(1.05rem, 2.5vw, 1.25rem)",        // ← KEPT exact same
+    fontSize: "clamp(1.05rem, 2.5vw, 1.25rem)",
     fontWeight: 600,
     lineHeight: 1.35,
-    margin: "0 0 8px 0",                                // ← KEPT exact same
-    color: "#fff",
+    margin: "0 0 8px 0",
     transition: "color 0.3s ease",
     display: "-webkit-box",
     WebkitLineClamp: 2,
@@ -249,8 +256,7 @@ const styles = {
   },
 
   channelName: {
-    fontSize: "clamp(0.85rem, 2vw, 0.95rem)",           // ← KEPT exact same
-    color: "#934CF0",                                    // ← upgraded to theme primary
+    fontSize: "clamp(0.85rem, 2vw, 0.95rem)",
     margin: 0,
     opacity: 0.9,
     fontWeight: 700,
@@ -261,7 +267,6 @@ const styles = {
   loading: {
     textAlign: "center",
     fontSize: "1.3rem",
-    color: "#888",
     padding: "80px 20px",
     position: "relative",
     zIndex: 10,
@@ -270,7 +275,6 @@ const styles = {
   empty: {
     textAlign: "center",
     fontSize: "1.2rem",
-    color: "#777",
     padding: "80px 20px",
     position: "relative",
     zIndex: 10,

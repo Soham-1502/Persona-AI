@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import DigitalSmartNotesTab from '@/app/components/micro-learning/DigitalSmartNotesTab';
 import { segmentTranscript } from '@/lib/segmenter';
+import { useTheme } from 'next-themes';
 
 export default function VideoPlayerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const videoId = params.videoId;
   const playlistId = searchParams.get('list');
@@ -31,12 +34,19 @@ export default function VideoPlayerPage() {
   const hasSentToMCQ = useRef(false);
   const [mcqStatus, setMcqStatus] = useState('not_started');
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isLight = resolvedTheme === 'light';
+
   const theme = {
-    accent: '#934CF0',
-    bg: '#181022',
-    border: 'rgba(255, 255, 255, 0.1)',
-    sidebar: 'rgba(147, 76, 240, 0.05)',
-    textMuted: '#94a3b8',
+    accent: isLight ? '#9067C6' : '#934CF0',
+    bg: isLight ? '#ffffff' : '#0a080d',
+    border: isLight ? 'rgba(144, 103, 198, 0.15)' : 'rgba(255, 255, 255, 0.1)',
+    sidebar: isLight ? 'rgba(144, 103, 198, 0.04)' : 'rgba(147, 76, 240, 0.05)',
+    textPrimary: isLight ? '#242038' : '#ffffff',
+    textMuted: isLight ? '#655A7C' : '#94a3b8',
     success: '#10b981'
   };
 
@@ -287,8 +297,10 @@ export default function VideoPlayerPage() {
     }
   };
 
+  if (!mounted) return null;
+
   if (loading && videos.length === 0) {
-    return <div style={{ background: theme.bg, color: '#fff', height: '100vh', padding: '40px' }}>Loading...</div>;
+    return <div style={{ background: 'transparent', color: theme.textPrimary, height: '100vh', padding: '40px' }}>Loading...</div>;
   }
 
   const isAssessmentEnabled = isVideoEnded && mcqStatus === 'ready';
@@ -302,18 +314,12 @@ export default function VideoPlayerPage() {
         minHeight: '100vh',
         width: '100%',
         maxWidth: '100%',
-        backgroundColor: theme.bg,
-        color: '#fff',
+        backgroundColor: 'transparent',
+        color: theme.textPrimary,
         overflow: 'hidden',
         position: 'relative',
       }}
     >
-      {/* ── Theme Overlays ── */}
-      <div className="scanline" />
-      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -192, left: -192 }} />
-      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -96, right: '25%' }} />
-      <div className="orb" style={{ background: '#934CF0', width: 400, height: 400, top: '50%', right: 0, opacity: 0.15 }} />
-
       {/* Left: Video + Info */}
       <div
         style={{
@@ -333,10 +339,10 @@ export default function VideoPlayerPage() {
           backgroundColor: '#000',
           borderRadius: '24px',
           overflow: 'hidden',
-          background: 'rgba(147, 76, 240, 0.05)',
+          background: theme.sidebar,
           border: `1px solid ${theme.border}`,
           backdropFilter: 'blur(12px)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          boxShadow: isLight ? '0 25px 50px -12px rgba(144, 103, 198, 0.1)' : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         }}>
           {/* Smart overlay: blocks YouTube suggested video clicks when paused/ended */}
           {(isVideoPaused || isVideoEnded) && (
@@ -359,7 +365,7 @@ export default function VideoPlayerPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(0, 0, 0, 0.45)',
+                background: isLight ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)',
                 backdropFilter: 'blur(2px)',
                 transition: 'opacity 0.3s ease',
               }}
@@ -368,11 +374,11 @@ export default function VideoPlayerPage() {
                 width: '80px',
                 height: '80px',
                 borderRadius: '50%',
-                background: 'rgba(147, 76, 240, 0.85)',
+                background: theme.accent,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 30px rgba(147, 76, 240, 0.5)',
+                boxShadow: `0 0 30px ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.5)'}`,
                 transition: 'transform 0.2s ease',
               }}>
                 {isVideoEnded ? (
@@ -389,7 +395,7 @@ export default function VideoPlayerPage() {
               <span style={{
                 position: 'absolute',
                 bottom: '20px',
-                color: 'rgba(255,255,255,0.7)',
+                color: isLight ? theme.textPrimary : 'rgba(255,255,255,0.7)',
                 fontSize: '0.85rem',
                 fontWeight: '600',
                 letterSpacing: '0.05em',
@@ -417,7 +423,7 @@ export default function VideoPlayerPage() {
               margin: 0,
               letterSpacing: '-0.02em',
               lineHeight: 1.2,
-              color: '#fff',
+              color: theme.textPrimary,
             }}>
               {videoDetails?.title || "Loading..."}
             </h1>
@@ -433,7 +439,7 @@ export default function VideoPlayerPage() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  color: '#c084fc',
+                  color: theme.accent,
                   fontSize: '0.9rem',
                   fontWeight: '600',
                 }}>
@@ -480,14 +486,14 @@ export default function VideoPlayerPage() {
               cursor: isAssessmentEnabled ? 'pointer' : 'not-allowed',
               transition: 'all 0.3s ease',
               background: isAssessmentEnabled
-                ? 'linear-gradient(135deg, #934CF0 0%, #4338CA 100%)'
-                : 'rgba(255, 255, 255, 0.03)',
-              color: isAssessmentEnabled ? '#fff' : 'rgba(148, 163, 184, 0.4)',
+                ? `linear-gradient(135deg, ${theme.accent} 0%, #4338CA 100%)`
+                : isLight ? 'rgba(144, 103, 198, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+              color: isAssessmentEnabled ? '#fff' : theme.textMuted,
               border: isAssessmentEnabled
                 ? 'none'
-                : '1px solid rgba(255, 255, 255, 0.08)',
+                : `1px solid ${theme.border}`,
               boxShadow: isAssessmentEnabled
-                ? '0 0 20px rgba(147, 76, 240, 0.3)'
+                ? `0 0 20px ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.3)'}`
                 : 'none',
             }}
           >
@@ -510,14 +516,14 @@ export default function VideoPlayerPage() {
         <div style={{
           marginTop: '32px',
           padding: '24px',
-          background: 'rgba(147, 76, 240, 0.05)',
+          background: theme.sidebar,
           backdropFilter: 'blur(12px)',
           border: `1px solid ${theme.border}`,
           borderRadius: '16px',
           transition: 'all 0.4s ease',
         }}>
           <p style={{
-            color: '#cbd5e1',
+            color: theme.textMuted,
             fontSize: '1rem',
             lineHeight: '1.7',
             whiteSpace: 'pre-wrap',
@@ -534,7 +540,7 @@ export default function VideoPlayerPage() {
         style={{
           width: '400px',
           maxWidth: '100%',
-          background: 'rgba(147, 76, 240, 0.05)',
+          background: theme.sidebar,
           backdropFilter: 'blur(12px)',
           borderLeft: `1px solid ${theme.border}`,
           display: 'flex',
@@ -567,9 +573,9 @@ export default function VideoPlayerPage() {
           <button
             onClick={() => setActiveRightTab(activeRightTab === 'course' ? 'notes' : 'course')}
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: `1px solid rgba(255, 255, 255, 0.05)`,
-              color: '#94a3b8',
+              background: isLight ? 'rgba(144, 103, 198, 0.05)' : 'rgba(255, 255, 255, 0.05)',
+              border: `1px solid ${theme.border}`,
+              color: theme.textMuted,
               padding: '6px 12px',
               borderRadius: '8px',
               cursor: 'pointer',
@@ -604,8 +610,8 @@ export default function VideoPlayerPage() {
                     padding: '12px',
                     borderRadius: '12px',
                     cursor: 'pointer',
-                    backgroundColor: videoId === v.id ? 'rgba(147, 76, 240, 0.1)' : 'transparent',
-                    border: `1px solid ${videoId === v.id ? 'rgba(147, 76, 240, 0.2)' : 'rgba(255, 255, 255, 0.03)'}`,
+                    backgroundColor: videoId === v.id ? (isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(147, 76, 240, 0.1)') : 'transparent',
+                    border: `1px solid ${videoId === v.id ? theme.accent + '33' : theme.border}`,
                     transition: 'all 0.3s ease',
                   }}
                 >
@@ -631,7 +637,7 @@ export default function VideoPlayerPage() {
                     fontSize: '0.85rem',
                     fontWeight: '600',
                     lineHeight: '1.4',
-                    color: videoId === v.id ? '#fff' : '#cbd5e1',
+                    color: videoId === v.id ? theme.textPrimary : theme.textMuted,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
@@ -692,19 +698,19 @@ export default function VideoPlayerPage() {
           background: rgba(255, 255, 255, 0.02);
         }
         .custom-scrollbar-area::-webkit-scrollbar-thumb {
-          background: rgba(147, 76, 240, 0.3);
+          background: ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'};
           border-radius: 10px;
         }
         .custom-scrollbar-area::-webkit-scrollbar-thumb:hover {
-          background: rgba(147, 76, 240, 0.6);
+          background: ${isLight ? 'rgba(144, 103, 198, 0.6)' : 'rgba(147, 76, 240, 0.6)'};
         }
         .custom-scrollbar-area {
           scrollbar-width: thin;
-          scrollbar-color: rgba(147, 76, 240, 0.3) rgba(255, 255, 255, 0.02);
+          scrollbar-color: ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'} rgba(255, 255, 255, 0.02);
         }
         .playlist-item-el:hover {
-          background: rgba(147, 76, 240, 0.1) !important;
-          border-color: rgba(147, 76, 240, 0.15) !important;
+          background: ${isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(147, 76, 240, 0.1)'} !important;
+          border-color: ${theme.accent}33 !important;
         }
       `}</style>
     </div>
