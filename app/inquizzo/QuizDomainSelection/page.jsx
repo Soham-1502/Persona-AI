@@ -84,12 +84,16 @@ const QuizDomainSelection = () => {
   const [isTimeout, setIsTimeout] = useState(false);
 
   const SESSION_LENGTH = 10;
+  const STORAGE_KEY = 'inquizzo_active_session';
   const sessionIdRef = useRef(null);
   const [sessionQCount, setSessionQCount] = useState(0);
   const [sessionScore, setSessionScore] = useState(0);
   const [showSessionEnd, setShowSessionEnd] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const questionStartTimeRef = useRef(Date.now());
+  const isRestoringSessionRef = useRef(false);
+  const hasRestoredRef = useRef(false);  // guard against StrictMode double-fire
+  const allQuestionsRef = useRef([]);  // stores all fetched {question, answer} objects
   const isTransitioningRef = useRef(false);
   const recognitionRef = useRef(null);
   const currentQuestionRef = useRef({ question: "", answer: "" });
@@ -307,8 +311,113 @@ const QuizDomainSelection = () => {
     setParticles([...Array(20)].map(() => ({ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, delay: `${Math.random() * 5}s` })));
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) setIsBrowserSupported(false);
+    // Check for existing session to resume
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const session = JSON.parse(saved);
+        if (session && session.quiz_id && session.quiz_id !== 'random' && Array.isArray(session.questions) && session.questions.length > 0 && session.current_index > 0 && session.current_index < SESSION_LENGTH) {
+          if (!hasRestoredRef.current) {
+            hasRestoredRef.current = true;
+            const pct = Math.round((session.current_index / SESSION_LENGTH) * 100);
+            toast(
+              `You have an incomplete quiz (${pct}% completed). Would you like to resume or start a new session?`,
+              {
+                duration: 15000,
+                action: {
+                  label: 'Resume',
+                  onClick: () => restoreSession(session),
+                },
+                cancel: {
+                  label: 'New Session',
+                  onClick: () => {
+                    localStorage.removeItem(STORAGE_KEY);
+                  },
+                },
+              }
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to check saved session:', e);
+    }
     return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
   }, []);
+
+  // ── Session Persistence Helpers ────────────────────────────
+  const getQuizId = () => [selectedDomain, selectedCategory, selectedSubCategory, selectedTopic].filter(Boolean).join(':');
+
+  const saveSession = (overrides = {}) => {
+    try {
+      const sessionData = {
+        quiz_id: overrides.quiz_id || getQuizId(),
+        session_id: sessionIdRef.current,
+        questions: overrides.questions || allQuestionsRef.current,
+        current_index: overrides.current_index ?? sessionQCount,
+        answers_map: overrides.answers_map ?? chatHistory,
+        score: overrides.score ?? score,
+        accuracy: questionsAnswered > 0 ? Math.round((correctCount / questionsAnswered) * 100) : 0,
+        start_time: overrides.start_time || Date.now(),
+        difficulty: selectedDifficulty,
+        correct_count: overrides.correct_count ?? correctCount,
+        questions_answered: overrides.questions_answered ?? questionsAnswered,
+        session_score: overrides.session_score ?? sessionScore,
+        // Domain selection context for restoration
+        domain: selectedDomain,
+        category: selectedCategory,
+        subCategory: selectedSubCategory,
+        topic: selectedTopic,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    } catch (e) {
+      console.warn('Failed to save session:', e);
+    }
+  };
+
+  const clearSession = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { console.warn('Failed to clear session:', e); }
+  };
+
+  const restoreSession = (session) => {
+    isRestoringSessionRef.current = true;
+    sessionIdRef.current = session.session_id || crypto.randomUUID();
+    allQuestionsRef.current = session.questions;
+    const idx = session.current_index || 0;
+    const currentQ = session.questions[idx];
+
+    // Restore domain selection context
+    if (session.domain) setSelectedDomain(session.domain);
+    if (session.category) setSelectedCategory(session.category);
+    if (session.subCategory) setSelectedSubCategory(session.subCategory);
+    if (session.topic) setSelectedTopic(session.topic);
+    setCurrentView('quiz');
+
+    setSessionQCount(idx);
+    setSessionScore(session.session_score || 0);
+    setScore(session.score || 0);
+    setCorrectCount(session.correct_count || 0);
+    setQuestionsAnswered(session.questions_answered || idx);
+    setChatHistory(session.answers_map || []);
+    setSelectedDifficulty(session.difficulty || 'medium');
+
+    if (currentQ) {
+      setCurrentQuestion(currentQ.question);
+      setCorrectAnswer(currentQ.answer);
+      currentQuestionRef.current = { question: currentQ.question, answer: currentQ.answer };
+    }
+    setIsLoading(false);
+    setTimer(30);
+    setTimerActive(false);
+    setTranscript('');
+    setFeedback('');
+    setShowResult(false);
+    setIsAnswering(false);
+    setError('');
+    questionStartTimeRef.current = Date.now();
+    isRestoringSessionRef.current = false;
+    toast.success(`Quiz resumed at question ${idx + 1}/${SESSION_LENGTH}`);
+  };
 
   useEffect(() => {
     if (currentView === "quiz" && timerActive && timer > 0 && !showResult) {
@@ -381,8 +490,12 @@ const QuizDomainSelection = () => {
         setCurrentQuestion(currentData.question); setCorrectAnswer(currentData.answer);
         currentQuestionRef.current = { question: currentData.question, answer: currentData.answer };
         saveSeenQuestion(currentData.question);
+        // Track question for session persistence
+        allQuestionsRef.current = [...allQuestionsRef.current, { question: currentData.question, answer: currentData.answer }];
         setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsTimeout(false);
         questionStartTimeRef.current = Date.now();
+        // Auto-save session after fetching a new question
+        saveSession({ questions: allQuestionsRef.current });
       }
     } catch (err) {
       console.warn("API failed or timed out. Initiating fallback...", err);
@@ -532,9 +645,22 @@ const QuizDomainSelection = () => {
       }
       await saveAttempt({ question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer || currentQuestionRef.current.answer, isCorrect: data.result.isCorrect || false, score: gained, timeTaken });
       const newCount = sessionQCount + 1; setSessionQCount(newCount); setQuestionsAnswered((p) => p + 1);
-      setChatHistory((p) => [...p, { question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer, isCorrect: data.result.isCorrect, feedback: data.result.explanation || data.result.feedback, score: gained }]);
+      const resultData = { question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer, isCorrect: data.result.isCorrect, feedback: data.result.explanation || data.result.feedback, score: gained };
+      setChatHistory((p) => [...p, resultData]);
+
+      // Auto-save session after answering
+      saveSession({
+        current_index: newCount,
+        answers_map: [...chatHistory, resultData],
+        score: score + (gained > 0 ? gained : 0),
+        correct_count: correctCount + (data.result.isCorrect ? 1 : 0),
+        questions_answered: questionsAnswered + 1,
+        session_score: sessionScore + (gained > 0 ? gained : 0),
+      });
+
       if (newCount >= SESSION_LENGTH) {
         setShowSessionEnd(true);
+        clearSession();
         stopListening(true); // CRITICAL: Stop mic immediately when session ends
       }
     } catch { setError("Failed to check answer. Please try again."); }
@@ -553,8 +679,18 @@ const QuizDomainSelection = () => {
     setSessionQCount(newCount);
     setQuestionsAnswered((p) => p + 1);
     setIsManualStop(false);
+
+    // Auto-save session after timeout
+    const timeoutResult = { question: currentQuestionRef.current.question, userAnswer: '(Timeout)', correctAnswer: currentQuestionRef.current.answer, isCorrect: false, score: 0 };
+    saveSession({
+      current_index: newCount,
+      answers_map: [...chatHistory, timeoutResult],
+      questions_answered: questionsAnswered + 1,
+    });
+
     if (newCount >= SESSION_LENGTH) {
       setShowSessionEnd(true);
+      clearSession();
       stopListening(true); // CRITICAL: Stop mic on timeout session end
     }
     saveAttempt({
@@ -576,6 +712,8 @@ const QuizDomainSelection = () => {
     fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic, a);
   };
   const startNewSession = () => {
+    clearSession();
+    allQuestionsRef.current = [];
     sessionIdRef.current = crypto.randomUUID(); setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0); setCorrectCount(0); setChatHistory([]); setQuestionsAnswered(0);
     if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { } recognitionRef.current = null; setIsListening(false); }
     nextQuestion();

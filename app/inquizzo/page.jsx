@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import CursorAura from '@/app/components/inquizzo/CursorAura';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
@@ -9,7 +9,7 @@ import {
   Medal, FileCheck, Target, Award,
   Shuffle, LayoutGrid, ArrowRight, List,
   Brain, Code, Palette, ExternalLink,
-  Rocket, TrendingUp, Loader2
+  Rocket, TrendingUp, Loader2, X
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Header from '@/app/components/shared/header/Header.jsx';
@@ -201,6 +201,27 @@ export default function InQuizzoDashboard() {
     },
     recentActivity: []
   });
+
+  const STORAGE_KEY = 'inquizzo_active_session';
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [resumePct, setResumePct] = useState(0);
+
+  const handleRandomQuizClick = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const session = JSON.parse(saved);
+        if (session && session.quiz_id === 'random' && Array.isArray(session.questions) && session.questions.length > 0 && session.current_index > 0 && session.current_index < 10) {
+          setResumePct(Math.round((session.current_index / 10) * 100));
+          setShowResumeModal(true);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to check saved session:', e);
+    }
+    router.push('/inquizzo/RandomQuiz');
+  };
 
   // Premium Theme Tokens (Synced with RandomQuiz)
   const t = isLight ? {
@@ -400,7 +421,7 @@ export default function InQuizzoDashboard() {
               {/* Random Quiz Card */}
               <motion.div
                 whileHover={{ y: -5, scale: 1.01 }}
-                onClick={() => router.push('/inquizzo/RandomQuiz')}
+                onClick={handleRandomQuizClick}
                 className="relative overflow-hidden rounded-3xl p-8 h-64 flex flex-col justify-end group cursor-pointer bg-gradient-to-br from-purple-600 to-pink-500 shadow-2xl shadow-purple-500/20"
                 data-cursor="card"
               >
@@ -491,6 +512,142 @@ export default function InQuizzoDashboard() {
           </section>
         </div>
       </main >
+
+      {/* ── Resume Session Modal ── */}
+      <AnimatePresence>
+        {showResumeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+            onClick={() => setShowResumeModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md rounded-3xl overflow-hidden"
+              style={{
+                background: isLight
+                  ? 'rgba(255, 255, 255, 0.25)'
+                  : 'rgba(255, 255, 255, 0.06)',
+                backdropFilter: 'blur(40px)',
+                WebkitBackdropFilter: 'blur(40px)',
+                border: isLight
+                  ? '1px solid rgba(255, 255, 255, 0.5)'
+                  : '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: isLight
+                  ? '0 8px 60px rgba(147, 76, 240, 0.15), 0 0 0 1px rgba(255,255,255,0.3) inset, 0 2px 20px rgba(0,0,0,0.06)'
+                  : '0 8px 60px rgba(147, 76, 240, 0.25), 0 0 0 1px rgba(255,255,255,0.08) inset, 0 2px 20px rgba(0,0,0,0.3)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Glassmorphism inner glow orbs */}
+              <div className="absolute -top-20 -left-20 w-40 h-40 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, ${t.primary}40, transparent 70%)` }} />
+              <div className="absolute -bottom-16 -right-16 w-36 h-36 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.3), transparent 70%)' }} />
+
+              {/* Top accent bar */}
+              <div className="h-1 w-full" style={{ background: `linear-gradient(to right, ${t.primary}, #EC4899, ${t.primary})` }} />
+
+              {/* Close button */}
+              <button
+                onClick={() => setShowResumeModal(false)}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 z-10"
+                style={{
+                  background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+                  backdropFilter: 'blur(12px)',
+                  border: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                <X className="w-4 h-4" style={{ color: t.textMuted }} />
+              </button>
+
+              <div className="relative z-[1] p-8 pt-6 text-center">
+                {/* Glassmorphism icon container */}
+                <div
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 relative"
+                  style={{
+                    background: isLight
+                      ? 'rgba(147, 76, 240, 0.12)'
+                      : 'rgba(147, 76, 240, 0.15)',
+                    backdropFilter: 'blur(16px)',
+                    border: isLight
+                      ? '1px solid rgba(147, 76, 240, 0.2)'
+                      : '1px solid rgba(147, 76, 240, 0.25)',
+                    boxShadow: `0 0 40px ${t.primary}33, 0 0 80px ${t.primary}15`,
+                  }}
+                >
+                  <Shuffle className="w-9 h-9" style={{ color: t.primary }} />
+                </div>
+
+                <h3 className="text-2xl font-black mb-2 tracking-tight" style={{ color: t.textPrimary }}>Incomplete Quiz Found</h3>
+                <p className="text-sm mb-7 leading-relaxed" style={{ color: t.textMuted }}>
+                  You have an incomplete quiz session. Would you like to pick up where you left off?
+                </p>
+
+                {/* Progress indicator with glass bg */}
+                <div
+                  className="mb-7 p-4 rounded-2xl"
+                  style={{
+                    background: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)',
+                    border: isLight ? '1px solid rgba(0,0,0,0.05)' : '1px solid rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: t.textMuted }}>Progress</span>
+                    <span className="text-sm font-black" style={{ color: t.primary }}>{resumePct}%</span>
+                  </div>
+                  <div className="w-full h-3 rounded-full overflow-hidden" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${resumePct}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                      className="h-full rounded-full"
+                      style={{ background: `linear-gradient(90deg, ${t.primary}, #EC4899)`, boxShadow: `0 0 12px ${t.primary}66` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Action buttons — glass styled */}
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setShowResumeModal(false);
+                      router.push('/inquizzo/RandomQuiz');
+                    }}
+                    className="w-full py-3.5 rounded-2xl font-bold text-white text-sm shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                    style={{
+                      background: `linear-gradient(135deg, ${t.primary}, #EC4899)`,
+                      boxShadow: `0 6px 30px ${t.primary}44, 0 0 0 1px rgba(255,255,255,0.1) inset`,
+                    }}
+                  >
+                    Resume Quiz ({resumePct}% Done)
+                  </button>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem(STORAGE_KEY);
+                      setShowResumeModal(false);
+                      router.push('/inquizzo/RandomQuiz');
+                    }}
+                    className="w-full py-3.5 rounded-2xl font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.98]"
+                    style={{
+                      background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)',
+                      backdropFilter: 'blur(12px)',
+                      border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)',
+                      color: t.textPrimary,
+                    }}
+                  >
+                    Start New Session
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div >
   );
 }
