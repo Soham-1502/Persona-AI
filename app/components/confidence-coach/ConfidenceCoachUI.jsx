@@ -21,7 +21,6 @@ const SCENARIO_WEIGHTS = {
 export function ConfidenceCoachUI() {
     // Video state
     const videoRef = useRef(null);
-    const streamRef = useRef(null);
     const [stream, setStream] = useState(null);
     const streamRef = useRef(null); // Ref to always hold the live stream — avoids stale closure on cleanup
 
