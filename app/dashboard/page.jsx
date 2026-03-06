@@ -37,6 +37,14 @@ export default function Home() {
     totalSessions: 0,
     prevTotalSessions: 0,
     moduleProgress: null,
+    lastCompletedSession: null,
+    activeSession: null,
+    stats: {
+      questsAnswered: 0,
+      accuracyRate: 0,
+      questsChangeTag: "",
+      accuracyTag: ""
+    }
   });
   const [liveLoading, setLiveLoading] = useState(true);
 
@@ -63,6 +71,14 @@ export default function Home() {
           totalSessions: json.totalSessions ?? 0,
           prevTotalSessions: json.prevTotalSessions ?? 0,
           moduleProgress: json.moduleProgress ?? null,
+          activeSession: json.activeSession ?? null,
+          lastCompletedSession: json.lastCompletedSession ?? null,
+          stats: json.stats ?? {
+            questsAnswered: 0,
+            accuracyRate: 0,
+            questsChangeTag: "",
+            accuracyTag: ""
+          }
         });
       }
     } catch (err) {
@@ -111,19 +127,19 @@ export default function Home() {
         <MetricCardSwiper count={4}>
           <MetricCard
             icon={Activity}
-            label="Total Sessions"
-            value={totalSessions}
-            badgeText={totalSessionsBadge.text}
-            badgeTone={totalSessionsBadge.tone}
+            label="Quests Answered"
+            value={liveData.stats?.questsAnswered || 0}
+            badgeText={liveData.stats?.questsChangeTag || ""}
+            badgeTone="purple"
             subtitle={selectedDate}
             isLoading={liveLoading}
           />
           <MetricCard
             icon={Sparkles}
-            label="Confidence Score"
-            value={`${ConfidenceCoach}%`}
-            badgeText={ConfidenceCoachBadge.text}
-            badgeTone={ConfidenceCoachBadge.tone}
+            label="Accuracy Rate"
+            value={`${liveData.stats?.accuracyRate || 0}%`}
+            badgeText={liveData.stats?.accuracyTag || ""}
+            badgeTone="purple"
             subtitle={selectedDate}
             isLoading={liveLoading}
           />
@@ -159,8 +175,11 @@ export default function Home() {
         </div>
 
 
-        {/* Pass live module progress down so ModuleProgressSection needs no extra fetch */}
-        <ModuleProgressSection liveData={liveData.moduleProgress} liveLoading={liveLoading} />
+        {/* Pass live module progress and active session down */}
+        <ModuleProgressSection
+          liveData={liveData}
+          liveLoading={liveLoading}
+        />
         <ReminderSection />
       </div>
     </div>

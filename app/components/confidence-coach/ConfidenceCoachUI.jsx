@@ -69,7 +69,6 @@ export function ConfidenceCoachUI() {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
-            setStream(null);
         }
         if (videoRef.current) {
             videoRef.current.srcObject = null;

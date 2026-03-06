@@ -11,7 +11,6 @@ import {
 import Header from '@/app/components/shared/header/Header.jsx';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1414,11 +1413,10 @@ const QuizDomainSelection = () => {
   // ─── MAIN RENDER ───────────────────────────────────────────────────────────
   return (
     <div
-      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
+      className={cn("relative min-h-screen font-dm flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
-      <CursorAura />
       <Toaster richColors position="top-center" />
 
       {/* Decorative Orbs */}
