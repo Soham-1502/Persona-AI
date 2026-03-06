@@ -120,19 +120,19 @@
   --chart-5: oklch(0.977 0.005 60);
   /* #F7ECE1 - Cream */
 
-  /* SIDEBAR - PersonaAI Style (Dark sidebar) */
-  --sidebar: oklch(0.225 0.028 285);
+  /* SIDEBAR - PersonaAI Style (Light sidebar in light mode) */
+  --sidebar: oklch(0.977 0.005 60);
+  /* #F7ECE1 - Cream */
+  --sidebar-foreground: oklch(0.225 0.028 285);
   /* #242038 - Dark purple */
-  --sidebar-foreground: oklch(0.977 0.005 60);
-  /* #F7ECE1 - Cream text */
   --sidebar-primary: oklch(0.565 0.145 285);
   /* #9067C6 - Active item */
   --sidebar-primary-foreground: oklch(1 0 0);
   /* White text */
-  --sidebar-accent: oklch(0.595 0.085 285);
-  /* #8D86C9 - Hover accent */
-  --sidebar-accent-foreground: oklch(1 0 0);
-  /* White text */
+  --sidebar-accent: oklch(0.9 0.02 285);
+  /* Lighter lavender for hover */
+  --sidebar-accent-foreground: oklch(0.225 0.028 285);
+  /* Dark purple text */
   --sidebar-border: oklch(0.82 0.012 285);
   /* #CAC4CE - Border */
   --sidebar-ring: oklch(0.565 0.145 285);
@@ -527,6 +527,9 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+
+  body.custom-cursor-active * {
     cursor: none !important;
   }
 

@@ -26,10 +26,12 @@
 /* ----------------------------------------
    Hide default cursor — everywhere on micro-learning pages
    ---------------------------------------- */
-*,
-*::before,
-*::after {
-  cursor: none !important;
+@media (pointer: fine) {
+  body.custom-cursor-active *,
+  body.custom-cursor-active *::before,
+  body.custom-cursor-active *::after {
+    cursor: none !important;
+  }
 }
 
 /* ----------------------------------------
@@ -41,8 +43,8 @@
   position: fixed;
   top: 0;
   left: 0;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--ml-primary);
   box-shadow: 0 0 10px var(--ml-cursor-glow);
@@ -50,8 +52,8 @@
   z-index: 99999;
   opacity: 0;
   /* shift so the dot center aligns with the pointer */
-  margin-left: -4px;
-  margin-top: -4px;
+  margin-left: -3px;
+  margin-top: -3px;
   will-change: transform;
   transition: opacity 0.2s ease;
 }
@@ -61,25 +63,25 @@
   position: fixed;
   top: 0;
   left: 0;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 1.5px solid var(--ml-card-border);
   pointer-events: none;
   z-index: 99998;
   opacity: 0;
-  margin-left: -18px;
-  margin-top: -18px;
+  margin-left: -14px;
+  margin-top: -14px;
   will-change: transform;
   transition: opacity 0.2s ease, width 0.2s ease, height 0.2s ease, border-color 0.2s ease;
 }
 
 /* Shrink ring on click */
 .ml-cursor-ring--click {
-  width: 24px;
-  height: 24px;
-  margin-left: -12px;
-  margin-top: -12px;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top: -10px;
   border-color: var(--ml-primary);
 }
 

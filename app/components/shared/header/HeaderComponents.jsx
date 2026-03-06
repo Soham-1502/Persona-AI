@@ -15,10 +15,11 @@ import {
     DropdownMenuItem
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Bell, Sun, Moon, MonitorCog } from "lucide-react";
+import { Bell, Sun, Moon, MonitorCog, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState, useRef } from "react";
 import { isAuthenticated, clearAuth } from "@/lib/auth-client";
+import { toast } from 'sonner';
 
 export function DateFilter({ value, onValueChange }) {
     return (
@@ -132,6 +133,41 @@ export function Notifications() {
         }
     };
 
+    const deleteNotification = async (id, e) => {
+        e.stopPropagation(); // Prevent marking as read when clicking delete
+        try {
+            const response = await fetch(`/api/notifications/${id}`, {
+                method: "DELETE",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+            });
+            if (response.ok) {
+                toast.success('Notification deleted');
+                fetchNotifications();
+            }
+        } catch (error) {
+            console.error("Error deleting notification:", error);
+        }
+    };
+
+    const deleteAllNotifications = async () => {
+        try {
+            const response = await fetch("/api/notifications", {
+                method: "DELETE",
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+            });
+            if (response.ok) {
+                toast.success('All notifications cleared');
+                fetchNotifications();
+            }
+        } catch (error) {
+            console.error("Error deleting all notifications:", error);
+        }
+    };
+
     useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 10000); // 10s for testing
@@ -145,7 +181,7 @@ export function Notifications() {
         )}>
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild className="cursor-pointer">
-                    <button className="relative">
+                    <button className="relative focus:outline-none focus-visible:ring-0">
                         <Bell />
                         {unreadCount > 0 && (
                             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
@@ -158,19 +194,31 @@ export function Notifications() {
                     align="end"
                     sideOffset={15}
                     alignOffset={-5}
-                    className="notification-dropdown w-[calc(100vw-2rem)] sm:w-96 max-h-[80vh] flex flex-col p-0 overflow-hidden border dark:border-white/10 backdrop-blur-[12px] bg-background/80"
+                    className="notification-dropdown w-[calc(100vw-2rem)] sm:w-96 max-h-[80vh] flex flex-col p-0 overflow-hidden border border-black/5 dark:border-white/10 backdrop-blur-xl bg-card/70 shadow-2xl"
                 >
                     {/* Header — sticky, never scrolls */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b sticky top-0 bg-transparent z-10 shrink-0">
-                        <h3 className="font-semibold text-base">Notifications</h3>
-                        {unreadCount > 0 && (
-                            <button
-                                onClick={markAllAsRead}
-                                className="text-xs text-primary hover:underline"
-                            >
-                                Mark all read
-                            </button>
-                        )}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-black/5 dark:border-white/5 sticky top-0 bg-transparent z-10 shrink-0">
+                        <div className="flex flex-col">
+                            <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Notifications</h3>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            {unreadCount > 0 && (
+                                <button
+                                    onClick={markAllAsRead}
+                                    className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                                >
+                                    Mark all read
+                                </button>
+                            )}
+                            {notifications.length > 0 && (
+                                <button
+                                    onClick={deleteAllNotifications}
+                                    className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors"
+                                >
+                                    Clear all
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Notifications List — scrolls independently */}
@@ -189,8 +237,8 @@ export function Notifications() {
                                 <DropdownMenuItem
                                     key={notification._id}
                                     className={cn(
-                                        "p-4 cursor-pointer border-b last:border-b-0 focus:bg-muted",
-                                        !notification.read && "bg-muted/30"
+                                        "p-4 cursor-pointer border-b border-black/5 dark:border-white/5 last:border-b-0 focus:bg-primary/5 transition-colors",
+                                        !notification.read && "bg-primary/10 dark:bg-primary/5"
                                     )}
                                     onClick={() => markAsRead(notification._id)}
                                 >
@@ -204,9 +252,18 @@ export function Notifications() {
                                                     {notification.message}
                                                 </p>
                                             </div>
-                                            {!notification.read && (
-                                                <span className="h-2 w-2 bg-blue-500 rounded-full mt-1 shrink-0" />
-                                            )}
+                                            <div className="flex flex-col items-end gap-2 shrink-0">
+                                                {!notification.read && (
+                                                    <span className="h-2 w-2 bg-blue-500 rounded-full shrink-0" />
+                                                )}
+                                                <button
+                                                    onClick={(e) => deleteNotification(notification._id, e)}
+                                                    className="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-red-500 transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="flex items-center justify-between mt-2">
                                             <span className="text-xs text-muted-foreground">
@@ -236,7 +293,7 @@ export function Theme() {
         )} >
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild className="cursor-pointer">
-                    <button size="icon">
+                    <button className="focus:outline-none focus-visible:ring-0">
                         <Sun className='scale-100 dark:scale-0' />
                         <Moon className='absolute -translate-y-6 scale-0 dark:scale-100' />
                     </button>
