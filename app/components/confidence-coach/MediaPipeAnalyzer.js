@@ -1,7 +1,8 @@
-import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, FaceLandmarker, PoseLandmarker, HandLandmarker } from '@mediapipe/tasks-vision';
 
 let faceLandmarker = null;
 let poseLandmarker = null;
+let handLandmarker = null;
 let isInitializing = false;
 
 // Subdue MediaPipe WASM informational logs
@@ -25,7 +26,7 @@ if (typeof window !== 'undefined') {
 
 // Load models singleton
 export async function initMediaPipeModels() {
-    if (faceLandmarker && poseLandmarker) return;
+    if (faceLandmarker && poseLandmarker && handLandmarker) return;
     if (isInitializing) {
         // Simple polling if already initializing
         while (isInitializing) {
@@ -58,6 +59,15 @@ export async function initMediaPipeModels() {
             runningMode: "VIDEO",
             numPoses: 1
         });
+
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: {
+                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+                delegate: "CPU"
+            },
+            runningMode: "VIDEO",
+            numHands: 2
+        });
     } catch (err) {
         console.error("MediaPipe initialization error:", err);
     } finally {
@@ -69,37 +79,35 @@ export async function initMediaPipeModels() {
 function determinePosture(poseLandmarks) {
     if (!poseLandmarks || poseLandmarks.length === 0) return "unknown";
 
-    // MediaPipe tracks 33 points. We care about hips (23, 24) and knees (25, 26)
     const leftHip = poseLandmarks[23];
     const rightHip = poseLandmarks[24];
     const leftKnee = poseLandmarks[25];
     const rightKnee = poseLandmarks[26];
 
-    // If we only see upper body (knees not visible), we assume Sitting for desktop use cases usually,
-    // but let's check visibility thresholds (MediaPipe gives visibility score 0-1)
     const hipsVisible = leftHip?.visibility > 0.5 || rightHip?.visibility > 0.5;
     const kneesVisible = leftKnee?.visibility > 0.5 || rightKnee?.visibility > 0.5;
 
     if (!hipsVisible) return "unknown";
 
     if (kneesVisible) {
-        // Average Y coordinates (Y grows downwards 0 to 1)
-        const hipY = ((leftHip?.y || 0) + (rightHip?.y || 0)) / (leftHip && rightHip ? 2 : 1);
-        const kneeY = ((leftKnee?.y || 0) + (rightKnee?.y || 0)) / (leftKnee && rightKnee ? 2 : 1);
+        const leftHipY = leftHip?.y || 0;
+        const rightHipY = rightHip?.y || 0;
+        const leftKneeY = leftKnee?.y || 0;
+        const rightKneeY = rightKnee?.y || 0;
 
-        // If knee is significantly lower than hip down the screen, standing.
+        const hipY = (leftHipY + rightHipY) / 2;
+        const kneeY = (leftKneeY + rightKneeY) / 2;
+
         const yDiff = kneeY - hipY;
-        if (yDiff > 0.2) return "standing";
+        if (yDiff > 0.15) return "standing";
     }
 
-    return "sitting"; // Default assumption if hips are seen but knees aren't, or knees are leveled
+    return "sitting";
 }
 
-// ARKit Blendshape heuristical Emotion mapping
 function evaluateEmotion(faceBlendshapes) {
     if (!faceBlendshapes || faceBlendshapes.length === 0) return "neutral";
 
-    // Blendshapes is an array of categories with {categoryName, score}
     const getScore = (name) => {
         const shape = faceBlendshapes.find(b => b.categoryName === name);
         return shape ? shape.score : 0;
@@ -110,15 +118,8 @@ function evaluateEmotion(faceBlendshapes) {
     const browDownLeft = getScore("browDownLeft");
     const browDownRight = getScore("browDownRight");
 
-    // Positive
-    if (smileLeft > 0.4 && smileRight > 0.4) {
-        return "positive";
-    }
-
-    // Tense / Frowning
-    if (browDownLeft > 0.4 && browDownRight > 0.4) {
-        return "tense";
-    }
+    if (smileLeft > 0.4 && smileRight > 0.4) return "positive";
+    if (browDownLeft > 0.4 && browDownRight > 0.4) return "tense";
 
     return "neutral";
 }
@@ -141,13 +142,14 @@ export function startMediaPipeStream(videoElement, onResults) {
 
             let faceResult = null;
             let poseResult = null;
+            let handResult = null;
             let posture = "unknown";
             let emotion = "neutral";
 
             if (faceLandmarker) {
                 faceResult = faceLandmarker.detectForVideo(videoElement, currentTimeMs);
                 if (faceResult && faceResult.faceBlendshapes && faceResult.faceBlendshapes.length > 0) {
-                    emotion = evaluateEmotion(faceResult.faceBlendshapes[0]);
+                    emotion = evaluateEmotion(faceResult.faceBlendshapes[0].categories);
                 }
             }
             if (poseLandmarker) {
@@ -156,13 +158,18 @@ export function startMediaPipeStream(videoElement, onResults) {
                     posture = determinePosture(poseResult.landmarks[0]);
                 }
             }
+            if (handLandmarker) {
+                handResult = handLandmarker.detectForVideo(videoElement, currentTimeMs);
+            }
 
             // Fire callback
             onResults({
                 face: faceResult,
                 pose: poseResult,
+                hand: handResult,
                 posture,
-                emotion
+                emotion,
+                handsVisible: handResult?.landmarks?.length > 0
             });
         }
 
