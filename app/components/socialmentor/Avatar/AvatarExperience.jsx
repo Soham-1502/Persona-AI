@@ -309,6 +309,8 @@ export function AvatarExperience({ isTalking, avatarType = "male" }) {
                 backgroundAttachment: 'local'
             }}
         >
+            {/* Subtle Gradient Background Overlay */}
+            <div className="absolute inset-0 bg-radial from-white/10 to-transparent dark:from-white/5 opacity-50 pointer-events-none" />
             {/* Ambient Background Glow */}
             <div className="absolute inset-0 bg-radial from-primary/5 via-transparent to-transparent pointer-events-none" />
 
