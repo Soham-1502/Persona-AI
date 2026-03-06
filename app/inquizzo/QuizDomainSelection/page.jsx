@@ -16,7 +16,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import Lottie from 'lottie-react';
 import { cn } from "@/lib/utils";
 import { useRouter } from 'next/navigation';
 import { useTheme } from "next-themes";
@@ -432,7 +431,8 @@ const QuizDomainSelection = () => {
     if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = loadVoices;
   }, []);
 
-  const resetToHome = () => {
+  const resetToHome = async () => {
+    await deleteActiveSession();
     isTransitioningRef.current = true;
     stopListening(true);
     setCurrentView("domains"); setSelectedDomain(null); setSelectedCategory(null);
@@ -624,7 +624,101 @@ const QuizDomainSelection = () => {
   };
 
   const saveAttempt = async ({ question, userAnswer, correctAnswer, isCorrect, score, timeTaken }) => {
-    try { const token = getAuthToken(); if (!token || !sessionIdRef.current) return; await fetch("/api/inquizzo/attempt", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ moduleId: "inQuizzo", gameType: "voice", sessionId: sessionIdRef.current, question, userAnswer, correctAnswer, isCorrect, score, difficulty: selectedDifficulty, timeTaken }) }); } catch { }
+    try {
+      const token = getAuthToken();
+      if (!token || !sessionIdRef.current) return;
+      await fetch("/api/inquizzo/attempt", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ moduleId: "inQuizzo", gameType: "voice", sessionId: sessionIdRef.current, question, userAnswer, correctAnswer, isCorrect, score, difficulty: selectedDifficulty, timeTaken }) });
+
+      // Also update active session state
+      await saveActiveSession();
+    } catch { }
+  };
+
+  const saveActiveSession = async (overrideData = {}) => {
+    try {
+      const token = getAuthToken();
+      if (!token || !sessionIdRef.current || showSessionEnd) return;
+
+      const sessionData = {
+        sessionId: sessionIdRef.current,
+        gameType: 'voice',
+        config: {
+          domain: selectedDomain,
+          category: selectedCategory,
+          subCategory: selectedSubCategory,
+          topic: selectedTopic,
+          difficulty: selectedDifficulty
+        },
+        questionsAnswered,
+        correctCount,
+        totalScore: score,
+        chatHistory: chatHistory.slice(-5), // Keep last 5 for context
+        ...overrideData
+      };
+
+      await fetch("/api/inquizzo/active-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(sessionData),
+      });
+    } catch (err) {
+      console.error("Failed to save active session:", err);
+    }
+  };
+
+  const loadActiveSession = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) return false;
+
+      const data = await makeAuthenticatedRequest("/api/inquizzo/active-session");
+      if (data?.session) {
+        const s = data.session;
+        sessionIdRef.current = s.sessionId;
+        setQuestionsAnswered(s.questionsAnswered);
+        setCorrectCount(s.correctCount);
+        setScore(s.totalScore);
+        setSessionScore(s.totalScore);
+        setSessionQCount(s.questionsAnswered);
+
+        // Restore Domain/Category structure
+        setSelectedDomain(s.config?.domain);
+        setSelectedCategory(s.config?.category);
+        setSelectedSubCategory(s.config?.subCategory);
+        setSelectedTopic(s.config?.topic);
+        setSelectedDifficulty(s.config?.difficulty || "medium");
+        setChatHistory(s.chatHistory || []);
+
+        if (s.questionsAnswered >= SESSION_LENGTH) {
+          setShowSessionEnd(true);
+          setCurrentView("quiz");
+          return true;
+        }
+
+        if (s.config?.topic) {
+          setCurrentView("quiz");
+          fetchQuestion(s.config.domain, s.config.category, s.config.subCategory, s.config.topic, s.config.difficulty);
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.error("Failed to load active session:", err);
+      return false;
+    }
+  };
+
+  const deleteActiveSession = async () => {
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+      await fetch("/api/inquizzo/active-session", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error("Failed to delete active session:", err);
+    }
   };
 
   const submitAnswer = async (textOverride = null, isTimeoutCall = false) => {
@@ -662,6 +756,7 @@ const QuizDomainSelection = () => {
         setShowSessionEnd(true);
         clearSession();
         stopListening(true); // CRITICAL: Stop mic immediately when session ends
+        await deleteActiveSession();
       }
     } catch { setError("Failed to check answer. Please try again."); }
     finally { setIsAnswering(false); }
@@ -692,6 +787,7 @@ const QuizDomainSelection = () => {
       setShowSessionEnd(true);
       clearSession();
       stopListening(true); // CRITICAL: Stop mic on timeout session end
+      deleteActiveSession();
     }
     saveAttempt({
       question: currentQuestionRef.current.question,

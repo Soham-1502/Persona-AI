@@ -165,6 +165,9 @@ function generateInsights(user, attempts, streak) {
     snapshot.push(
       `Streak • ${streak.current} day${streak.current !== 1 ? "s" : ""}`,
     );
+  if (confidenceCoachStats?.sessionsCompleted > 0) {
+    snapshot.push(`Public Speaker • ${confidenceCoachStats.sessionsCompleted} sessions`);
+  }
 
   // Peak day from recent attempts
   const dayCounts = {};
@@ -274,7 +277,7 @@ export async function GET(req) {
       {
         status:
           error.message === "No token provided" ||
-          error.message === "Authentication failed"
+            error.message === "Authentication failed"
             ? 401
             : 500,
       },

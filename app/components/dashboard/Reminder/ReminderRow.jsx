@@ -22,7 +22,7 @@ export default function ReminderRow({ reminder, onToggle, onReminderUpdated, onR
 
     function getReminderStatus(reminder) {
         const date = new Date(reminder.date);
-        const now = new Date("2025-09-14"); // Change this to current date LATER 
+        const now = new Date(); // Reverting to current date
 
         if (reminder.status === 'completed') return 'completed';
         if (date < now) return 'overdue';
@@ -85,11 +85,11 @@ export default function ReminderRow({ reminder, onToggle, onReminderUpdated, onR
 
                         <DeleteReminderAlert
                             reminder={reminder}
-                            onReminderDeleted={onReminderDeleted} // This links to handleReminderDeleted in Section
+                            onReminderDeleted={onReminderDeleted}
                         >
                             <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
-                                onSelect={(e) => e.preventDefault()} // CRITICAL: This keeps the alert open
+                                onSelect={(e) => e.preventDefault()}
                             >
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Delete Reminder

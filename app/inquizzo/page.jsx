@@ -3,7 +3,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import {
   Medal, FileCheck, Target, Award,
@@ -354,9 +353,8 @@ export default function InQuizzoDashboard() {
   });
 
   return (
-    <div className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")} style={isLight ? { backgroundColor: t.pageBg } : undefined}>
+    <div className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500", !isLight && "iq-mesh-bg")} style={isLight ? { backgroundColor: t.pageBg } : undefined}>
       <NoiseMesh />
-      <CursorAura />
 
       {/* Ambient background orbs */}
       {isLight ? (
@@ -366,11 +364,11 @@ export default function InQuizzoDashboard() {
           <div className="absolute top-[25%] right-[5%] w-[400px] h-[400px] blur-[100px] rounded-full pointer-events-none" style={{ backgroundColor: '#CEF9F2', opacity: 0.7 }} />
         </div>
       ) : (
-        <>
+        <div className="fixed inset-0 pointer-events-none overflow-hidden text-center z-0">
           <div className="absolute -top-20 -left-20 w-[400px] h-[400px] blur-[80px] rounded-full pointer-events-none animate-pulse" style={{ backgroundColor: t.orb1 }} />
           <div className="absolute bottom-10 right-10 w-[300px] h-[300px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb2 }} />
           <div className="absolute top-1/2 left-1/3 w-[250px] h-[250px] blur-[80px] rounded-full pointer-events-none" style={{ backgroundColor: t.orb3 }} />
-        </>
+        </div>
       )}
 
       <main className="relative z-10 flex flex-col min-h-screen">

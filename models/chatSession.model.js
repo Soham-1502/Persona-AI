@@ -8,6 +8,12 @@ const messageSchema = new mongoose.Schema({
 });
 
 const chatSessionSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true,
+    },
     sessionId: {
         type: String,
         required: true,
@@ -18,6 +24,16 @@ const chatSessionSchema = new mongoose.Schema({
         default: 'New Conversation',
     },
     messages: [messageSchema],
+    isDeleted: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    isArchived: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
     updatedAt: {
         type: Date,
         default: Date.now,
