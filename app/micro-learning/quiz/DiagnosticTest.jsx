@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react';
+import { Brain } from 'lucide-react';
 
 export default function DiagnosticTest({ questions = [], onComplete }) {
   const [answers, setAnswers] = useState({});
@@ -52,7 +53,7 @@ export default function DiagnosticTest({ questions = [], onComplete }) {
           gap: '12px',
           margin: 0 
         }}>
-          <span style={{ fontSize: '1.8rem' }}>🧠</span> Cognitive Validation
+          <Brain size={24} /> Cognitive Validation
         </h3>
         <p style={{ color: theme.textMuted, fontSize: '1rem', marginTop: '10px', lineHeight: '1.6' }}>
           Your articulation accuracy was low. We need to verify if the 

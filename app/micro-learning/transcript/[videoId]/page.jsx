@@ -1,8 +1,9 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
+import BackButton from '@/app/components/micro-learning/BackButton'
 
 export default function TranscriptPage() {
   const params = useParams()
@@ -44,6 +45,7 @@ export default function TranscriptPage() {
         fontFamily: 'system-ui, -apple-system, sans-serif',
       }}
     >
+      <BackButton target="back" />
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
         <h1
           className="gradient-text"
@@ -96,24 +98,6 @@ export default function TranscriptPage() {
             If it's not available yet, try again later or check if the video has been watched far enough.
           </p>
         </div>
-
-        <button
-          onClick={() => window.history.back()}
-          style={{
-            marginTop: '32px',
-            padding: '12px 28px',
-            backgroundColor: isLight ? '#9067C6' : '#a855f7',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            fontSize: '1rem',
-            boxShadow: isLight ? '0 4px 12px rgba(144, 103, 198, 0.2)' : '0 4px 12px rgba(168, 85, 247, 0.3)',
-          }}
-        >
-          ← Back to Video
-        </button>
       </div>
     </div>
   )
