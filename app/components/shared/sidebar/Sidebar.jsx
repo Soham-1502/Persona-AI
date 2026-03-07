@@ -212,7 +212,8 @@ export default function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
               {sidebarItems.map((item) => {
-                const isActive = pathname === item.href;
+                // Match exact route, OR if it's a nested route under a module (skip this for the root /dashboard)
+                const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(`${item.href}/`));
                 return (
                   <SidebarMenuItem
                     key={item.href}

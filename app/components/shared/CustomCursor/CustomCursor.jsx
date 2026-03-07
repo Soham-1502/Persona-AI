@@ -20,8 +20,7 @@ const CustomCursor = () => {
         setMounted(true);
         const checkRoute = () => {
             const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
-            const isModuleRoute = pathname?.startsWith("/micro-learning");
-            setIsHiddenRoute(isMobile || isModuleRoute);
+            setIsHiddenRoute(isMobile);
         };
         checkRoute();
 
@@ -100,7 +99,7 @@ const CustomCursor = () => {
         };
     }, [mounted, isHiddenRoute, isVisible]);
 
-    if (isHiddenRoute) return null;
+    if (!mounted || isHiddenRoute) return null;
 
     return (
         <div
