@@ -11,7 +11,7 @@ import {
 import Header from '@/app/components/shared/header/Header.jsx';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
+// import CursorAura removed
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -929,7 +929,7 @@ const QuizDomainSelection = () => {
     <motion.div
       key={idx} initial={{ opacity: 0, y: 20 }} animate="initial" transition={{ delay: idx * 0.05 }}
       onClick={onClick} data-cursor="card" whileHover="hover" variants={CARD_HOVER_VARIANTS}
-      className="group relative rounded-3xl overflow-hidden cursor-none"
+      className="group relative rounded-3xl overflow-hidden"
       style={{
         minHeight: height,
         height: 'auto',
@@ -1414,7 +1414,7 @@ const QuizDomainSelection = () => {
   // ─── MAIN RENDER ───────────────────────────────────────────────────────────
   return (
     <div
-      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
+      className={cn("relative min-h-screen font-dm flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
@@ -1444,19 +1444,19 @@ const QuizDomainSelection = () => {
       {(selectedDomain || selectedCategory || selectedSubCategory || selectedTopic) && currentView !== "quiz" && (
         <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 pt-10 md:pt-16">
           <div className="flex items-center flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: t.textMuted }}>
-            <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" onClick={resetToHome}>InQuizzo</span>
+            <span data-cursor="button" className="transition-colors hover:text-pink-500" onClick={resetToHome}>InQuizzo</span>
             <ChevronRight className="w-3 h-3 opacity-30" />
             {selectedDomain && (
               <>
-                <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" style={{ color: !selectedCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("categories"); setSelectedCategory(null); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, null, null, null); }}>{selectedDomain}</span>
+                <span data-cursor="button" className="transition-colors hover:text-pink-500" style={{ color: !selectedCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("categories"); setSelectedCategory(null); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, null, null, null); }}>{selectedDomain}</span>
                 {selectedCategory && (
                   <>
                     <ChevronRight className="w-3 h-3 opacity-30" />
-                    <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" style={{ color: !selectedSubCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("subCategories"); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, null, null); }}>{selectedCategory}</span>
+                    <span data-cursor="button" className="transition-colors hover:text-pink-500" style={{ color: !selectedSubCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("subCategories"); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, null, null); }}>{selectedCategory}</span>
                     {selectedSubCategory && (
                       <>
                         <ChevronRight className="w-3 h-3 opacity-30" />
-                        <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" style={{ color: !selectedTopic ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("topics"); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}>{selectedSubCategory}</span>
+                        <span data-cursor="button" className="transition-colors hover:text-pink-500" style={{ color: !selectedTopic ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("topics"); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}>{selectedSubCategory}</span>
                         {selectedTopic && (
                           <>
                             <ChevronRight className="w-3 h-3 opacity-30" />
