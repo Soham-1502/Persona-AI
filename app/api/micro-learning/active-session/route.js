@@ -30,6 +30,14 @@ export async function POST(req) {
         let session = await ActiveQuizSession.findOne({ userId: user._id });
 
         if (session) {
+            // Check if videoId changed – if so, clear stale questions
+            const currentVideoId = session.quizState?.videoId;
+            const newVideoId = quizState?.videoId;
+            if (newVideoId && currentVideoId && newVideoId !== currentVideoId) {
+                session.questions = [];
+                session.questionsAnswered = 0;
+            }
+
             // Update existing
             session.moduleId = 'microLearning';
             session.sessionId = sessionId || session.sessionId;

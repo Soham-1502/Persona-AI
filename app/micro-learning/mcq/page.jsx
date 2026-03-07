@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
+import { 
+  Target, 
+  BookOpen, 
+  HelpCircle, 
+  CheckCircle2, 
+  ArrowLeft, 
+  ArrowRight, 
+  CheckCircle,
+  Loader2
+} from 'lucide-react'
 
 export default function MCQRound() {
   const [videoText, setVideoText] = useState('')
@@ -140,7 +150,10 @@ export default function MCQRound() {
           flexShrink: 0,
         }}
       >
-        <h2 style={{ color: theme.accent, fontSize: '1.2rem', fontWeight: '800', marginBottom: '40px', letterSpacing: '2px' }}>LEARNING HUB</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px' }}>
+          <BookOpen size={20} color={theme.accent} />
+          <h2 style={{ color: theme.accent, fontSize: '1.2rem', fontWeight: '800', margin: 0, letterSpacing: '2px' }}>LEARNING HUB</h2>
+        </div>
 
         <div style={{ marginBottom: '30px' }}>
           <p style={{ color: theme.textMuted, fontSize: '0.7rem', marginBottom: '8px' }}>SESSION PROGRESS</p>
@@ -159,8 +172,10 @@ export default function MCQRound() {
               border: `1px solid ${currentQuestionIndex === i ? theme.accent : 'transparent'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between'
             }}>
-              Question {i + 1}
-              {userAnswers[i] && <span style={{ color: theme.success }}>●</span>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <HelpCircle size={14} /> Question {i + 1}
+              </div>
+              {userAnswers[i] && <CheckCircle2 size={12} color={theme.success} />}
             </div>
           ))}
         </nav>
@@ -182,7 +197,10 @@ export default function MCQRound() {
           {/* STEP 1: INPUT */}
           {!mcqs.length && !loading && (
             <div style={{ animation: 'fadeIn 0.6s ease' }}>
-              <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '15px' }} className="gradient-text">Knowledge Assessment</h1>
+              <h1 style={{ fontSize: '2.5rem', fontWeight: '800', marginBottom: '15px' }} className="gradient-text">
+                <Target size={40} style={{ display: 'inline', marginRight: '15px', verticalAlign: 'bottom' }} />
+                Knowledge Assessment
+              </h1>
               <p style={{ color: theme.textMuted, marginBottom: '35px' }}>Generate a personalized quiz from your transcript.</p>
               <textarea
                 value={videoText}
@@ -203,7 +221,7 @@ export default function MCQRound() {
           {/* LOADING */}
           {loading && (
             <div style={{ textAlign: 'center', marginTop: '20vh' }}>
-              <div style={{ width: '40px', height: '40px', border: `3px solid ${theme.border}`, borderTopColor: theme.accent, borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+              <Loader2 size={40} className="animate-spin" style={{ color: theme.accent, margin: '0 auto' }} />
             </div>
           )}
 
@@ -241,15 +259,15 @@ export default function MCQRound() {
                   disabled={currentQuestionIndex === 0}
                   style={{ padding: '15px 30px', borderRadius: '10px', background: 'transparent', border: `1px solid ${theme.border}`, color: theme.text, opacity: currentQuestionIndex === 0 ? 0 : 1, cursor: 'pointer' }}
                 >
-                  ← Back
+                  <ArrowLeft size={18} /> Back
                 </button>
                 {currentQuestionIndex === mcqs.length - 1 ? (
                   <button onClick={handleFinalSubmit} disabled={!userAnswers[currentQuestionIndex]} style={{ padding: '15px 45px', borderRadius: '10px', background: theme.accent, color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxShadow: isLight ? '0 10px 20px rgba(144, 103, 198, 0.2)' : 'none' }}>
                     Complete Round 1
                   </button>
                 ) : (
-                  <button onClick={() => setCurrentQuestionIndex(p => p + 1)} disabled={!userAnswers[currentQuestionIndex]} style={{ padding: '15px 45px', borderRadius: '10px', background: theme.accent, color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer', opacity: !userAnswers[currentQuestionIndex] ? 0.5 : 1, boxShadow: isLight ? '0 10px 20px rgba(144, 103, 198, 0.2)' : 'none' }}>
-                    Next Question →
+                  <button onClick={() => setCurrentQuestionIndex(p => p + 1)} disabled={!userAnswers[currentQuestionIndex]} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 45px', borderRadius: '10px', background: theme.accent, color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer', opacity: !userAnswers[currentQuestionIndex] ? 0.5 : 1, boxShadow: isLight ? '0 10px 20px rgba(144, 103, 198, 0.2)' : 'none' }}>
+                    Next Question <ArrowRight size={18} />
                   </button>
                 )}
               </div>
@@ -260,7 +278,9 @@ export default function MCQRound() {
           {submitted && (
             <div style={{ animation: 'fadeIn 0.6s ease' }}>
               <div style={{ backgroundColor: theme.card, padding: '50px', borderRadius: '24px', border: `1px solid ${theme.border}`, textAlign: 'center', marginBottom: '40px', backdropFilter: 'blur(12px)' }}>
-                <div style={{ fontSize: '4rem', marginBottom: '10px' }}>🎯</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                  <Target size={64} color={theme.accent} />
+                </div>
                 <h2 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '15px' }}>
                   Stage 1 Verified {isSaving && <span style={{ fontSize: '0.9rem', color: theme.accent, display: 'block', marginTop: '8px', fontWeight: '400' }}>(Syncing to Neural Cloud...)</span>}
                 </h2>
@@ -289,6 +309,7 @@ export default function MCQRound() {
       </main>
 
       <style>{`
+        .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 

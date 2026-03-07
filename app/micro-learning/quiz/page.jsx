@@ -3,6 +3,21 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import BackButton from '@/app/components/micro-learning/BackButton';
+import { 
+  Brain, 
+  Lock, 
+  Check, 
+  ArrowLeft, 
+  ArrowRight, 
+  CheckCircle, 
+  Target, 
+  BarChart2, 
+  AlertTriangle,
+  XCircle,
+  FastForward,
+  Loader2
+} from 'lucide-react';
 
 function QuizContent() {
   const searchParams = useSearchParams();
@@ -284,11 +299,7 @@ function QuizContent() {
         overflow: 'hidden',
       }}>
         <div style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
-          <div style={{
-            width: '40px', height: '40px', margin: '0 auto 20px',
-            border: `3px solid ${t.border}`, borderTopColor: t.accent,
-            borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-          }} />
+          <Loader2 size={40} className="animate-spin" style={{ margin: '0 auto 20px', color: t.accent }} />
           <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>Initializing Neural Assessment...</p>
         </div>
       </div>
@@ -333,7 +344,7 @@ function QuizContent() {
   // Results calculations
   const correctCount = mcqs.filter((q, i) => selectedAnswers[i] === q.answer).length;
   const attemptedCount = Object.keys(selectedAnswers).length;
-  const accuracy = attemptedCount > 0 ? Math.round((correctCount / attemptedCount) * 100) : 0;
+  const accuracy = mcqs.length > 0 ? Math.round((correctCount / mcqs.length) * 100) : 0;
   const skippedCount = skipped.size;
 
   // ─── Results View ───
@@ -345,7 +356,7 @@ function QuizContent() {
         color: t.textPrimary,
         padding: '40px',
         position: 'relative',
-        overflow: 'hidden',
+        minHeight: '100vh',
       }}>
         <div style={{ maxWidth: '960px', margin: '0 auto', position: 'relative', zIndex: 10 }}>
           {/* Results Header */}
@@ -366,10 +377,10 @@ function QuizContent() {
             marginBottom: '48px',
           }}>
             {[
-              { label: 'Correct', value: `${correctCount}/${mcqs.length}`, color: t.success },
-              { label: 'Attempted', value: `${attemptedCount}/${mcqs.length}`, color: t.accent },
-              { label: 'Accuracy', value: `${accuracy}%`, color: isLight ? '#2563eb' : '#60a5fa' },
-              { label: 'Skipped', value: skippedCount, color: t.warning },
+              { label: 'Correct', value: `${correctCount}/${mcqs.length}`, color: t.success, icon: CheckCircle },
+              { label: 'Attempted', value: `${attemptedCount}/${mcqs.length}`, color: t.accent, icon: Target },
+              { label: 'Accuracy', value: `${accuracy}%`, color: isLight ? '#2563eb' : '#60a5fa', icon: BarChart2 },
+              { label: 'Skipped', value: skippedCount, color: t.warning, icon: AlertTriangle },
             ].map((stat, i) => (
               <div
                 key={stat.label}
@@ -386,14 +397,17 @@ function QuizContent() {
                   opacity: 0,
                 }}
               >
-                <p style={{
-                  color: t.textMuted,
-                  fontSize: '10px',
-                  fontWeight: '800',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.15em',
-                  marginBottom: '8px',
-                }}>{stat.label}</p>
+                  <div style={{ color: stat.color, marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+                    <stat.icon size={24} />
+                  </div>
+                  <p style={{
+                    color: t.textMuted,
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.15em',
+                    marginBottom: '8px',
+                  }}>{stat.label}</p>
                 <p style={{
                   fontSize: '2.5rem',
                   fontWeight: '900',
@@ -431,13 +445,13 @@ function QuizContent() {
               const userAnswer = selectedAnswers[idx];
               const isCorrect = userAnswer === q.answer;
               const isSkippedQ = skipped.has(idx);
-              let statusLabel, statusColor, statusBg;
+              let statusLabel, statusColor, statusBg, StatusIcon;
               if (isSkippedQ) {
-                statusLabel = 'SKIPPED'; statusColor = t.warning; statusBg = isLight ? 'rgba(234, 179, 8, 0.05)' : 'rgba(234, 179, 8, 0.1)';
+                statusLabel = 'SKIPPED'; statusColor = t.warning; StatusIcon = AlertTriangle; statusBg = isLight ? 'rgba(234, 179, 8, 0.05)' : 'rgba(234, 179, 8, 0.1)';
               } else if (isCorrect) {
-                 statusLabel = 'CORRECT'; statusColor = t.success; statusBg = isLight ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)';
+                 statusLabel = 'CORRECT'; statusColor = t.success; StatusIcon = CheckCircle; statusBg = isLight ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)';
               } else {
-                statusLabel = 'INCORRECT'; statusColor = t.error; statusBg = isLight ? 'rgba(244, 63, 94, 0.05)' : 'rgba(244, 63, 94, 0.1)';
+                statusLabel = 'INCORRECT'; statusColor = t.error; StatusIcon = XCircle; statusBg = isLight ? 'rgba(244, 63, 94, 0.05)' : 'rgba(244, 63, 94, 0.1)';
               }
 
               return (
@@ -465,25 +479,24 @@ function QuizContent() {
 
                     {isSkippedQ ? (
                       <div style={{ fontSize: '0.85rem' }}>
-                        <p style={{ color: t.warning, margin: '0 0 4px 0' }}>⚠ You skipped this question.</p>
-                        <p style={{ color: t.success, margin: 0 }}>
-                          ✓ Correct Answer: <span style={{ color: t.textPrimary }}>{q.answer}</span>
+                        <p style={{ color: t.warning, margin: '0 0 4px 0', fontWeight: '700' }}>⚠ SKIPPED</p>
+                        <p style={{ color: t.success, margin: 0, fontWeight: '600' }}>
+                          Correct Answer: <span style={{ color: t.textPrimary }}>{q.answer}</span>
                         </p>
                       </div>
                     ) : isCorrect ? (
                       <div style={{ fontSize: '0.85rem' }}>
-                        <p style={{ color: t.success, margin: '0 0 4px 0' }}>
-                          ✓ Your Answer: <span style={{ color: t.textPrimary }}>{userAnswer}</span>
-                        </p>
-                        {q.explanation && <p style={{ color: t.textMuted, margin: 0 }}>{q.explanation}</p>}
+                        <p style={{ color: t.success, margin: '0 0 4px 0', fontWeight: '700' }}>✓ CORRECT</p>
+                        <p style={{ color: t.textMuted, margin: 0 }}>{q.explanation}</p>
                       </div>
                     ) : (
                       <div style={{ fontSize: '0.85rem' }}>
+                        <p style={{ color: t.error, margin: '0 0 4px 0', fontWeight: '700' }}>✗ INCORRECT</p>
                         <p style={{ color: t.error, margin: '0 0 4px 0' }}>
-                          ✗ Your Answer: <span style={{ color: isLight ? '#ef4444' : '#fca5a5' }}>{userAnswer}</span>
+                          Your Answer: <span style={{ color: isLight ? '#ef4444' : '#fca5a5' }}>{userAnswer}</span>
                         </p>
-                        <p style={{ color: t.success, margin: '0 0 4px 0' }}>
-                          ✓ Correct Answer: <span style={{ color: t.textPrimary }}>{q.answer}</span>
+                        <p style={{ color: t.success, margin: '0 0 4px 0', fontWeight: '600' }}>
+                          Correct Answer: <span style={{ color: t.textPrimary }}>{q.answer}</span>
                         </p>
                         {q.explanation && <p style={{ color: t.textMuted, margin: 0, marginTop: '8px' }}>{q.explanation}</p>}
                       </div>
@@ -501,6 +514,7 @@ function QuizContent() {
                     whiteSpace: 'nowrap',
                     flexShrink: 0,
                   }}>
+                    <StatusIcon size={14} style={{ marginRight: '6px' }} />
                     {statusLabel}
                   </span>
                 </div>
@@ -539,7 +553,7 @@ function QuizContent() {
               e.currentTarget.style.boxShadow = isLight ? '0 10px 40px rgba(144, 103, 198, 0.3)' : '0 10px 40px rgba(67, 56, 202, 0.3)';
             }}
           >
-            Proceed to Neural Articulation Round →
+            Proceed to Neural Articulation Round <ArrowRight size={20} style={{ marginLeft: '10px' }} />
           </button>
         </div>
 
@@ -550,6 +564,9 @@ function QuizContent() {
           }
           @keyframes spin {
             to { transform: rotate(360deg); }
+          }
+          .animate-spin {
+            animation: spin 1s linear infinite;
           }
         `}</style>
       </div>
@@ -568,23 +585,21 @@ function QuizContent() {
         maxWidth: '100%',
         backgroundColor: t.bg,
         color: t.textPrimary,
-        overflow: 'hidden',
         position: 'relative',
       }}
     >
+      <BackButton target={`/micro-learning/video/${videoId}`} />
       {/* ── Sidebar ── */}
       <aside
         className="ml-quiz-sidebar quiz-sidebar-scroll"
         style={{
           width: '280px',
-          height: 'calc(100vh - 32px)',
           margin: '16px',
           marginRight: 0,
           background: isLight ? 'rgba(255, 255, 255, 0.4)' : t.glass,
           backdropFilter: 'blur(12px)',
           border: `1px solid ${t.border}`,
-          borderRight: 'none',
-          borderRadius: '16px 0 0 16px',
+          borderRadius: '16px',
           display: 'flex',
           flexDirection: 'column',
           padding: '24px',
@@ -595,12 +610,7 @@ function QuizContent() {
       >
         {/* Sidebar Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-          <div style={{
-            width: '40px', height: '40px', borderRadius: '12px',
-            background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.2rem',
-          }}>🧠</div>
+            <Brain size={20} color="#fff" strokeWidth={2.5} />
           <h2 style={{ fontSize: '1.15rem', fontWeight: '700', letterSpacing: '-0.01em', margin: 0 }}>
             Progress Board
           </h2>
@@ -639,7 +649,6 @@ function QuizContent() {
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
-            overflowY: 'auto',
             paddingRight: '8px',
           }}
         >
@@ -678,16 +687,16 @@ function QuizContent() {
                   Segment {String(idx + 1).padStart(2, '0')}
                 </span>
                 {isAnswered ? (
-                  <span style={{ color: t.success, fontSize: '14px' }}>✓</span>
+                  <Check size={14} color={t.success} strokeWidth={3} />
                 ) : isSkippedItem ? (
-                  <span style={{ color: t.warning, fontSize: '10px', fontWeight: '800' }}>SKIP</span>
+                  <FastForward size={14} color={t.warning} strokeWidth={2.5} />
                 ) : isActive ? (
                   <div style={{
                     width: '8px', height: '8px', borderRadius: '50%',
                     background: t.accent, animation: 'pulse 2s infinite',
                   }} />
                 ) : (
-                  <span style={{ fontSize: '14px', color: t.textMuted }}>🔒</span>
+                  <Lock size={14} color={t.textMuted} strokeWidth={2} />
                 )}
               </div>
             );
@@ -699,14 +708,12 @@ function QuizContent() {
       <main
         style={{
           flex: 1,
-          height: '100vh',
           padding: '24px',
           paddingTop: '32px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           position: 'relative',
-          overflowY: 'auto',
           zIndex: 10,
         }}
         className="quiz-main-scroll custom-scrollbar-area"
@@ -819,33 +826,35 @@ function QuizContent() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            width: '100%'
           }}>
-            <button
-              onClick={handlePrevious}
-              disabled={currentIndex === 0}
-              style={{
-                padding: '16px 32px',
-                background: isLight ? 'rgba(144, 103, 198, 0.1)' : t.glass,
-                backdropFilter: 'blur(12px)',
-                border: `1px solid ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(100, 116, 139, 0.3)'}`,
-                borderRadius: '16px',
-                color: t.textPrimary,
-                fontWeight: '700',
-                cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
-                opacity: currentIndex === 0 ? 0.4 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s',
-                fontSize: '0.9rem',
-              }}
-            >
-              ← Previous
-            </button>
+            {currentIndex > 0 ? (
+              <button
+                onClick={handlePrevious}
+                style={{
+                  padding: '16px 32px',
+                  background: isLight ? 'rgba(144, 103, 198, 0.1)' : t.glass,
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(100, 116, 139, 0.3)'}`,
+                  borderRadius: '16px',
+                  color: t.textPrimary,
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s',
+                  fontSize: '0.9rem',
+                }}
+              >
+                <ArrowLeft size={18} /> Previous
+              </button>
+            ) : <div />}
 
             {currentIndex === mcqs.length - 1 ? (
               <button
                 onClick={handleSubmit}
+                disabled={isSaving}
                 style={{
                   padding: '16px 40px',
                   background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
@@ -868,7 +877,8 @@ function QuizContent() {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                Submit Assessment ✓
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                Submit Assessment
               </button>
             ) : (
               <button
@@ -895,7 +905,7 @@ function QuizContent() {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                Next Neural Segment →
+                Next Segment <ArrowRight size={18} />
               </button>
             )}
           </div>
@@ -952,6 +962,9 @@ function QuizContent() {
 
         .custom-scrollbar-area::-webkit-scrollbar {
           width: 4px;
+        }
+        .ml-quiz-sidebar::-webkit-scrollbar {
+          width: 2px;
         }
         .custom-scrollbar-area::-webkit-scrollbar-track {
           background: transparent;

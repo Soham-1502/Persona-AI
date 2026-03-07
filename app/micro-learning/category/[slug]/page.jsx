@@ -79,7 +79,7 @@ function CategoryPlaylists() {
 
   return (
     <main className={spaceGrotesk.className} style={{ ...styles.main, color: t.textPrimary }}>
-      <BackButton target="/micro-learning" />
+      <BackButton target={`/micro-learning?mode=${mode}`} />
       <h1 style={{ ...styles.title, color: t.textPrimary, textShadow: `0 0 25px ${t.glow}` }}>{displayTitle}</h1>
 
       {loading ? (

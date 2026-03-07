@@ -149,6 +149,7 @@ function CategoriesContent() {
 
   const initialSearch = searchParams.get('q') || '';
   const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [activeTab, setActiveTab] = useState('personality');
 
   useEffect(() => {
     setMounted(true);
@@ -235,9 +236,33 @@ function CategoriesContent() {
 
       <h1 className="gradient-text" style={{ ...styles.title, color: t.textPrimary }}>Choose Your Interest</h1>
 
+      {/* Tab Switcher */}
+      <div style={styles.tabContainer}>
+        <button
+          onClick={() => setActiveTab('personality')}
+          style={{
+            ...styles.tabButton,
+            color: activeTab === 'personality' ? t.primary : t.textMuted,
+            borderBottom: activeTab === 'personality' ? `3px solid ${t.primary}` : '3px solid transparent',
+          }}
+        >
+          Personality
+        </button>
+        <button
+          onClick={() => setActiveTab('academic')}
+          style={{
+            ...styles.tabButton,
+            color: activeTab === 'academic' ? t.primary : t.textMuted,
+            borderBottom: activeTab === 'academic' ? `3px solid ${t.primary}` : '3px solid transparent',
+          }}
+        >
+          Academics
+        </button>
+      </div>
+
       <div style={styles.content}>
         {/* Personality Section */}
-        {filteredPersonality.length > 0 && (
+        {activeTab === 'personality' && filteredPersonality.length > 0 && (
           <div style={styles.section}>
             <h2 style={{ ...styles.sectionTitle, color: t.primary }}>Personality & Growth</h2>
             <p style={{ ...styles.sectionDesc, color: t.textMuted }}>Build the inner skills that define your presence and mindset.</p>
@@ -264,38 +289,46 @@ function CategoriesContent() {
         )}
 
         {/* Academic Sections */}
-        {filteredAcademic.length > 0 ? (
-          filteredAcademic.map((sec) => (
-            <div key={sec.title} style={styles.section}>
-              <h2 style={{ ...styles.sectionTitle, color: t.primary }}>{sec.title}</h2>
-              <p style={{ ...styles.sectionDesc, color: t.textMuted }}>{sec.description}</p>
+        {activeTab === 'academic' && (
+          filteredAcademic.length > 0 ? (
+            filteredAcademic.map((sec) => (
+              <div key={sec.title} style={styles.section}>
+                <h2 style={{ ...styles.sectionTitle, color: t.primary }}>{sec.title}</h2>
+                <p style={{ ...styles.sectionDesc, color: t.textMuted }}>{sec.description}</p>
 
-              <div style={styles.grid}>
-                {sec.items.map((item) => (
-                  <Link
-                    key={item.slug}
-                    href={`/micro-learning/category/${item.slug}`}
-                    style={{ textDecoration: 'none' }}
-                  >
-                    <div className="glass-card group" style={styles.card}>
-                      <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
-                        <div className="icon-glow" style={{ background: t.glow }} />
-                        <item.icon className="icon-symbol" size={48} strokeWidth={1.5} style={{ color: isLight ? t.primary : '#fff' }} />
+                <div style={styles.grid}>
+                  {sec.items.map((item) => (
+                    <Link
+                      key={item.slug}
+                      href={`/micro-learning/category/${item.slug}?mode=academic`}
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <div className="glass-card group" style={styles.card}>
+                        <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
+                          <div className="icon-glow" style={{ background: t.glow }} />
+                          <item.icon className="icon-symbol" size={48} strokeWidth={1.5} style={{ color: isLight ? t.primary : '#fff' }} />
+                        </div>
+                        <h3 style={{ ...styles.name, color: t.textPrimary }}>{item.name}</h3>
+                        <p style={{ ...styles.desc, color: t.textMuted }}>{item.description}</p>
                       </div>
-                      <h3 style={{ ...styles.name, color: t.textPrimary }}>{item.name}</h3>
-                      <p style={{ ...styles.desc, color: t.textMuted }}>{item.description}</p>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
-        ) : (
-          (filteredPersonality.length === 0 && searchQuery) && (
-            <p style={{ ...styles.noResults, color: t.textMuted }}>
-              No subjects or fields match &quot;{searchQuery}&quot;
-            </p>
+            ))
+          ) : (
+            searchQuery && (
+              <p style={{ ...styles.noResults, color: t.textMuted }}>
+                No academic subjects match &quot;{searchQuery}&quot;
+              </p>
+            )
           )
+        )}
+
+        {activeTab === 'personality' && filteredPersonality.length === 0 && searchQuery && (
+          <p style={{ ...styles.noResults, color: t.textMuted }}>
+            No personality categories match &quot;{searchQuery}&quot;
+          </p>
         )}
       </div>
     </main>
@@ -340,9 +373,28 @@ const styles = {
   },
   title: {
     fontSize: '3.2rem',
-    marginBottom: '40px',
+    marginBottom: '20px',
     fontWeight: '800',
     textAlign: 'center',
+  },
+  tabContainer: {
+    display: 'flex',
+    gap: '40px',
+    marginBottom: '50px',
+    borderBottom: '1px solid rgba(144, 103, 198, 0.1)',
+    width: '100%',
+    maxWidth: '1200px',
+    justifyContent: 'center',
+  },
+  tabButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '1.2rem',
+    fontWeight: '700',
+    padding: '12px 20px',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    outline: 'none',
   },
   content: {
     width: '100%',

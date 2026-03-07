@@ -12,7 +12,7 @@ import {
   Atom, FlaskConical, Dna, Globe,
   Megaphone, Coins, Rocket, ClipboardList,
   Scroll, Microscope, Users, Lightbulb,
-  Palette, Smartphone, Landmark, Music, Search
+  Palette, Smartphone, Landmark, Music, Search, GraduationCap
 } from 'lucide-react';
 import BackButton from '@/app/components/micro-learning/BackButton';
 
@@ -107,7 +107,7 @@ const academicSections = [
       { name: 'Physics', slug: 'physics', icon: Atom, description: 'Matter, energy, space, time' },
       { name: 'Chemistry', slug: 'chemistry', icon: FlaskConical, description: 'Reactions, elements, molecules' },
       { name: 'Biology', slug: 'biology', icon: Dna, description: 'Life, genetics, cells, evolution' },
-      { name: 'Earth Science', slug: 'earth-science', icon: Globe, description: 'Climate, geology, oceans' },
+      { name: 'Environment', slug: 'environment', icon: Globe, description: 'Climate, geology, oceans' },
     ]
   },
   {
@@ -134,7 +134,7 @@ const academicSections = [
     title: 'Arts & Languages',
     description: 'Expressing creativity and connecting through communication.',
     items: [
-      { name: 'Design & Visual Arts', slug: 'design', icon: Palette, description: 'UI/UX, graphic design, art history' },
+      { name: 'Graphic Design', slug: 'graphic-design', icon: Palette, description: 'UI/UX, graphic design, art history' },
       { name: 'Language Learning', slug: 'language', icon: Smartphone, description: 'Speaking, grammar, fluency' },
       { name: 'Economics', slug: 'economics', icon: Landmark, description: 'Markets, supply/demand, policy' },
       { name: 'Music Theory', slug: 'music', icon: Music, description: 'Composition, rhythm, melody' },
@@ -150,6 +150,7 @@ function CategoriesContent() {
 
   const initialSearch = searchParams.get('q') || '';
   const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [activeTab, setActiveTab] = useState("personality");
 
   useEffect(() => {
     setMounted(true);
@@ -235,12 +236,44 @@ function CategoriesContent() {
           />
         </div>
       </div>
+      
+      {/* Tab Switcher */}
+      <div style={styles.tabContainer}>
+        <button 
+          onClick={() => setActiveTab('personality')}
+          className={`tab-button ${activeTab === 'personality' ? 'active' : ''}`}
+          style={{
+            ...styles.tabButton,
+            color: activeTab === 'personality' ? '#fff' : t.textMuted,
+            background: activeTab === 'personality' ? t.primary : 'transparent',
+            borderColor: activeTab === 'personality' ? t.primary : t.cardBorder,
+          }}
+        >
+          <UserRound size={18} style={{ marginRight: '8px' }} />
+          Personality
+        </button>
+        <button 
+          onClick={() => setActiveTab('academic')}
+          className={`tab-button ${activeTab === 'academic' ? 'active' : ''}`}
+          style={{
+            ...styles.tabButton,
+            color: activeTab === 'academic' ? '#fff' : t.textMuted,
+            background: activeTab === 'academic' ? t.primary : 'transparent',
+            borderColor: activeTab === 'academic' ? t.primary : t.cardBorder,
+          }}
+        >
+          <GraduationCap size={18} style={{ marginRight: '8px' }} />
+          Academics
+        </button>
+      </div>
 
-      <h1 className="gradient-text" style={{ ...styles.title, color: t.textPrimary }}>Choose Your Interest</h1>
+      <h1 className="gradient-text" style={{ ...styles.title, color: t.textPrimary }}>
+        {activeTab === 'personality' ? 'Build Your Personality' : 'Academic Excellence'}
+      </h1>
 
       <div style={styles.content}>
         {/* Personality Section */}
-        {filteredPersonality.length > 0 && (
+        {activeTab === 'personality' && filteredPersonality.length > 0 && (
           <div style={styles.section}>
             <h2 style={{ ...styles.sectionTitle, color: t.primary }}>Personality & Growth</h2>
             <p style={{ ...styles.sectionDesc, color: t.textMuted }}>Build the inner skills that define your presence and mindset.</p>
@@ -267,38 +300,47 @@ function CategoriesContent() {
         )}
 
         {/* Academic Sections */}
-        {filteredAcademic.length > 0 ? (
-          filteredAcademic.map((sec) => (
-            <div key={sec.title} style={styles.section}>
-              <h2 style={{ ...styles.sectionTitle, color: t.primary }}>{sec.title}</h2>
-              <p style={{ ...styles.sectionDesc, color: t.textMuted }}>{sec.description}</p>
+        {activeTab === 'academic' && (
+          filteredAcademic.length > 0 ? (
+            filteredAcademic.map((sec) => (
+              <div key={sec.title} style={styles.section}>
+                <h2 style={{ ...styles.sectionTitle, color: t.primary }}>{sec.title}</h2>
+                <p style={{ ...styles.sectionDesc, color: t.textMuted }}>{sec.description}</p>
 
-              <div style={styles.grid}>
-                {sec.items.map((item) => (
-                  <Link
-                    key={item.slug}
-                    href={`/micro-learning/category/${item.slug}`}
-                    style={{ textDecoration: 'none' }}
-                  >
-                    <div className="glass-card group" style={styles.card}>
-                      <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
-                        <div className="icon-glow" style={{ background: t.glow }} />
-                        <item.icon className="icon-symbol" size={48} strokeWidth={1.5} style={{ color: isLight ? t.primary : '#fff' }} />
+                <div style={styles.grid}>
+                  {sec.items.map((item) => (
+                    <Link
+                      key={item.slug}
+                      href={`/micro-learning/category/${item.slug}?mode=academic`}
+                      style={{ textDecoration: 'none' }}
+                    >
+                      <div className="glass-card group" style={styles.card}>
+                        <div className="icon-container" style={{ margin: '0 auto 18px auto' }}>
+                          <div className="icon-glow" style={{ background: t.glow }} />
+                          <item.icon className="icon-symbol" size={48} strokeWidth={1.5} style={{ color: isLight ? t.primary : '#fff' }} />
+                        </div>
+                        <h3 style={{ ...styles.name, color: t.textPrimary }}>{item.name}</h3>
+                        <p style={{ ...styles.desc, color: t.textMuted }}>{item.description}</p>
                       </div>
-                      <h3 style={{ ...styles.name, color: t.textPrimary }}>{item.name}</h3>
-                      <p style={{ ...styles.desc, color: t.textMuted }}>{item.description}</p>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
-        ) : (
-          (filteredPersonality.length === 0 && searchQuery) && (
-            <p style={{ ...styles.noResults, color: t.textMuted }}>
-              No subjects or fields match &quot;{searchQuery}&quot;
-            </p>
+            ))
+          ) : (
+            searchQuery && (
+              <p style={{ ...styles.noResults, color: t.textMuted }}>
+                No academic subjects match &quot;{searchQuery}&quot;
+              </p>
+            )
           )
+        )}
+
+        {/* Universal No Results fallback */}
+        {((activeTab === 'personality' && filteredPersonality.length === 0) || (activeTab === 'academic' && filteredAcademic.length === 0)) && searchQuery && (
+          <p style={{ ...styles.noResults, color: t.textMuted }}>
+            No matches found for &quot;{searchQuery}&quot; in this category.
+          </p>
         )}
       </div>
     </main>
@@ -330,7 +372,25 @@ const styles = {
   searchContainer: {
     width: '100%',
     maxWidth: '600px',
-    margin: '20px auto 40px auto',
+    margin: '20px auto 20px auto',
+  },
+  tabContainer: {
+    display: 'flex',
+    gap: '12px',
+    marginBottom: '40px',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  tabButton: {
+    padding: '10px 24px',
+    borderRadius: '30px',
+    border: '1px solid',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    display: 'flex',
+    alignItems: 'center',
   },
   searchInput: {
     width: '100%',

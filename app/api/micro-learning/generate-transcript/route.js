@@ -59,14 +59,86 @@ export async function POST(req) {
     }
 
     // ────────────────────────────────────────────────
-    // 2. No fallback available — YouTube URLs can't be sent to Gladia
-    //    (Gladia requires a direct audio/video file URL, not a YouTube page)
+    // 2. Gladia V2 Fallback (for videos without captions)
     // ────────────────────────────────────────────────
-    console.warn(`[Transcript] No captions available for ${videoId}. Gladia fallback not supported for YouTube URLs.`);
-    return NextResponse.json(
-      { error: 'Transcript unavailable: This video does not have captions. Please try a video with auto-generated or manual captions.' },
-      { status: 422 }
-    );
+    console.log(`[Transcript] Falling back to Gladia V2 for video: ${videoId}`);
+
+    try {
+      // Step A: Initiate transcription
+      const initiateResponse = await fetch('https://api.gladia.io/v2/transcription', {
+        method: 'POST',
+        headers: {
+          'x-gladia-key': gladiaKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          audio_url: videoUrl,
+          diarization: true,
+        }),
+      });
+
+      if (!initiateResponse.ok) {
+        const errorData = await initiateResponse.json();
+        throw new Error(`Gladia initiation failed: ${errorData.message || initiateResponse.statusText}`);
+      }
+
+      const { result_url } = await initiateResponse.json();
+      console.log(`[Transcript] Gladia task initiated. Result URL: ${result_url}`);
+
+      // Step B: Polling for completion
+      let status = 'queued';
+      let resultData = null;
+      let attempts = 0;
+      const maxAttempts = 60; // Up to 5 minutes (5s * 60)
+
+      while (status !== 'completed' && attempts < maxAttempts) {
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s between polls
+
+        const pollResponse = await fetch(result_url, {
+          headers: { 'x-gladia-key': gladiaKey },
+        });
+
+        if (!pollResponse.ok) {
+          console.error(`[Transcript] Gladia poll failed (Attempt ${attempts}): ${pollResponse.status}`);
+          continue;
+        }
+
+        resultData = await pollResponse.json();
+        status = resultData.status;
+        console.log(`[Transcript] Gladia status (Attempt ${attempts}): ${status}`);
+
+        if (status === 'error') {
+          throw new Error('Gladia transcription failed with status: error');
+        }
+      }
+
+      if (status !== 'completed') {
+        throw new Error('Gladia transcription timed out');
+      }
+
+      // Step C: Format transcription with diarization
+      if (resultData?.result?.transcription?.utterances) {
+        const utterances = resultData.result.transcription.utterances;
+        const formattedTranscript = utterances
+          .map(u => `Speaker ${u.speaker !== undefined ? u.speaker : '?'}: ${u.text}`)
+          .join('\n');
+
+        console.log(`[Transcript Success] Gladia processed ${videoId} (${formattedTranscript.length} chars)`);
+        return NextResponse.json({ transcript: formattedTranscript });
+      } else if (resultData?.result?.transcription?.full_transcript) {
+        return NextResponse.json({ transcript: resultData.result.transcription.full_transcript });
+      } else {
+        throw new Error('Gladia returned no transcription content');
+      }
+
+    } catch (gladiaError) {
+      console.error(`[Transcript] Gladia fallback failed: ${gladiaError.message}`);
+      return NextResponse.json(
+        { error: `Transcription failed: ${gladiaError.message}` },
+        { status: 500 }
+      );
+    }
 
   } catch (error) {
     console.error('[Gladia API Route Error]:', error.message, error.stack);

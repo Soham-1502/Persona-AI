@@ -3,6 +3,17 @@ import React, { useState, useEffect, Suspense } from "react";
 import Highlighter from "react-highlight-words";
 import { useTheme } from "next-themes";
 import BackButton from "@/app/components/micro-learning/BackButton";
+import { 
+  Sparkles, 
+  Star, 
+  BarChart2, 
+  RefreshCw, 
+  CheckCircle,
+  XCircle,
+  ArrowRightCircle,
+  RotateCcw,
+  Target
+} from "lucide-react";
 
 function ArticulationResultsContent() {
   const { resolvedTheme } = useTheme();
@@ -219,7 +230,7 @@ function ArticulationResultsContent() {
               alignItems: 'center',
               gap: '16px',
             }}>
-              <span style={{ fontSize: '1.5rem', animation: 'pulse 2s infinite', color: t.accent }}>✦</span>
+              <Sparkles size={24} style={{ animation: 'pulse 2s infinite', color: t.accent }} />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '1.5rem', fontWeight: '800', fontFamily: 'monospace', color: t.accent }}>{articulationPoints} XP</span>
                 <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.15em', color: t.textMuted, fontWeight: '700' }}>Articulation</span>
@@ -271,7 +282,7 @@ function ArticulationResultsContent() {
               alignItems: 'center',
               gap: '16px',
             }}>
-              <span style={{ fontSize: '1.5rem', color: t.warning, animation: 'pulse 2s infinite' }}>★</span>
+              <Star size={24} color={t.warning} style={{ animation: 'pulse 2s infinite' }} />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '1.5rem', fontWeight: '800', fontFamily: 'monospace', color: t.warning }}>{mainMcqPoints} XP</span>
                 <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.15em', color: t.textMuted, fontWeight: '700' }}>MCQ Logic</span>
@@ -342,7 +353,7 @@ function ArticulationResultsContent() {
               padding: '32px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-                <span style={{ color: t.accent, fontSize: '14px' }}>📊</span>
+                <BarChart2 size={14} color={t.accent} />
                 <h4 style={{ fontSize: '10px', fontWeight: '900', color: t.textMuted, letterSpacing: '0.3em', textTransform: 'uppercase', margin: 0 }}>Explanatory Audit</h4>
               </div>
               <p style={{ color: t.textPrimary, fontSize: '1.05rem', lineHeight: '1.7', fontWeight: '500', margin: 0 }}>
@@ -547,7 +558,7 @@ function ArticulationResultsContent() {
             gap: '24px',
           }}
         >
-          <span style={{ fontSize: '1rem' }}>↻</span>
+          <RefreshCw size={16} />
           Start New Analysis Session
         </button>
       </main>

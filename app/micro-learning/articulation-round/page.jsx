@@ -3,6 +3,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import BackButton from '@/app/components/micro-learning/BackButton';
+import { 
+  AlertTriangle, 
+  X, 
+  Mic, 
+  Square, 
+  Sparkles, 
+  Loader2 
+} from 'lucide-react';
 
 export default function ArticulationRound() {
   const router = useRouter();
@@ -264,6 +273,7 @@ export default function ArticulationRound() {
         padding: '16px',
       }}
     >
+      <BackButton target="back" />
       {/* Main content */}
       <main
         style={{
@@ -319,7 +329,7 @@ export default function ArticulationRound() {
             animation: 'shakeIn 0.4s ease',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+              <AlertTriangle size={18} />
               <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{error}</span>
             </div>
             <button
@@ -336,7 +346,7 @@ export default function ArticulationRound() {
               onMouseEnter={e => e.currentTarget.style.opacity = '1'}
               onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
             >
-              ✕
+              <X size={18} />
             </button>
           </div>
         )}
@@ -419,7 +429,7 @@ export default function ArticulationRound() {
                 boxShadow: isLight ? '0 4px 12px rgba(144, 103, 198, 0.2)' : 'none',
               }}
             >
-              <span>{isRecording ? '⏹' : '🎤'}</span>
+              <span>{isRecording ? <Square size={18} fill="#fff" /> : <Mic size={18} />}</span>
               <span>{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
             </button>
           </div>
@@ -523,9 +533,9 @@ export default function ArticulationRound() {
             }}
           >
             <span>
-              {isAnalyzing ? 'Processing Neural Audit...' : isSaving ? 'Syncing results...' : error ? 'Retry Audit' : 'Analyze My Explanation'}
+              {isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : isSaving ? <Loader2 size={18} className="animate-spin" /> : error ? 'Retry Audit' : 'Analyze My Explanation'}
             </span>
-            {!isAnalyzing && <span>✨</span>}
+            {!isAnalyzing && !isSaving && <Sparkles size={18} />}
           </button>
         </div>
       </main>
@@ -555,6 +565,9 @@ export default function ArticulationRound() {
         }
         .pulse-green {
           animation: pulse-green 2s infinite;
+        }
+        .animate-spin {
+          animation: spin 1s linear infinite;
         }
         .articulation-textarea::-webkit-scrollbar {
           width: 6px;

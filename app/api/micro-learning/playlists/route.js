@@ -12,7 +12,7 @@ export async function GET(request) {
     );
   }
 
-  const ids = idsString.split(',').filter(id => id.trim() !== '');
+  const ids = idsString.split(',').map(id => id.trim()).filter(id => id !== '');
   const apiKey = process.env.YOUTUBE_API_KEY;
 
   if (!apiKey) {
