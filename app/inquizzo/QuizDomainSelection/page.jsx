@@ -1418,7 +1418,6 @@ const QuizDomainSelection = () => {
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
-      <CursorAura />
       <Toaster richColors position="top-center" />
 
       {/* Decorative Orbs */}
