@@ -21,20 +21,20 @@ const moduleIcons = {
 export default function ModuleProgressRow({ submodule, parentModule }) {
   const Icon = moduleIcons[parentModule.name];
 
-  const isPending = submodule.progress === 0;
-  const isCompleted = submodule.progress === 100;
+  const isStatRow = submodule.id === 'accuracy' || submodule.id === 'questions' || submodule.id === 'score';
 
-  const status = isCompleted
-    ? "Completed"
-    : isPending
-      ? "Pending"
-      : "In Progress";
+  const isPending = !isStatRow && submodule.progress === 0;
+  const isCompleted = !isStatRow && submodule.progress >= 100;
 
-  const actionText = isCompleted
-    ? "Review"
-    : isPending
-      ? "Start"
-      : "Continue";
+  let status = "In Progress";
+  if (isStatRow) status = "View Stats";
+  else if (isCompleted) status = "Completed";
+  else if (isPending) status = "Pending";
+
+  let actionText = "Continue";
+  if (isStatRow) actionText = "View Details";
+  else if (isCompleted) actionText = "Review";
+  else if (isPending) actionText = "Start";
 
   const handleAction = () => {
     if (submodule.isVirtual) {
@@ -114,19 +114,23 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
       </div>
 
       {/* BOTTOM on mobile / right on desktop: BADGE + BUTTON */}
-      <div className="flex items-center justify-between md:contents">
-        <Badge
-          variant={isCompleted ? "default" : isPending ? "outline" : "secondary"}
-          className="w-fit"
-        >
-          {status}
-        </Badge>
-        <Button
-          variant={isCompleted ? "outline" : "default"}
-          className="md:ml-4"
-        >
-          {actionText}
-        </Button>
+      <div className="flex items-center justify-between md:flex-none md:justify-end gap-4 md:w-[240px]">
+        <div className="flex justify-start md:w-[100px]">
+          <Badge
+            variant={isCompleted ? "default" : isPending ? "outline" : "secondary"}
+            className="w-fit whitespace-nowrap"
+          >
+            {status}
+          </Badge>
+        </div>
+        <div className="flex justify-end md:w-[120px]">
+          <Button
+            variant={isCompleted ? "outline" : "default"}
+            className="w-full md:w-auto"
+          >
+            {actionText}
+          </Button>
+        </div>
       </div>
     </div>
   );
