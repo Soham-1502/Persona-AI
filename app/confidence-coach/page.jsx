@@ -12,7 +12,7 @@ export default function ConfidenceCoachPage() {
     });
 
     return (
-        <div className="w-full h-screen flex flex-col bg-background">
+        <div className="w-full min-h-screen flex flex-col bg-background">
             {/* Header Section */}
             <div className="sticky top-0 z-50 w-full shrink-0">
                 <Header
@@ -24,7 +24,7 @@ export default function ConfidenceCoachPage() {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 p-2 px-3 flex gap-3 overflow-y-auto lg:overflow-hidden">
+            <div className="flex-1 p-2 px-3 flex gap-3">
                 <ConfidenceCoachUI />
             </div>
         </div>

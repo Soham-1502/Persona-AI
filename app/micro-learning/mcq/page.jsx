@@ -150,7 +150,7 @@ export default function MCQRound() {
           </div>
         </div>
 
-        <nav style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar-area">
+        <nav style={{ flex: 1, overflowY: 'auto' }} className="custom-scroll-area">
           {mcqs.map((_, i) => (
             <div key={i} onClick={() => !submitted && setCurrentQuestionIndex(i)} style={{
               padding: '12px 15px', borderRadius: '10px', fontSize: '0.85rem', marginBottom: '8px', cursor: submitted ? 'default' : 'pointer',
@@ -168,7 +168,7 @@ export default function MCQRound() {
 
       {/* MAIN CONTENT AREA */}
       <main
-        className="ml-mcq-main custom-scrollbar-area"
+        className="ml-mcq-main custom-scroll-area"
         style={{
           flex: 1,
           padding: '32px',
@@ -317,13 +317,13 @@ export default function MCQRound() {
           }
         }
 
-        .custom-scrollbar-area::-webkit-scrollbar {
+        .custom-scroll-area::-webkit-scrollbar {
           width: 4px;
         }
-        .custom-scrollbar-area::-webkit-scrollbar-track {
+        .custom-scroll-area::-webkit-scrollbar-track {
           background: transparent;
         }
-        .custom-scrollbar-area::-webkit-scrollbar-thumb {
+        .custom-scroll-area::-webkit-scrollbar-thumb {
           background: ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(168, 85, 247, 0.2)'};
           border-radius: 10px;
         }

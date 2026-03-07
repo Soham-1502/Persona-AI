@@ -435,7 +435,7 @@ function QuizContent() {
               if (isSkippedQ) {
                 statusLabel = 'SKIPPED'; statusColor = t.warning; statusBg = isLight ? 'rgba(234, 179, 8, 0.05)' : 'rgba(234, 179, 8, 0.1)';
               } else if (isCorrect) {
-                 statusLabel = 'CORRECT'; statusColor = t.success; statusBg = isLight ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)';
+                statusLabel = 'CORRECT'; statusColor = t.success; statusBg = isLight ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)';
               } else {
                 statusLabel = 'INCORRECT'; statusColor = t.error; statusBg = isLight ? 'rgba(244, 63, 94, 0.05)' : 'rgba(244, 63, 94, 0.1)';
               }
@@ -633,7 +633,7 @@ function QuizContent() {
 
         {/* Segment Nav */}
         <nav
-          className="custom-scrollbar-area"
+          className="custom-scroll-area"
           style={{
             flex: 1,
             display: 'flex',
@@ -709,7 +709,7 @@ function QuizContent() {
           overflowY: 'auto',
           zIndex: 10,
         }}
-        className="quiz-main-scroll custom-scrollbar-area"
+        className="quiz-main-scroll custom-scroll-area"
       >
         <div style={{ width: '100%', maxWidth: '900px', paddingTop: '40px', paddingBottom: '80px' }}>
           {/* Question Header */}
@@ -950,13 +950,13 @@ function QuizContent() {
           }
         }
 
-        .custom-scrollbar-area::-webkit-scrollbar {
+        .custom-scroll-area::-webkit-scrollbar {
           width: 4px;
         }
-        .custom-scrollbar-area::-webkit-scrollbar-track {
+        .custom-scroll-area::-webkit-scrollbar-track {
           background: transparent;
         }
-        .custom-scrollbar-area::-webkit-scrollbar-thumb {
+        .custom-scroll-area::-webkit-scrollbar-thumb {
           background: ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(255, 255, 255, 0.1)'};
           border-radius: 10px;
         }

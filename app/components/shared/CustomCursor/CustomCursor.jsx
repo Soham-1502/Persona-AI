@@ -51,6 +51,12 @@ const CustomCursor = () => {
     // Mouse tracking
     const mouseX = useMotionValue(-100);
     const mouseY = useMotionValue(-100);
+
+    // Spring configuration for smooth follow
+    const springConfig = { stiffness: 400, damping: 28, mass: 0.5 };
+    const springX = useSpring(mouseX, springConfig);
+    const springY = useSpring(mouseY, springConfig);
+
     const lastTouchTime = useRef(0);
 
     useEffect(() => {
@@ -66,7 +72,7 @@ const CustomCursor = () => {
         const handleHover = (e) => {
             if (Date.now() - lastTouchTime.current < 2000) return;
             const target = e.target;
-            const isPointer = target.closest("button, a") ||
+            const isPointer = target.closest("button, a, input[type='button'], input[type='submit']") ||
                 window.getComputedStyle(target).cursor === "pointer";
             setIsHovered(!!isPointer);
         };
@@ -81,10 +87,23 @@ const CustomCursor = () => {
             setIsVisible(false);
         };
 
+        const handleScroll = () => {
+            if (Date.now() - lastTouchTime.current < 2000) return;
+            const x = mouseX.get();
+            const y = mouseY.get();
+            const target = document.elementFromPoint(x, y);
+            if (target) {
+                const isPointer = target.closest("button, a, input[type='button'], input[type='submit']") ||
+                    window.getComputedStyle(target).cursor === "pointer";
+                setIsHovered(!!isPointer);
+            }
+        };
+
         window.addEventListener("mousemove", moveMouse);
         window.addEventListener("mouseover", handleHover);
         window.addEventListener("mousedown", handleMouseDown);
         window.addEventListener("mouseup", handleMouseUp);
+        window.addEventListener("scroll", handleScroll, true);
         window.addEventListener("touchstart", handleTouch, { passive: true });
         document.addEventListener("mouseleave", handleMouseLeave);
         document.addEventListener("mouseenter", handleMouseEnter);
@@ -94,13 +113,14 @@ const CustomCursor = () => {
             window.removeEventListener("mouseover", handleHover);
             window.removeEventListener("mousedown", handleMouseDown);
             window.removeEventListener("mouseup", handleMouseUp);
+            window.removeEventListener("scroll", handleScroll, true);
             window.removeEventListener("touchstart", handleTouch);
             document.removeEventListener("mouseleave", handleMouseLeave);
             document.removeEventListener("mouseenter", handleMouseEnter);
         };
     }, [mounted, isHiddenRoute, isVisible]);
 
-    if (isHiddenRoute) return null;
+    if (!mounted || isHiddenRoute) return null;
 
     return (
         <div
@@ -109,22 +129,22 @@ const CustomCursor = () => {
         >
             <motion.div
                 style={{
-                    x: mouseX.current === -100 ? (typeof window !== "undefined" ? window.innerWidth / 2 : 0) : mouseX,
-                    y: mouseY.current === -100 ? (typeof window !== "undefined" ? window.innerHeight / 2 : 0) : mouseY,
+                    x: springX,
+                    y: springY,
                     translateX: "-50%",
                     translateY: "-50%",
                 }}
                 animate={{
-                    scale: isClicked ? 0.6 : (isHovered ? 1.15 : 1),
+                    scale: isClicked ? 0.7 : (isHovered ? 1.4 : 1),
                 }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                transition={{ type: "spring", stiffness: 450, damping: 25 }}
                 className="absolute w-7 h-7 flex items-center justify-center pointer-events-none"
             >
                 <img
-                    key={currentTheme}
                     src={customImage}
                     alt="cursor"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain pointer-events-none"
+                    draggable={false}
                     onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.parentElement.style.border = '2px solid white';

@@ -529,6 +529,7 @@
     @apply border-border outline-ring/50;
   }
 
+  body.custom-cursor-active,
   body.custom-cursor-active * {
     cursor: none !important;
   }

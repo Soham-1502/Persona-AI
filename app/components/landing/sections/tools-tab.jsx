@@ -90,7 +90,7 @@ export default function AIToolsTabs() {
         <div className="max-w-[1008px] mx-auto">
           <div>
             {/* Tab Navigation */}
-            <div className="overflow-x-auto custom-scrollbar mx-auto max-w-fit relative">
+            <div className="overflow-x-auto custom-scroll mx-auto max-w-fit relative">
               <div className="flex gap-2 min-w-max rounded-full bg-gray-100 dark:bg-white/5 p-1">
                 {tabs.map((tab) => (
                   <button

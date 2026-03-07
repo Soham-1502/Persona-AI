@@ -47,6 +47,27 @@ export default function Home() {
     }
   });
   const [liveLoading, setLiveLoading] = useState(true);
+  const [aiInsights, setAiInsights] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
+
+  const fetchAiInsights = useCallback(async () => {
+    setInsightsLoading(true);
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+      const res = await fetch('/api/dashboard/ai-insights', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) setAiInsights(json.insights);
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI insights:', err);
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, []);
 
   const fetchLiveData = useCallback(async (range) => {
     setLiveLoading(true);
@@ -90,11 +111,8 @@ export default function Home() {
 
   useEffect(() => {
     fetchLiveData(selectedDate);
-  }, [selectedDate, fetchLiveData]);
-
-  // ── Insights (still mock for now) ────────────────────────────────────────
-  const insightsData = mockUserDashboardData;
-  const insightsLoading = false;
+    fetchAiInsights();
+  }, [selectedDate, fetchLiveData, fetchAiInsights]);
 
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
@@ -168,8 +186,8 @@ export default function Home() {
         </div>
         <div className='col-span-full lg:col-span-1'>
           <InsightsCard
-            insights={insightsData?.insights}
-            streak={insightsData?.streak}
+            insights={aiInsights}
+            streak={aiInsights?.streak}
             isLoading={insightsLoading}
           />
         </div>

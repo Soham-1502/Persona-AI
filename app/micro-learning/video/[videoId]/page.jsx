@@ -377,7 +377,7 @@ export default function VideoPlayerPage() {
           position: 'relative',
           zIndex: 10,
         }}
-        className="custom-scrollbar-area ml-video-main"
+        className="custom-scroll-area ml-video-main"
       >
         <div style={{
           position: 'relative',
@@ -642,7 +642,7 @@ export default function VideoPlayerPage() {
           flex: 1,
           overflowY: 'auto',
           padding: '16px',
-        }} className="custom-scrollbar-area">
+        }} className="custom-scroll-area">
 
           {activeRightTab === 'course' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -738,20 +738,20 @@ export default function VideoPlayerPage() {
           }
         }
 
-        .custom-scrollbar-area::-webkit-scrollbar {
+        .custom-scroll-area::-webkit-scrollbar {
           width: 4px;
         }
-        .custom-scrollbar-area::-webkit-scrollbar-track {
+        .custom-scroll-area::-webkit-scrollbar-track {
           background: rgba(255, 255, 255, 0.02);
         }
-        .custom-scrollbar-area::-webkit-scrollbar-thumb {
+        .custom-scroll-area::-webkit-scrollbar-thumb {
           background: ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'};
           border-radius: 10px;
         }
-        .custom-scrollbar-area::-webkit-scrollbar-thumb:hover {
+        .custom-scroll-area::-webkit-scrollbar-thumb:hover {
           background: ${isLight ? 'rgba(144, 103, 198, 0.6)' : 'rgba(147, 76, 240, 0.6)'};
         }
-        .custom-scrollbar-area {
+        .custom-scroll-area {
           scrollbar-width: thin;
           scrollbar-color: ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'} rgba(255, 255, 255, 0.02);
         }

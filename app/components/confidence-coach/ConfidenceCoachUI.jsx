@@ -4,6 +4,7 @@ import { Mic, Video, Square, Play, CheckCircle, Loader2, Eye, Activity, Zap, Tre
 import { startMediaPipeStream } from "./MediaPipeAnalyzer";
 import { AudioAnalyzer } from "./AudioAnalyzer";
 import { getAuthToken } from "@/lib/auth-client";
+import { CATEGORY_MAP } from "@/lib/data";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
@@ -19,6 +20,8 @@ const SCENARIO_WEIGHTS = {
 };
 
 export function ConfidenceCoachUI() {
+    console.log('Rendering Confidence Coach UI - Dynamic ML Version');
+
     // Video state
     const videoRef = useRef(null);
     const [stream, setStream] = useState(null);
@@ -73,15 +76,19 @@ export function ConfidenceCoachUI() {
     const [aiFeedback, setAiFeedback] = useState([]);
     const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
     const [aiFeedbackError, setAiFeedbackError] = useState(false);
+    const [recommendedVideo, setRecommendedVideo] = useState(null);
+    const [recommendedCategory, setRecommendedCategory] = useState(null);
 
     // Latest State Refs (to avoid hook dependency loops)
     const mlStatsRef = useRef(mlStats);
     const userAnswerRef = useRef(userAnswer);
     const interimAnswerRef = useRef(interimAnswer);
+    const sessionStatusRef = useRef(sessionStatus);
 
     useEffect(() => { mlStatsRef.current = mlStats; }, [mlStats]);
     useEffect(() => { userAnswerRef.current = userAnswer; }, [userAnswer]);
     useEffect(() => { interimAnswerRef.current = interimAnswer; }, [interimAnswer]);
+    useEffect(() => { sessionStatusRef.current = sessionStatus; }, [sessionStatus]);
 
     const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
 
@@ -294,22 +301,23 @@ export function ConfidenceCoachUI() {
 
         let recognition = recognitionRef.current;
         if (!recognition) {
-            console.log("🎤 Initializing Speech Recognition for Active Session");
+            console.log("🎤 Initializing Speech Recognition Service");
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.maxAlternatives = 3; // Allow more context for phonetic matching
+            recognition.maxAlternatives = 3;
             recognition.lang = recognitionLang;
             recognitionRef.current = recognition;
         } else {
-            // Update language if it changed
             recognition.lang = recognitionLang;
         }
 
+        recognition.onstart = () => console.log("🎤 Speech Recognition: Active and Listening");
         recognition.onresult = (event) => {
             if (!active) return;
             let interimTranscript = '';
             let finalTranscriptParts = [];
+            const currentStatus = sessionStatusRef.current;
 
             const sanitize = (text) => {
                 return text
@@ -326,24 +334,35 @@ export function ConfidenceCoachUI() {
                     .replace(/Christmas/gi, "Kharpude");
             };
 
-            for (let i = 0; i < event.results.length; ++i) {
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const result = event.results[i];
-                const rawText = result[0].transcript.toLowerCase().trim();
+                const alternatives = Array.from(result);
+
+                // Scan all alternatives for wake words
+                const hasStart = alternatives.some(alt => {
+                    const t = alt.transcript.toLowerCase();
+                    return t.includes("start") || t.includes("begin session") || t.includes("start the session");
+                });
+
+                const hasEnd = alternatives.some(alt => {
+                    const t = alt.transcript.toLowerCase();
+                    return t.includes("end the speech") || t.includes("end this speech") || t.includes("finish talking") || t.includes("stop session");
+                });
 
                 // --- COMMAND SCANNER ---
-                if (sessionStatus === "idle" && (rawText === "start" || rawText === "begin" || rawText.includes("begin session"))) {
+                if (currentStatus === "idle" && hasStart) {
                     console.log("🗣️ Voice Command detected: START");
                     startSession();
                     return;
                 }
 
-                if (sessionStatus === "analyzing" && (rawText.includes("end this speech") || rawText === "finish" || rawText === "stop session")) {
+                if (currentStatus === "analyzing" && hasEnd) {
                     console.log("🗣️ Voice Command detected: END");
                     endSession();
                     return;
                 }
 
-                if (sessionStatus === "analyzing") {
+                if (currentStatus === "analyzing") {
                     if (result.isFinal) {
                         const cleaned = sanitize(result[0].transcript);
                         if (result[0].confidence > 0.05 || cleaned.length > 5) {
@@ -355,9 +374,9 @@ export function ConfidenceCoachUI() {
                 }
             }
 
-            if (sessionStatus === "analyzing") {
+            if (currentStatus === "analyzing") {
                 const currentFinal = finalTranscriptParts.join(" ");
-                if (currentFinal.trim() !== userAnswerRef.current.trim()) {
+                if (currentFinal.trim().length > 0 && currentFinal.trim() !== userAnswerRef.current.trim()) {
                     setUserAnswer(currentFinal);
                     userAnswerRef.current = currentFinal;
                 }
@@ -377,7 +396,8 @@ export function ConfidenceCoachUI() {
         };
 
         recognition.onend = () => {
-            if (active && (sessionStatus === "idle" || sessionStatus === "analyzing")) {
+            if (active && (sessionStatusRef.current === "idle" || sessionStatusRef.current === "analyzing")) {
+                console.log("🎤 Speech Recognition ended, restarting...");
                 setTimeout(() => { if (active) try { recognition.start(); } catch (e) { } }, 300);
             }
         };
@@ -388,16 +408,8 @@ export function ConfidenceCoachUI() {
 
         return () => {
             active = false;
-            if (recognitionRef.current) {
-                try {
-                    recognitionRef.current.onresult = null;
-                    recognitionRef.current.onend = null;
-                    recognitionRef.current.onerror = null;
-                    recognitionRef.current.stop();
-                } catch (e) { }
-            }
         };
-    }, [sessionStatus, recognitionLang]);
+    }, [isGeneratingQuestion, recognitionLang, stream]);
 
     // AI Question Generation
     useEffect(() => {
@@ -462,6 +474,7 @@ export function ConfidenceCoachUI() {
         });
         setAiFeedback([]);
         setAiFeedbackError(false);
+        setRecommendedVideo(null);
         setLiveMetrics({ eyeContact: 0, posture: 0, pitch: 0, energy: 0, pace: 0, wpm: 0, isSpeaking: false });
 
         console.log("🚀 Initializing session analysis components...");
@@ -514,6 +527,8 @@ export function ConfidenceCoachUI() {
         setIsGeneratingFeedback(true);
         setAiFeedbackError(false);
         setAiFeedback([]); // Clear old feedback immediately
+        setRecommendedVideo(null);
+        setRecommendedCategory(null);
         try {
             const res = await fetch('/api/confidence-coach/generate-feedback', {
                 method: 'POST',
@@ -527,6 +542,26 @@ export function ConfidenceCoachUI() {
             const data = await res.json();
             if (data.success && Array.isArray(data.feedback) && data.feedback.length > 0) {
                 setAiFeedback(data.feedback);
+                if (data.recommendedCategory) setRecommendedCategory(data.recommendedCategory);
+
+                // Fetch specific recommended video based on category and keyword
+                if (data.recommendedCategory && data.searchKeyword) {
+                    try {
+                        const searchRes = await fetch(`/api/micro-learning/search-video?category=${encodeURIComponent(data.recommendedCategory)}&keyword=${encodeURIComponent(data.searchKeyword)}`);
+                        if (searchRes.ok) {
+                            const searchData = await searchRes.json();
+                            console.log("🎥 SEARCH VIDEO API RESPONSE:", searchData);
+                            if (searchData.video) {
+                                setRecommendedVideo(searchData.video);
+                            }
+                        } else {
+                            console.error("SEARCH API RETURNED NON-OK STATUS:", searchRes.status);
+                        }
+                    } catch (plErr) {
+                        console.error("Failed to fetch recommended video", plErr);
+                    }
+                }
+
             } else {
                 setAiFeedbackError(true);
             }
@@ -681,9 +716,9 @@ export function ConfidenceCoachUI() {
     };
 
     return (
-        <div className="w-full h-fit lg:h-full flex flex-col lg:flex-row gap-4 overflow-y-auto lg:overflow-hidden pb-4 lg:pb-0">
+        <div className="w-full h-fit flex flex-col lg:flex-row gap-4 pb-4 lg:pb-0">
             {/* Left Panel: Video Feed */}
-            <div className="w-full lg:w-[60%] min-h-[40vh] lg:min-h-0 bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center shrink-0 lg:shrink">
+            <div className="w-full lg:w-1/2 lg:h-[640px] bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center shrink-0">
                 <video
                     ref={videoRef}
                     autoPlay
@@ -693,10 +728,10 @@ export function ConfidenceCoachUI() {
                 />
 
                 <div className="absolute top-4 left-4 flex gap-2">
-                    <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white border border-white/10 text-sm">
-                        <Video size={16} className={stream ? "text-green-400" : "text-red-400"} />
-                        <span>{stream ? "Camera Active" : "No Camera"}</span>
-                        {/* DEBUG: {stream?.id} */}
+                    <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white border border-white/10 text-[11px] font-bold">
+                        <div className={`w-2 h-2 rounded-full ${stream ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+                        <Video size={14} className="opacity-80" />
+                        <span className="tracking-tight">{stream ? "Camera Active" : "No Camera"}</span>
                     </div>
                 </div>
 
@@ -709,13 +744,13 @@ export function ConfidenceCoachUI() {
             </div>
 
             {/* Right Panel: Controls & Instructions */}
-            <div className="w-full lg:w-[40%] bg-card rounded-xl border border-border p-5 lg:p-6 flex flex-col shadow-sm flex-1 lg:overflow-y-auto">
+            <div className="w-full lg:w-1/2 lg:h-[640px] bg-card rounded-xl border border-border p-5 lg:p-6 flex flex-col shadow-sm overflow-y-auto custom-scroll">
 
                 {sessionStatus === "idle" && (
                     <div className="flex flex-col h-full justify-between">
                         <div>
-                            <h2 className="text-3xl font-black mb-2 tracking-tight">Confidence Coach</h2>
-                            <p className="text-muted-foreground mb-8">Master your presence with real-time AI feedback.</p>
+                            <h2 className="text-4xl font-bold mb-1 tracking-tight">Confidence Coach</h2>
+                            <p className="text-muted-foreground/80 mb-8 text-[15px]">Master your presence with real-time AI feedback.</p>
 
                             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                                 <div className="flex-1 min-w-0">
@@ -723,7 +758,7 @@ export function ConfidenceCoachUI() {
                                     <select
                                         value={scenarioCategory}
                                         onChange={(e) => setScenarioCategory(e.target.value)}
-                                        className="w-full p-2.5 sm:p-3 rounded-lg border border-input bg-background"
+                                        className="w-full p-3 rounded-xl border border-border bg-[#1E1E2E] text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                         disabled={isGeneratingQuestion}
                                     >
                                         {scenarios.map(s => (
@@ -736,7 +771,7 @@ export function ConfidenceCoachUI() {
                                     <select
                                         value={difficulty}
                                         onChange={(e) => setDifficulty(e.target.value)}
-                                        className="w-full p-2.5 sm:p-3 rounded-lg border border-input bg-background"
+                                        className="w-full p-3 rounded-xl border border-border bg-[#1E1E2E] text-white focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                         disabled={isGeneratingQuestion}
                                     >
                                         <option value="Beginner">Beginner</option>
@@ -751,24 +786,24 @@ export function ConfidenceCoachUI() {
                                     <Loader2 size={18} className="animate-spin" /> Crafting your challenge...
                                 </div>
                             ) : (
-                                <div className="border border-border bg-secondary/20 p-5 rounded-2xl mb-8 shadow-inner relative group">
-                                    <div className="absolute -top-3 left-4 bg-background px-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Practice Question</div>
-                                    <p className="text-lg font-semibold leading-relaxed">&quot;{question}&quot;</p>
+                                <div className="border border-white/5 bg-[#1E1E2E] p-6 rounded-2xl mb-8 relative group shadow-xl">
+                                    <div className="absolute -top-2.5 left-4 bg-[#2D2D3F] px-3 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest text-white/80 border border-white/10">Practice Question</div>
+                                    <p className="text-[17px] font-medium leading-relaxed italic opacity-90">&quot;{question}&quot;</p>
                                 </div>
                             )}
 
-                            <div className="bg-secondary/40 rounded-2xl p-5 mb-4 border border-border">
-                                <h3 className="font-bold flex items-center gap-2 mb-3 text-sm">
-                                    <Mic size={18} className="text-primary" /> VOICE COMMANDS
+                            <div className="bg-[#1E1E2E]/50 rounded-2xl p-5 mb-8 border border-white/5">
+                                <h3 className="font-bold flex items-center gap-2 mb-4 text-[11px] tracking-widest text-[#934cf0]">
+                                    <Mic size={14} /> VOICE COMMANDS
                                 </h3>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="text-xs bg-background p-3 rounded-lg border border-border">
-                                        <span className="text-muted-foreground block mb-1">TO START</span>
-                                        <span className="font-bold">&quot;Start&quot;</span>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-[#161625] p-4 rounded-xl border border-white/5 group transition-colors hover:bg-black/40">
+                                        <span className="text-[10px] text-white/40 block mb-1 uppercase font-bold tracking-tighter">TO START</span>
+                                        <span className="font-bold text-[13px]">&quot;Start&quot;</span>
                                     </div>
-                                    <div className="text-xs bg-background p-3 rounded-lg border border-border">
-                                        <span className="text-muted-foreground block mb-1">TO END</span>
-                                        <span className="font-bold">&quot;End this speech&quot;</span>
+                                    <div className="bg-[#161625] p-4 rounded-xl border border-white/5 group transition-colors hover:bg-black/40">
+                                        <span className="text-[10px] text-white/40 block mb-1 uppercase font-bold tracking-tighter">TO END</span>
+                                        <span className="font-bold text-[13px]">&quot;End this speech&quot;</span>
                                     </div>
                                 </div>
                             </div>
@@ -777,14 +812,14 @@ export function ConfidenceCoachUI() {
                         <button
                             onClick={startSession}
                             disabled={!stream || isGeneratingQuestion}
-                            className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black text-lg shadow-xl hover:translate-y-[-2px] active:translate-y-[0] transition-all flex justify-center items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                            className="w-full py-4 bg-[#7C3AED]/90 hover:bg-[#7C3AED] text-white rounded-xl font-bold text-[16px] shadow-lg hover:shadow-indigo-500/20 active:scale-[0.98] transition-all flex justify-center items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isGeneratingQuestion ? (
-                                <Loader2 size={24} className="animate-spin" />
+                                <Loader2 size={20} className="animate-spin" />
                             ) : (
-                                <Play fill="currentColor" size={24} className="group-hover:scale-110 transition-transform" />
+                                <Play fill="currentColor" size={20} className="transition-transform group-hover:scale-110" />
                             )}
-                            {isGeneratingQuestion ? "PREPARING..." : "BEGIN SESSION"}
+                            <span className="uppercase tracking-widest">{isGeneratingQuestion ? "PREPARING..." : "BEGIN SESSION"}</span>
                         </button>
                     </div>
                 )}
@@ -1093,32 +1128,49 @@ export function ConfidenceCoachUI() {
                                     </div>
                                 </div>
 
-                                {/* YOUTUBE PLAYLIST INTEGRATION */}
-                                <div className="bg-secondary/10 rounded-3xl p-6 border border-border mt-2 overflow-hidden relative group">
-                                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
-                                        <TrendingUp size={80} />
-                                    </div>
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Recommended Training</h3>
-                                    <div className="flex gap-4 items-center">
-                                        <div className="w-24 h-16 bg-black rounded-lg overflow-hidden flex-shrink-0 relative border border-white/10">
-                                            <img src="https://img.youtube.com/vi/K0pxo-dS9Hc/0.jpg" className="w-full h-full object-cover" alt="YouTube Thumbnail" />
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                                <Play size={12} fill="white" className="text-white" />
+                                {/* YOUTUBE PLAYLIST INTEGRATION -> INTERNAL MICRO-LEARNING INTEGRATION */}
+                                {recommendedVideo && recommendedVideo.snippet && (
+                                    <div className="bg-secondary/10 rounded-3xl p-6 border border-border mt-2 overflow-hidden relative group">
+                                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
+                                            <TrendingUp size={80} />
+                                        </div>
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">Specific Training Recommended</h3>
+                                        <div className="flex gap-4 items-center">
+                                            <div className="w-24 h-16 bg-black rounded-lg overflow-hidden flex-shrink-0 relative border border-white/10">
+                                                <img
+                                                    src={recommendedVideo.snippet?.thumbnails?.medium?.url || recommendedVideo.snippet?.thumbnails?.default?.url || ''}
+                                                    className="w-full h-full object-cover"
+                                                    alt="Video Thumbnail"
+                                                />
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                                    <Play size={12} fill="white" className="text-white" />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-black leading-tight line-clamp-2" title={recommendedVideo.snippet?.title}>
+                                                    {recommendedVideo.snippet?.title || "Mastering the Details"}
+                                                </p>
+                                                <p className="text-[10px] font-medium text-muted-foreground line-clamp-1">{recommendedVideo.snippet?.channelTitle || "Targeted Feedback Module"}</p>
+                                                {recommendedVideo.snippet?.resourceId?.videoId && (
+                                                    <a
+                                                        href={`/micro-learning/video/${recommendedVideo.snippet.resourceId.videoId}`}
+                                                        className="text-[10px] font-black text-primary hover:underline flex items-center gap-1 mt-1"
+                                                    >
+                                                        WATCH IN MICRO-LEARNING →
+                                                    </a>
+                                                )}
+                                                {recommendedCategory && (
+                                                    <a
+                                                        href={`/micro-learning/category/${recommendedCategory}`}
+                                                        className="text-[10px] font-bold text-muted-foreground hover:text-primary hover:underline flex items-center gap-1 mt-1"
+                                                    >
+                                                        EXPLORE ALL '{recommendedCategory.replace('-', ' ').toUpperCase()}' PLAYLISTS →
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-black leading-tight">Mastering Body Language</p>
-                                            <p className="text-[10px] font-medium text-muted-foreground">Confidence Coach Curated Playlist</p>
-                                            <a
-                                                href="https://www.youtube.com/playlist?list=PLp_f9kI_pG7yUshX7b_0PskFk9OQyW8vS"
-                                                target="_blank"
-                                                className="text-[10px] font-black text-primary hover:underline flex items-center gap-1 mt-1"
-                                            >
-                                                WATCH ON YOUTUBE →
-                                            </a>
-                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 <button
                                     onClick={() => {

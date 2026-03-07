@@ -42,8 +42,17 @@ export async function POST(req) {
                     Focus on substance and presence.
 
                     You MUST generate exactly 3 specific "Areas for Improvement". Be critical but constructive.
+                    You MUST also select exactly ONE "recommendedCategory" from this strict list that the user needs the most practice with:
+                    ["communication", "posture"]
+                    
+                    CRITICAL: You MUST provide a "searchKeyword" describing the exact flaw.
+                    Your "searchKeyword" MUST BE EXACTLY ONE OF THE FOLLOWING PHRASES. DO NOT INVENT NEW PHRASES.
+                    If the category is "posture", choose exactly from: "facial expressions", "hand gestures", "body language", "body movement", "facial gestures", "upper body movement", "lower body movement".
+                    If the category is "communication", choose exactly from: "vocal pace", "vocal tone", "voice projection", "vocal energy", "vocal delivery".
+                    DO NOT SUGGEST ANYTHING ELSE OTHER THAN THE ABOVE PRECISE PHRASES.
+
                     Return your response in strict JSON format. 
-                    The output must be a JSON object with a "feedback" key containing an array of exactly 3 objects:
+                    The output must be a JSON object with a "feedback" key containing an array of exactly 3 objects, a "recommendedCategory" string, and a "searchKeyword" string:
                     {
                       "feedback": [
                         {
@@ -51,7 +60,9 @@ export async function POST(req) {
                           "description": "Concise, actionable advice.",
                           "iconType": "one of: camera, mic, zap, activity, eye, trending"
                         }
-                      ]
+                      ],
+                      "recommendedCategory": "one category from the strict list above",
+                      "searchKeyword": "specific single flaw (e.g., eye contact)"
                     }
                 `;
 
@@ -66,7 +77,12 @@ export async function POST(req) {
                 const feedback = content.feedback || [];
 
                 console.log("✅ Success with key!");
-                return NextResponse.json({ success: true, feedback: feedback.slice(0, 3) });
+                return NextResponse.json({
+                    success: true,
+                    feedback: feedback.slice(0, 3),
+                    recommendedCategory: content.recommendedCategory,
+                    searchKeyword: content.searchKeyword
+                });
 
             } catch (err) {
                 console.warn(`⚠️ Key failed: ${err.message}`);
