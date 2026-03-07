@@ -1,6 +1,6 @@
 'use client'
 
-import { DateFilter, Notifications, Theme } from './HeaderComponents';
+import { Notifications, Theme } from './HeaderComponents';
 import { useEffect, useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useTheme } from 'next-themes';
@@ -46,31 +46,14 @@ export default function Header({ DateValue, onDateChange, tempDate, showDateFilt
                         </div>
                     </div>
 
-                    {/* Center: date label (desktop only) */}
-                    <div className="hidden md:block shrink-0">
-                        <p className='text-sm font-bold'>Date Set : {tempDate}</p>
-                    </div>
-
-                    {/* Right: DateFilter (sm+) + Notifications + Theme */}
+                    {/* Right: Notifications + Theme */}
                     <div className='h-full flex items-center gap-2 shrink-0'>
-                        {showDateFilter && (
-                            <div className="hidden sm:block">
-                                <DateFilter value={DateValue} onValueChange={onDateChange} />
-                            </div>
-                        )}
                         <Notifications />
                         <Theme />
                     </div>
                 </div>
 
-                {/* Second row — mobile only: DateFilter aligned with welcome text */}
-                {showDateFilter && (
-                    <div className="sm:hidden pb-3 flex items-center">
-                        {/* Spacer matches SidebarTrigger width (h-7 w-7 button = ~28px) + gap-2 (8px) */}
-                        <div className="w-[calc(1.75rem+0.5rem)] shrink-0" />
-                        <DateFilter value={DateValue} onValueChange={onDateChange} />
-                    </div>
-                )}
+
 
             </header>
         </div>
