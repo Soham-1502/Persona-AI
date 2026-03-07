@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { motion, useMotionValue, useSpring } from "framer-motion"
 
 export default function CursorGlow() {
@@ -10,13 +10,22 @@ export default function CursorGlow() {
     const springX = useSpring(x, { stiffness: 80, damping: 20 })
     const springY = useSpring(y, { stiffness: 80, damping: 20 })
 
+    const lastTouchTime = useRef(0)
+
     useEffect(() => {
+        const handleTouch = () => { lastTouchTime.current = Date.now() }
+        window.addEventListener("touchstart", handleTouch, { passive: true })
+
         const move = (e) => {
+            if (Date.now() - lastTouchTime.current < 2000) return;
             x.set(e.clientX)
             y.set(e.clientY)
         }
         window.addEventListener("mousemove", move)
-        return () => window.removeEventListener("mousemove", move)
+        return () => {
+            window.removeEventListener("mousemove", move)
+            window.removeEventListener("touchstart", handleTouch)
+        }
     }, [])
 
     return (
