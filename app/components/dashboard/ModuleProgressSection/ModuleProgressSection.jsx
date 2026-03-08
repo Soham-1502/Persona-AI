@@ -192,7 +192,7 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
     <motion.div
       whileHover={{ y: -2 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      className="col-span-full lg:col-span-3 h-[500px] backdrop-blur-[12px] border rounded-2xl p-5 shadow-xl w-full flex flex-col"
+      className="col-span-full lg:col-span-3 h-125 backdrop-blur-md border rounded-2xl p-5 shadow-xl w-full flex flex-col"
       style={{
         backgroundColor: t.cardBg,
         borderColor: t.cardBorder,
@@ -256,7 +256,7 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
               {Array(3).fill(0).map((_, i) => (
                 <div
                   key={i}
-                  className="h-[68px] rounded-lg animate-pulse"
+                  className="h-17 rounded-lg animate-pulse"
                   style={{ backgroundColor: t.primary + '10' }}
                 />
               ))}

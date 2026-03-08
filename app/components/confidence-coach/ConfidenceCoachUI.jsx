@@ -840,7 +840,7 @@ export function ConfidenceCoachUI() {
                             <button
                                 onClick={startSession}
                                 disabled={!stream || isGeneratingQuestion}
-                                className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black text-lg shadow-xl hover:translate-y-[-2px] active:translate-y-[0] transition-all flex justify-center items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                                className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black text-lg shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all flex justify-center items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                             >
                                 {isGeneratingQuestion ? (
                                     <Loader2 size={24} className="animate-spin" />
@@ -899,7 +899,7 @@ export function ConfidenceCoachUI() {
 
                                 <div className="bg-secondary/30 rounded-2xl border border-border overflow-hidden flex flex-col">
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground px-5 pt-4 pb-2 bg-secondary/50 border-b border-border">Live Transcript</h3>
-                                    <div className="p-5 overflow-y-auto max-h-[160px]">
+                                    <div className="p-5 overflow-y-auto max-h-40">
                                         <p className="text-sm font-medium leading-relaxed">
                                             {userAnswer} <span className="text-primary italic animate-pulse">{interimAnswer}</span>
                                         </p>
@@ -1157,7 +1157,7 @@ export function ConfidenceCoachUI() {
                                     </div>
 
                                     {/* DYNAMIC MICRO-LEARNING INTEGRATION */}
-                                    <div className="bg-secondary/10 rounded-3xl p-6 border border-border mt-2 overflow-hidden relative group min-h-[140px] flex flex-col justify-center">
+                                    <div className="bg-secondary/10 rounded-3xl p-6 border border-border mt-2 overflow-hidden relative group min-h-35 flex flex-col justify-center">
                                         {isLoadingTraining ? (
                                             <div className="flex flex-col items-center justify-center space-y-3 py-4">
                                                 <Loader2 size={24} className="text-primary animate-spin" />
@@ -1172,7 +1172,7 @@ export function ConfidenceCoachUI() {
                                                     Improve your {METRIC_DISPLAY_NAMES[recommendedTraining.weakMetric] || "Skills"}
                                                 </h3>
                                                 <div className="flex gap-4 items-center">
-                                                    <div className="w-24 h-16 bg-black rounded-lg overflow-hidden flex-shrink-0 relative border border-white/10">
+                                                    <div className="w-24 h-16 bg-black rounded-lg overflow-hidden shrink-0 relative border border-white/10">
                                                         <img
                                                             src={recommendedTraining.snippet.thumbnails?.high?.url || recommendedTraining.snippet.thumbnails?.medium?.url}
                                                             className="w-full h-full object-cover"
