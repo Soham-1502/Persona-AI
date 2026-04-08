@@ -2,7 +2,8 @@
 // Question text uses Raleway via inline style={{ fontFamily: "'Raleway', sans-serif" }}
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ChevronRight, Play, Zap, Target, Mic, MicOff, Volume2,
   CheckCircle, XCircle, RotateCcw, Search, BookOpen, Brain, Code, Sigma,
@@ -48,7 +49,7 @@ const CARD_HOVER_VARIANTS = {
   hover: { y: -8, scale: 1.02, boxShadow: "0 24px 48px rgba(0,0,0,0.5)", transition: { duration: 0.25, ease: "easeOut" } },
 };
 
-const QuizDomainSelection = () => {
+const QuizDomainSelectionInner = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldResume = searchParams.get('resume') === 'true';
@@ -334,10 +335,22 @@ const QuizDomainSelection = () => {
               setShowResumeModal(true);
             }
           }
+        } else if (shouldResume && !hasRestoredRef.current) {
+          // No valid localStorage session but ?resume=true — try the DB
+          hasRestoredRef.current = true;
+          loadActiveSession();
         }
+      } else if (shouldResume && !hasRestoredRef.current) {
+        // No localStorage session at all but ?resume=true — try the DB
+        hasRestoredRef.current = true;
+        loadActiveSession();
       }
     } catch (e) {
       console.warn('Failed to check saved session:', e);
+      if (shouldResume && !hasRestoredRef.current) {
+        hasRestoredRef.current = true;
+        loadActiveSession();
+      }
     }
     return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
   }, []);
@@ -1661,4 +1674,11 @@ const QuizDomainSelection = () => {
   );
 };
 
+const QuizDomainSelection = () => (
+  <Suspense fallback={null}>
+    <QuizDomainSelectionInner />
+  </Suspense>
+);
+
 export default QuizDomainSelection;
+

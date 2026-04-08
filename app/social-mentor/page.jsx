@@ -286,10 +286,10 @@ export default function SocialMentorPage() {
                     </div>
 
                     {showHistory ? (
-                        <div className="flex-1 w-full h-full backdrop-blur-2xl flex flex-col p-4 sm:p-6 overflow-hidden z-10 transition-colors">
-                            <div className="flex items-center gap-2 sm:gap-4 mb-4 sm:mb-6 shrink-0 pr-20 sm:pr-32">
-                                <h2 className="text-xl sm:text-2xl font-syne font-black flex items-center gap-2" style={{ color: t.textPrimary }}>
-                                    <History className="w-6 h-6" style={{ color: t.primary }} /> Session History
+                        <div className="flex-1 w-full h-full backdrop-blur-2xl flex flex-col p-4 sm:p-6 overflow-hidden z-10 transition-colors min-h-0">
+                            <div className="flex items-center gap-2 sm:gap-4 mb-4 sm:mb-6 shrink-0 pr-20 sm:pr-32 min-w-0">
+                                <h2 className="text-xl sm:text-2xl font-syne font-black flex items-center gap-2 truncate min-w-0" style={{ color: t.textPrimary }}>
+                                    <History className="w-6 h-6 shrink-0" style={{ color: t.primary }} /> <span className="truncate">Session History</span>
                                 </h2>
                                 <button
                                     onClick={fetchHistory}
@@ -338,7 +338,7 @@ export default function SocialMentorPage() {
                                 </button>
                             </div>
 
-                            <div className="space-y-3 overflow-y-auto flex-1 p-1 scrollbar-thin scrollbar-thumb-border">
+                            <div data-lenis-prevent="true" className="space-y-3 overflow-y-auto flex-1 p-1 scrollbar-thin scrollbar-thumb-border min-h-0 relative">
                                 {filteredSessions.length === 0 ? (
                                     <p className="text-sm text-muted-foreground text-center py-10 italic">
                                         {searchQuery ? "No sessions match your search." : (activeTab === "archived" ? "No archived sessions." : "No past sessions found. Start a new chat!")}
