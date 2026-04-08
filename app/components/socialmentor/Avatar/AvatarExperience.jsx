@@ -90,15 +90,16 @@ function MaleAvatar({ isTalking }) {
         if (!names.length) return;
         const action = actions[names[0]];
         if (!action) return;
-        action.reset();
+
         if (isTalking) {
             action.paused = false;
             action.play();
         } else {
+            // Reset to frame 0 (neutral position) when done talking
+            action.reset();
             action.play();
             action.paused = true;
         }
-        return () => action.stop();
     }, [isTalking, actions, names]);
 
     return (
