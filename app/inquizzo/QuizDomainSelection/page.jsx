@@ -7,7 +7,8 @@ import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ChevronRight, Play, Zap, Target, Mic, MicOff, Volume2,
   CheckCircle, XCircle, RotateCcw, Search, BookOpen, Brain, Code, Sigma,
-  Scroll, Landmark, Briefcase, User, Cpu, Palette, Gamepad2, FlaskConical, Atom, Clock
+  Scroll, Landmark, Briefcase, User, Cpu, Palette, Gamepad2, FlaskConical, Atom, Clock,
+  X, Shuffle
 } from "lucide-react";
 import Header from '@/app/components/shared/header/Header.jsx';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
@@ -16,13 +17,13 @@ import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from "next-themes";
 import { QUIZ_STRUCTURE } from "@/lib/quizData";
 import { jsPDF } from "jspdf";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 // ─── ICON MAPS ───────────────────────────────────────────────────────────────
 const DOMAIN_ICON_MAP = {
@@ -51,8 +52,7 @@ const CARD_HOVER_VARIANTS = {
 const QuizDomainSelectionInner = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const shouldResume = searchParams.get('resume') === 'true' || !!searchParams.get('sessionId');
-
+  const shouldResume = searchParams.get('resume') === 'true';
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -85,6 +85,9 @@ const QuizDomainSelectionInner = () => {
   const [correctCount, setCorrectCount] = useState(0);
   const [isManualStop, setIsManualStop] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [resumePct, setResumePct] = useState(0);
+  const [pendingSession, setPendingSession] = useState(null);
 
   const SESSION_LENGTH = 10;
   const STORAGE_KEY = 'inquizzo_active_session';
@@ -327,22 +330,9 @@ const QuizDomainSelectionInner = () => {
               restoreSession(session);
             } else {
               const pct = Math.round((session.current_index / SESSION_LENGTH) * 100);
-              toast(
-                `You have an incomplete quiz (${pct}% completed). Would you like to resume or start a new session?`,
-                {
-                  duration: 15000,
-                  action: {
-                    label: 'Resume',
-                    onClick: () => restoreSession(session),
-                  },
-                  cancel: {
-                    label: 'New Session',
-                    onClick: () => {
-                      localStorage.removeItem(STORAGE_KEY);
-                    },
-                  },
-                }
-              );
+              setResumePct(pct);
+              setPendingSession(session);
+              setShowResumeModal(true);
             }
           }
         } else if (shouldResume && !hasRestoredRef.current) {
@@ -1439,7 +1429,7 @@ const QuizDomainSelectionInner = () => {
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
-      <Toaster richColors position="top-center" />
+
 
       {/* Decorative Orbs */}
       {isLight ? (
@@ -1540,6 +1530,141 @@ const QuizDomainSelectionInner = () => {
           </motion.div>
         </div>
       )}
+
+      {/* ── Resume Session Modal ── */}
+      <AnimatePresence>
+        {showResumeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
+            onClick={() => setShowResumeModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md rounded-3xl overflow-hidden"
+              style={{
+                background: isLight
+                  ? 'rgba(255, 255, 255, 0.25)'
+                  : 'rgba(255, 255, 255, 0.06)',
+                backdropFilter: 'blur(40px)',
+                WebkitBackdropFilter: 'blur(40px)',
+                border: isLight
+                  ? '1px solid rgba(255, 255, 255, 0.5)'
+                  : '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: isLight
+                  ? '0 8px 60px rgba(147, 76, 240, 0.15), 0 0 0 1px rgba(255,255,255,0.3) inset, 0 2px 20px rgba(0,0,0,0.06)'
+                  : '0 8px 60px rgba(147, 76, 240, 0.25), 0 0 0 1px rgba(255,255,255,0.08) inset, 0 2px 20px rgba(0,0,0,0.3)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Glassmorphism inner glow orbs */}
+              <div className="absolute -top-20 -left-20 w-40 h-40 rounded-full pointer-events-none" style={{ background: `radial-gradient(circle, ${t.primary}40, transparent 70%)` }} />
+              <div className="absolute -bottom-16 -right-16 w-36 h-36 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.3), transparent 70%)' }} />
+
+              {/* Top accent bar */}
+              <div className="h-1 w-full" style={{ background: `linear-gradient(to right, ${t.primary}, #EC4899, ${t.primary})` }} />
+
+              {/* Close button */}
+              <button
+                onClick={() => setShowResumeModal(false)}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 z-10"
+                style={{
+                  background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
+                  backdropFilter: 'blur(12px)',
+                  border: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                <X className="w-4 h-4" style={{ color: t.textMuted }} />
+              </button>
+
+              <div className="relative z-[1] p-8 pt-6 text-center">
+                {/* Glassmorphism icon container */}
+                <div
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 relative"
+                  style={{
+                    background: isLight
+                      ? 'rgba(147, 76, 240, 0.12)'
+                      : 'rgba(147, 76, 240, 0.15)',
+                    backdropFilter: 'blur(16px)',
+                    border: isLight
+                      ? '1px solid rgba(147, 76, 240, 0.2)'
+                      : '1px solid rgba(147, 76, 240, 0.25)',
+                    boxShadow: `0 0 40px ${t.primary}33, 0 0 80px ${t.primary}15`,
+                  }}
+                >
+                  <Shuffle className="w-9 h-9" style={{ color: t.primary }} />
+                </div>
+
+                <h3 className="text-2xl font-black mb-2 tracking-tight" style={{ color: t.textPrimary }}>Incomplete Quiz Found</h3>
+                <p className="text-sm mb-7 leading-relaxed" style={{ color: t.textMuted }}>
+                  You have an incomplete quiz session. Would you like to pick up where you left off?
+                </p>
+
+                {/* Progress indicator with glass bg */}
+                <div
+                  className="mb-7 p-4 rounded-2xl"
+                  style={{
+                    background: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)',
+                    border: isLight ? '1px solid rgba(0,0,0,0.05)' : '1px solid rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: t.textMuted }}>Progress</span>
+                    <span className="text-sm font-black" style={{ color: t.primary }}>{resumePct}%</span>
+                  </div>
+                  <div className="w-full h-3 rounded-full overflow-hidden" style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${resumePct}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                      className="h-full rounded-full"
+                      style={{ background: `linear-gradient(90deg, ${t.primary}, #EC4899)`, boxShadow: `0 0 12px ${t.primary}66` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Action buttons — glass styled */}
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setShowResumeModal(false);
+                      restoreSession(pendingSession);
+                    }}
+                    className="w-full py-3.5 rounded-2xl font-bold text-white text-sm shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                    style={{
+                      background: `linear-gradient(135deg, ${t.primary}, #EC4899)`,
+                      boxShadow: `0 6px 30px ${t.primary}44, 0 0 0 1px rgba(255,255,255,0.1) inset`,
+                    }}
+                  >
+                    Resume Quiz ({resumePct}% Done)
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearSession();
+                      setShowResumeModal(false);
+                    }}
+                    className="w-full py-3.5 rounded-2xl font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.98]"
+                    style={{
+                      background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)',
+                      backdropFilter: 'blur(12px)',
+                      border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)',
+                      color: t.textPrimary,
+                    }}
+                  >
+                    Start New Session
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style jsx global>{`
         .animate-fadeIn { animation: fadeIn 0.4s ease-out; }

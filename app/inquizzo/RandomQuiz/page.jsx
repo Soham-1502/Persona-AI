@@ -15,7 +15,7 @@ import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { jsPDF } from "jspdf";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 /* ═══════════════════════════════════════════════════════════════
    COMPONENT
@@ -1391,7 +1391,7 @@ const QuizInner = () => {
           </motion.div>
         </div>
       )}
-      <Toaster richColors position="top-center" />
+
     </div>
   );
 };
