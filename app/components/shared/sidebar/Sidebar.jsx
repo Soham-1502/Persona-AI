@@ -57,6 +57,9 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import SettingsModal from "./SettingsModal";
+import ProfileModal from "./ProfileModal";
+import HelpFeedbackModal from "./HelpFeedbackModal";
 
 export default function AppSidebar() {
   const pathname = usePathname();
@@ -69,17 +72,11 @@ export default function AppSidebar() {
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [openSettingsModal, setOpenSettingsModal] = useState(false);
 
   // Profile modal states
   const [openProfileModal, setOpenProfileModal] = useState(false);
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    firstName: "",
-    lastName: "",
-    username: "",
-    bio: "",
-    picture: "",
-  });
+  const [openHelpModal, setOpenHelpModal] = useState(false);
 
   // ✅ ADD USER STATE
   const [user, setUser] = useState({
@@ -112,9 +109,9 @@ export default function AppSidebar() {
 
   // Glassmorphism styles matching the header
   const glassStyle = {
-    backgroundColor: isLight ? 'rgba(232, 224, 240, 0.5)' : 'rgba(10, 8, 16, 0.1)',
-    backdropFilter: 'blur(6px)',
-    WebkitBackdropFilter: 'blur(6px)',
+    backgroundColor: isLight ? 'rgba(235, 230, 255, 1)' : 'rgba(10, 8, 16, 0.1)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
   };
 
   // ✅ GET INITIALS FOR AVATAR FALLBACK
@@ -127,101 +124,6 @@ export default function AppSidebar() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("Image must be less than 5MB");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileForm((f) => ({ ...f, picture: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Open profile modal and prefill form
-  function handleOpenProfile() {
-    const storedUser = localStorage.getItem("user");
-    let userData = {};
-    if (storedUser) {
-      try {
-        userData = JSON.parse(storedUser);
-      } catch (_) { }
-    }
-
-    const nameParts = (userData.name || "").split(" ");
-    setProfileForm({
-      firstName: userData.firstName || nameParts[0] || "",
-      lastName: userData.lastName || nameParts.slice(1).join(" ") || "",
-      username: userData.username || "",
-      bio: userData.bio || "",
-      picture: userData.picture || "",
-    });
-
-    setOpenProfileModal(true);
-  }
-
-  async function handleSaveProfile() {
-    setIsSavingProfile(true);
-    try {
-      const token = localStorage.getItem("token");
-
-      const res = await fetch("/api/auth/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          firstName: profileForm.firstName,
-          lastName: profileForm.lastName,
-          username: profileForm.username,
-          bio: profileForm.bio,
-          picture: profileForm.picture,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.message || "Failed to update profile");
-        return;
-      }
-
-      // Update localStorage with new user info
-      const storedUser = localStorage.getItem("user");
-      const existingUser = storedUser ? JSON.parse(storedUser) : {};
-      const updatedUser = {
-        ...existingUser,
-        name: data.user.name,
-        firstName: data.user.firstName,
-        lastName: data.user.lastName,
-        username: data.user.username,
-        picture: data.user.picture,
-        bio: data.user.bio,
-      };
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-
-      // Update sidebar display
-      setUser({
-        name: data.user.name,
-        email: data.user.email || existingUser.email,
-        picture: data.user.picture || null,
-      });
-
-      toast.success("Profile updated successfully!");
-      setOpenProfileModal(false);
-    } catch (error) {
-      console.error("Profile save error:", error);
-      toast.error("Could not save profile. Please try again.");
-    } finally {
-      setIsSavingProfile(false);
-    }
-  }
-
   function handleLogout() {
     setIsLoggingOut(true);
 
@@ -232,12 +134,10 @@ export default function AppSidebar() {
     // Show success message
     toast.success('Logged out successfully');
 
-    // Small delay for UX, then redirect
-    setTimeout(() => {
-      setIsLoggingOut(false);
-      setOpenLogoutDialog(false);
-      router.push('/login');
-    }, 500);
+    // Instant hard redirect
+    setIsLoggingOut(false);
+    setOpenLogoutDialog(false);
+    window.location.href = '/';
   }
 
   if (!mounted) return null;
@@ -254,15 +154,15 @@ export default function AppSidebar() {
     >
       {/* HEADER */}
       <SidebarHeader
-        className="h-20 py-4"
+        className="h-20 py-4 group/header"
         style={{
           borderBottom: isLight ? '1px solid rgba(101, 90, 124, 0.12)' : '1px solid rgba(255, 255, 255, 0.06)',
           background: 'transparent',
         }}
       >
-        <div className="h-full flex items-center justify-between px-2 group-data-[collapsible=icon]:px-0">
-          {/* Logo + text */}
-          <div className="flex items-center gap-2 overflow-hidden">
+        <div className="h-full flex items-center justify-between px-2 group-data-[collapsible=icon]:px-0 relative">
+          {/* Logo + text - hides on hover ONLY when collapsed */}
+          <div className="flex items-center gap-2 overflow-hidden transition-opacity duration-300 group-data-[collapsible=icon]:group-hover/header:opacity-0 group-data-[collapsible=icon]:mx-auto">
             {/* Logo icon - suppress hydration warning for theme-dependent rendering */}
             <div className="w-10 h-10 rounded-xl dark:bg-background flex items-center justify-center border border-primary shrink-0 group/logo" suppressHydrationWarning>
               {mounted ? (
@@ -281,16 +181,23 @@ export default function AppSidebar() {
             </div>
 
             {/* Brand text – hide when collapsed */}
-            <span className="text-foreground dark:text-foreground text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden">
+            <span className={cn(
+              "text-xl font-semibold tracking-tight whitespace-nowrap group-data-[collapsible=icon]:hidden",
+              isLight ? "text-foreground" : "text-white"
+            )}>
               Persona
               <span className="font-bold text-sidebar-primary">AI</span>
             </span>
           </div>
 
-          {/* Toggle button */}
+          {/* Toggle button - shows on hover when collapsed, or always when expanded */}
           <button
             onClick={toggleSidebar}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-black/20 dark:hover:bg-white/10 dark:text-persona-cream/70 text-foreground shrink-0 cursor-pointer group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:-translate-x-1/2"
+            className={cn(
+              "w-8 h-8 flex items-center justify-center rounded-lg hover:bg-black/20 dark:hover:bg-white/10 shrink-0 cursor-pointer transition-all duration-300",
+              isLight ? "text-foreground" : "text-white",
+              "group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:-translate-x-1/2 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:group-hover/header:opacity-100"
+            )}
             aria-label="Toggle sidebar"
           >
             {/* expanded icon */}
@@ -307,7 +214,8 @@ export default function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
               {sidebarItems.map((item) => {
-                const isActive = pathname === item.href;
+                // Match exact route, OR if it's a nested route under a module (skip this for the root /dashboard)
+                const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(`${item.href}/`));
                 return (
                   <SidebarMenuItem
                     key={item.href}
@@ -317,7 +225,12 @@ export default function AppSidebar() {
                       asChild
                       isActive={isActive}
                       tooltip={item.title}
-                      className={`gap-3 relative rounded-lg transition-colors ${isActive ? "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-accent dark:text-persona-cream dark:hover:bg-accent/90 font-semibold shadow-md h-10" : "text-sidebar-foreground font-medium hover:bg-primary/10 hover:text-primary dark:text-persona-cream/80 dark:hover:bg-white/5 dark:hover:text-persona-cream h-10"}`}
+                      className={cn(
+                        "gap-3 relative rounded-lg transition-colors h-10 w-full flex items-center shadow-none",
+                        isActive
+                          ? "bg-secondary hover:bg-secondary/90 text-white font-semibold"
+                          : "font-medium hover:bg-primary/10 hover:text-primary dark:hover:bg-white/5 dark:hover:text-persona-cream text-muted-foreground dark:text-white/80"
+                      )}
                     >
                       <Link
                         href={item.href}
@@ -351,7 +264,11 @@ export default function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              className="flex items-center h-auto hover:bg-primary/10 dark:hover:bg-white/10 text-sidebar-foreground active:bg-primary/15 dark:active:bg-white/15 rounded-lg transition-colors group-data-[collapsible=icon]:justify-center"
+              className={cn(
+                "flex items-center h-auto rounded-lg transition-colors group-data-[collapsible=icon]:justify-center",
+                "hover:bg-primary/10 dark:hover:bg-white/10 active:bg-primary/15 dark:active:bg-white/15",
+                isLight ? "text-foreground" : "text-white/80"
+              )}
             >
               <div className="relative flex items-center w-full rounded-lg cursor-pointer group-data-[collapsible=icon]:justify-center">
 
@@ -373,12 +290,15 @@ export default function AppSidebar() {
 
                   {/* Text block (flexible, truncates) */}
                   <div className="flex flex-col flex-1 min-w-0 text-left">
-                    <span className="text-sm font-semibold truncate text-foreground" title={user.name}>
+                    <span
+                      className={cn("text-sm font-semibold truncate", isLight ? "text-foreground" : "text-white")}
+                      title={user.name}
+                    >
                       {user.name}
                     </span>
 
                     <span
-                      className="text-xs truncate text-muted-foreground"
+                      className={cn("text-xs truncate", isLight ? "text-muted-foreground" : "text-white/60")}
                       title={user.email}
                     >
                       {user.email}
@@ -391,7 +311,11 @@ export default function AppSidebar() {
                   <DropdownMenuTrigger asChild>
                     <button
                       aria-label="User options"
-                      className="w-9 h-9 shrink-0 rounded-lg flex items-center text-sidebar-foreground dark:text-persona-cream/70 justify-center hover:bg-primary/10 dark:hover:bg-white/10 active:bg-primary/20 dark:active:bg-white/15 transition-colors"
+                      className={cn(
+                        "w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-colors",
+                        "hover:bg-primary/10 dark:hover:bg-white/10 active:bg-primary/20 dark:active:bg-white/15",
+                        isLight ? "text-foreground" : "text-white/70"
+                      )}
                     >
                       <EllipsisVertical className="w-5 h-5" />
                     </button>
@@ -409,15 +333,21 @@ export default function AppSidebar() {
                     </DropdownMenuLabel>
 
                     <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={handleOpenProfile} className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                      <DropdownMenuItem onClick={() => setOpenProfileModal(true)} className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
                         <UserPen className="size-4" /> Profile
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                      <DropdownMenuItem
+                        onClick={() => setOpenSettingsModal(true)}
+                        className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors"
+                      >
                         <Settings className="size-4" /> Settings
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors">
+                      <DropdownMenuItem
+                        onClick={() => setOpenHelpModal(true)}
+                        className="text-foreground dark:text-persona-cream/80 hover:bg-primary/10 dark:hover:bg-white/10 cursor-pointer focus:bg-primary/10 dark:focus:bg-white/10 transition-colors"
+                      >
                         <MessageCircleQuestionMark className="size-4" />
                         Help & Support
                       </DropdownMenuItem>
@@ -472,144 +402,23 @@ export default function AppSidebar() {
       </SidebarFooter>
 
       {/* ─── PROFILE MODAL ─── */}
-      <Dialog open={openProfileModal} onOpenChange={setOpenProfileModal}>
-        <DialogContent className="sm:max-w-[500px] dark:bg-persona-dark dark:border-white/10 dark:text-persona-cream p-0 overflow-hidden">
-          {/* Modal Header with gradient */}
-          <div className="relative bg-gradient-to-br from-primary/20 to-primary/5 dark:from-primary/30 dark:to-transparent px-6 pt-6 pb-8">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold dark:text-white">Edit Profile</DialogTitle>
-              <p className="text-sm text-muted-foreground dark:text-persona-cream/60 mt-1">
-                Update your personal information
-              </p>
-            </DialogHeader>
+      <ProfileModal
+        isOpen={openProfileModal}
+        onClose={() => setOpenProfileModal(false)}
+        onProfileUpdate={(updatedUser) => {
+          setUser({
+            name: updatedUser.name,
+            email: updatedUser.email || user.email,
+            picture: updatedUser.picture || null,
+          });
+        }}
+      />
 
-            {/* Avatar preview + picture URL */}
-            <div className="mt-5 flex items-center gap-4">
-              <div className="relative shrink-0 group">
-                <label className="cursor-pointer">
-                  <Avatar className="w-16 h-16 rounded-2xl ring-2 ring-primary/30 transition-opacity group-hover:opacity-80">
-                    <AvatarImage
-                      src={profileForm.picture || "https://github.com/shadcn.png"}
-                      alt="Profile preview"
-                      className="object-cover"
-                    />
-                    <AvatarFallback className="text-lg rounded-2xl">
-                      {getInitials(`${profileForm.firstName} ${profileForm.lastName}`)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center shadow-md">
-                    <Camera className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                </label>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-muted-foreground dark:text-persona-cream/60 uppercase tracking-wider flex justify-between items-center">
-                  <span>Profile Picture URL (Optional)</span>
-                  {profileForm.picture?.startsWith('data:image') && (
-                    <span className="text-green-500 font-semibold normal-case">Local image ready</span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder={profileForm.picture?.startsWith('data:image') ? "Local image attached..." : "https://example.com/avatar.jpg"}
-                  value={profileForm.picture?.startsWith('data:image') ? "" : profileForm.picture}
-                  onChange={(e) => setProfileForm((f) => ({ ...f, picture: e.target.value }))}
-                  disabled={profileForm.picture?.startsWith('data:image')}
-                  className="mt-1 w-full text-sm px-3 py-2 rounded-lg border border-border dark:border-white/10 bg-background/50 dark:bg-white/5 dark:text-persona-cream placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                {profileForm.picture?.startsWith('data:image') && (
-                  <button
-                    type="button"
-                    onClick={() => setProfileForm(f => ({ ...f, picture: "" }))}
-                    className="mt-1.5 text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer font-medium"
-                  >
-                    Remove local image
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* ─── SETTINGS MODAL ─── */}
+      <SettingsModal isOpen={openSettingsModal} onClose={() => setOpenSettingsModal(false)} />
 
-          {/* Form fields */}
-          <div className="px-6 py-5 space-y-4">
-            {/* Name row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground dark:text-persona-cream/60 uppercase tracking-wider mb-1.5">
-                  <UserIcon className="w-3 h-3" /> First Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="John"
-                  value={profileForm.firstName}
-                  onChange={(e) => setProfileForm((f) => ({ ...f, firstName: e.target.value }))}
-                  className="w-full text-sm px-3 py-2.5 rounded-lg border border-border dark:border-white/10 bg-background/50 dark:bg-white/5 dark:text-persona-cream placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                />
-              </div>
-              <div>
-                <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground dark:text-persona-cream/60 uppercase tracking-wider mb-1.5">
-                  <UserIcon className="w-3 h-3" /> Last Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="Doe"
-                  value={profileForm.lastName}
-                  onChange={(e) => setProfileForm((f) => ({ ...f, lastName: e.target.value }))}
-                  className="w-full text-sm px-3 py-2.5 rounded-lg border border-border dark:border-white/10 bg-background/50 dark:bg-white/5 dark:text-persona-cream placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Username */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground dark:text-persona-cream/60 uppercase tracking-wider mb-1.5">
-                <AtSign className="w-3 h-3" /> Username
-              </label>
-              <input
-                type="text"
-                placeholder="johndoe"
-                value={profileForm.username}
-                onChange={(e) => setProfileForm((f) => ({ ...f, username: e.target.value }))}
-                className="w-full text-sm px-3 py-2.5 rounded-lg border border-border dark:border-white/10 bg-background/50 dark:bg-white/5 dark:text-persona-cream placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-              />
-            </div>
-
-            {/* Bio */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground dark:text-persona-cream/60 uppercase tracking-wider mb-1.5">
-                <FileText className="w-3 h-3" /> Bio
-              </label>
-              <textarea
-                rows={3}
-                placeholder="Tell us a little about yourself..."
-                value={profileForm.bio}
-                onChange={(e) => setProfileForm((f) => ({ ...f, bio: e.target.value }))}
-                className="w-full text-sm px-3 py-2.5 rounded-lg border border-border dark:border-white/10 bg-background/50 dark:bg-white/5 dark:text-persona-cream placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Footer buttons */}
-          <DialogFooter className="px-6 py-4 border-t dark:border-white/10 bg-black/5 dark:bg-white/3 flex gap-2">
-            <button
-              onClick={() => setOpenProfileModal(false)}
-              disabled={isSavingProfile}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border dark:border-white/10 text-sm font-medium text-muted-foreground dark:text-persona-cream/70 hover:bg-black/5 dark:hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <X className="w-4 h-4" /> Cancel
-            </button>
-            <button
-              onClick={handleSaveProfile}
-              disabled={isSavingProfile}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-sm font-semibold text-white shadow-persona-purple hover:shadow-persona-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              {isSavingProfile ? "Saving..." : "Save Changes"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ─── HELP MODAL ─── */}
+      <HelpFeedbackModal isOpen={openHelpModal} onClose={() => setOpenHelpModal(false)} />
 
     </Sidebar>
   );

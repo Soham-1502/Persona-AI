@@ -22,7 +22,6 @@ import {
 } from '../components/dashboard/Card/Metrics';
 import { mockUserDashboardData } from '@/lib/mockUserData';
 import { getAuthToken } from '@/lib/auth-client';
-
 export default function Home() {
   const [selectedDate, onDateChange] = useState('today');
 
@@ -166,4 +165,4 @@ export default function Home() {
       </div>
     </div>
   );
-}
+            }

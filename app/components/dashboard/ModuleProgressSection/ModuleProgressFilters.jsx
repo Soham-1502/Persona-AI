@@ -31,7 +31,7 @@ export function ProgressStatusFilter({ value, onValueChange }) {
       <ToggleGroupItem
         value="all"
         aria-label="Toggle All"
-        className="data-[state=on]:bg-red-500/20 data-[state=on]:text-red-500 [&[data-state=on]>svg]:fill-red-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-red-800"
+        className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-red-500/20 data-[state=on]:text-red-500 [&[data-state=on]>svg]:fill-red-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-red-800"
       >
         <Star />
         All
@@ -39,7 +39,7 @@ export function ProgressStatusFilter({ value, onValueChange }) {
       <ToggleGroupItem
         value="completed"
         aria-label="Toggle Completed"
-        className="data-[state=on]:bg-green-500/20 data-[state=on]:text-green-500 [&[data-state=on]>svg]:fill-green-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-green-800"
+        className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-green-500/20 data-[state=on]:text-green-500 [&[data-state=on]>svg]:fill-green-500 [&[data-state=on]>svg]:text-white data-[state=on]:border-green-800"
       >
         <CircleCheck />
         Completed
@@ -47,18 +47,10 @@ export function ProgressStatusFilter({ value, onValueChange }) {
       <ToggleGroupItem
         value="inprogress"
         aria-label="Toggle In Progress"
-        className="data-[state=on]:bg-blue-500/20 data-[state=on]:text-blue-400 [&[data-state=on]>svg]:fill-blue-400 data-[state=on]:border-blue-800"
+        className="hover:text-foreground hover:bg-primary/10 transition-colors data-[state=on]:bg-blue-500/20 data-[state=on]:text-blue-400 [&[data-state=on]>svg]:fill-blue-400 data-[state=on]:border-blue-800"
       >
         <Loader />
         In Progress
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value="pending"
-        aria-label="Toggle Pending"
-        className="data-[state=on]:bg-yellow-500/20 data-[state=on]:text-white [&[data-state=on]>svg]:fill-yellow-400 [&[data-state=on]>svg]:stroke-white data-[state=on]:border-yellow-800"
-      >
-        <Clock />
-        Pending
       </ToggleGroupItem>
     </ToggleGroup>
   )
@@ -75,8 +67,8 @@ export function CategoryFilter({ value, onValueChange }) {
 
   return (
     <DropdownMenu value={value} onValueChange={onValueChange}>
-      <DropdownMenuTrigger asChild className="cursor-pointer border-muted border-2 hover:border-ring transition-all duration-200 ease-in-out hover:bg-transparent w-full md:w-auto">
-        <button className="flex items-center gap-1 px-3 py-1 rounded-lg border text-sm bg-transparent hover:bg-muted transition w-full md:w-auto min-w-0 overflow-hidden">
+      <DropdownMenuTrigger asChild className="cursor-pointer border-muted border-2 hover:border-ring transition-all duration-200 ease-in-out hover:bg-primary/10 hover:text-foreground w-full md:w-auto">
+        <button className="flex items-center gap-1 px-3 py-1 rounded-lg border text-sm bg-transparent transition w-full md:w-auto min-w-0 overflow-hidden">
           <span className="truncate">{labels[value]}</span> <ChevronDown className="shrink-0" />
         </button>
       </DropdownMenuTrigger>
@@ -104,7 +96,8 @@ export function SortSelect({ value, onValueChange }) {
           rounded-lg
           text-sm
           dark:hover:bg-transparent
-          hover:border-ring hover:bg-transparent
+          hover:border-ring hover:bg-primary/10
+          hover:text-foreground
           transition-all duration-200 ease-in-out
           cursor-pointer
           w-full md:w-auto min-w-0

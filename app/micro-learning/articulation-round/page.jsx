@@ -2,28 +2,72 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
+import BackButton from '@/app/components/micro-learning/BackButton';
+import { 
+  AlertTriangle, 
+  X, 
+  Mic, 
+  Square, 
+  Sparkles, 
+  Loader2 
+} from 'lucide-react';
 
 export default function ArticulationRound() {
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const [text, setText] = useState('');
   const [interimText, setInterimText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isLight = resolvedTheme === 'light';
+
   // Get transcript from localStorage (set by quiz page)
   const transcript = typeof window !== 'undefined'
     ? localStorage.getItem('quizTranscript') || ''
     : '';
 
+  // Mark the active session as being in the "articulation" stage
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const markArticulationStage = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token || !sessionId) return;
+        await fetch('/api/micro-learning/active-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            sessionId,
+            gameType: 'voice',
+            title: videoTitle,
+            quizState: {
+              stage: 'articulation',
+              videoTitle
+            }
+          })
+        });
+      } catch { /* silent */ }
+    };
+    markArticulationStage();
+  }, []);
+
+  // Speech recognition setup
+  useEffect(() => {
+    const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
@@ -125,11 +169,56 @@ export default function ArticulationRound() {
       const data = await res.json();
 
       if (data.success) {
-        // Store analysis + user text for the results page
+        // Store analysis + user text for the results page (REQUIRED for /articulation-results page to show data)
         localStorage.setItem('articulationResult', JSON.stringify({
           analysis: data.analysis,
           userText: text
         }));
+
+        // Retrieve or generate sessionId
+        const sessionId = localStorage.getItem('ml_sessionId') || `ml_art_${Date.now()}`;
+        const token = localStorage.getItem('token');
+        setIsSaving(true);
+
+        // ─── PERSIST TO BACKEND ───
+        try {
+          await fetch('/api/micro-learning/attempt', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              moduleId: 'microLearning',
+              gameType: 'voice',
+              sessionId,
+              question: 'Neural Articulation Round',
+              userAnswer: text,
+              correctAnswer: 'Synthesized explanation based on transcript',
+              isCorrect: data.analysis.accuracy >= 60,
+              score: Math.round(data.analysis.accuracy),
+              difficulty: 'hard',
+              timeTaken: 60 // Fixed estimate for articulation
+            })
+          });
+          console.log('✅ Articulation results persisted to backend');
+        } catch (persistErr) {
+          console.error('❌ Persistence error:', persistErr);
+        } finally {
+          setIsSaving(false);
+        }
+
+        // ─── CLEAR ACTIVE SESSION ON COMPLETION ───
+        try {
+          if (token) {
+            await fetch('/api/micro-learning/active-session', {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+          }
+        } catch (err) {
+          console.error('Failed to clear active session:', err);
+        }
 
         // Redirect to results page
         router.push('/micro-learning/articulation-results');
@@ -146,13 +235,15 @@ export default function ArticulationRound() {
     }
   };
 
+  if (!mounted) return null;
+
   const displayText = text + (interimText ? (text ? ' ' : '') + interimText : '');
   const charCount = displayText.length;
   const isSubmitEnabled = charCount >= 20 && !isAnalyzing && !isRecording;
 
   // Status text & LED state
   let statusText = 'READY FOR INPUT';
-  let ledColor = '#10b981';
+  let ledColor = isLight ? '#059669' : '#10b981';
   let ledClass = 'pulse-green';
   if (isRecording) {
     statusText = 'LIVE RECORDING...';
@@ -160,7 +251,7 @@ export default function ArticulationRound() {
     ledClass = 'pulse-red';
   } else if (isTranscribing) {
     statusText = 'FINALIZING TEXT...';
-    ledColor = '#934CF0';
+    ledColor = isLight ? '#7C3AED' : '#934CF0';
     ledClass = '';
   }
 
@@ -168,8 +259,8 @@ export default function ArticulationRound() {
     <div
       className="ml-articulation-root"
       style={{
-        backgroundColor: '#181022',
-        color: '#fff',
+        backgroundColor: 'transparent',
+        color: isLight ? '#242038' : '#fff',
         width: '100%',
         maxWidth: '100%',
         minHeight: '100vh',
@@ -182,11 +273,7 @@ export default function ArticulationRound() {
         padding: '16px',
       }}
     >
-      {/* Theme overlays */}
-      <div className="scanline" />
-      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -100, left: -100 }} />
-      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -50, right: -50 }} />
-
+      <BackButton target="back" />
       {/* Main content */}
       <main
         style={{
@@ -213,10 +300,10 @@ export default function ArticulationRound() {
             marginBottom: '10px',
             lineHeight: 1.1,
           }}>
-            Neural <span style={{ color: '#934CF0' }}>Articulation</span>
+            Neural <span style={{ color: isLight ? '#9067C6' : '#934CF0' }}>Articulation</span>
           </h1>
           <p style={{
-            color: '#94A3B8',
+            color: isLight ? '#64748b' : '#94A3B8',
             fontSize: '1.15rem',
             fontWeight: '500',
           }}>
@@ -229,7 +316,7 @@ export default function ArticulationRound() {
           <div style={{
             width: '100%',
             marginBottom: '24px',
-            background: 'rgba(244, 63, 94, 0.1)',
+            background: isLight ? 'rgba(244, 63, 94, 0.05)' : 'rgba(244, 63, 94, 0.1)',
             border: '1px solid rgba(244, 63, 94, 0.3)',
             backdropFilter: 'blur(10px)',
             WebkitBackdropFilter: 'blur(10px)',
@@ -242,7 +329,7 @@ export default function ArticulationRound() {
             animation: 'shakeIn 0.4s ease',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+              <AlertTriangle size={18} />
               <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{error}</span>
             </div>
             <button
@@ -259,26 +346,29 @@ export default function ArticulationRound() {
               onMouseEnter={e => e.currentTarget.style.opacity = '1'}
               onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
             >
-              ✕
+              <X size={18} />
             </button>
           </div>
         )}
 
         {/* Main Card */}
-        <div style={{
-          width: '100%',
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'rgba(147, 76, 240, 0.05)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '40px',
-          padding: 'clamp(20px, 3vw, 40px)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-          minHeight: 0,
-        }}>
+        <div 
+          className="glass-card"
+          style={{
+            width: '100%',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            background: isLight ? 'rgba(255, 255, 255, 0.6)' : 'rgba(147, 76, 240, 0.05)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: `1px solid ${isLight ? 'rgba(144, 103, 198, 0.15)' : 'rgba(255, 255, 255, 0.1)'}`,
+            borderRadius: '40px',
+            padding: 'clamp(20px, 3vw, 40px)',
+            boxShadow: isLight ? '0 25px 50px -12px rgba(144, 103, 198, 0.1)' : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            minHeight: 0,
+          }}
+        >
           {/* Status Bar + Mic Button */}
           <div style={{
             display: 'flex',
@@ -288,8 +378,8 @@ export default function ArticulationRound() {
           }}>
             {/* Status Pill */}
             <div style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.05)',
+              background: isLight ? 'rgba(144, 103, 198, 0.05)' : 'rgba(255, 255, 255, 0.03)',
+              border: `1px solid ${isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(255, 255, 255, 0.05)'}`,
               backdropFilter: 'blur(10px)',
               borderRadius: '999px',
               padding: '10px 20px',
@@ -308,7 +398,7 @@ export default function ArticulationRound() {
                 }}
               />
               <span style={{
-                color: '#94A3B8',
+                color: isLight ? '#64748b' : '#94A3B8',
                 fontSize: '10px',
                 fontWeight: '700',
                 letterSpacing: '0.2em',
@@ -324,7 +414,7 @@ export default function ArticulationRound() {
               style={{
                 background: isRecording
                   ? '#f43f5e'
-                  : 'linear-gradient(135deg, #934CF0, #4338CA)',
+                  : `linear-gradient(135deg, ${isLight ? '#9067C6' : '#934CF0'}, ${isLight ? '#4338CA' : '#4338CA'})`,
                 color: '#fff',
                 border: 'none',
                 padding: '14px 32px',
@@ -336,9 +426,10 @@ export default function ArticulationRound() {
                 alignItems: 'center',
                 gap: '12px',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: isLight ? '0 4px 12px rgba(144, 103, 198, 0.2)' : 'none',
               }}
             >
-              <span>{isRecording ? '⏹' : '🎤'}</span>
+              <span>{isRecording ? <Square size={18} fill="#fff" /> : <Mic size={18} />}</span>
               <span>{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
             </button>
           </div>
@@ -355,11 +446,11 @@ export default function ArticulationRound() {
                 width: '100%',
                 height: '100%',
                 minHeight: '150px',
-                background: '#050505',
-                border: `1px solid ${isRecording ? 'rgba(244, 63, 94, 0.5)' : error ? 'rgba(244, 63, 94, 0.3)' : 'rgba(147, 76, 240, 0.2)'}`,
+                background: isLight ? 'rgba(255, 255, 255, 0.8)' : '#050505',
+                border: `1px solid ${isRecording ? 'rgba(244, 63, 94, 0.5)' : error ? 'rgba(244, 63, 94, 0.3)' : (isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.2)')}`,
                 borderRadius: '24px',
                 padding: '32px',
-                color: '#fff',
+                color: isLight ? '#242038' : '#fff',
                 fontSize: '1.15rem',
                 lineHeight: '1.7',
                 outline: 'none',
@@ -367,18 +458,18 @@ export default function ArticulationRound() {
                 fontFamily: 'inherit',
                 transition: 'all 0.3s ease',
                 boxShadow: isRecording
-                  ? '0 0 25px rgba(244, 63, 94, 0.2)'
-                  : 'none',
+                   ? '0 0 25px rgba(244, 63, 94, 0.2)'
+                   : 'none',
               }}
               onFocus={e => {
                 if (!isRecording) {
-                  e.currentTarget.style.borderColor = '#934CF0';
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(147, 76, 240, 0.15)';
+                  e.currentTarget.style.borderColor = isLight ? '#9067C6' : '#934CF0';
+                  e.currentTarget.style.boxShadow = isLight ? '0 0 20px rgba(144, 103, 198, 0.1)' : '0 0 20px rgba(147, 76, 240, 0.15)';
                 }
               }}
               onBlur={e => {
                 if (!isRecording) {
-                  e.currentTarget.style.borderColor = 'rgba(147, 76, 240, 0.2)';
+                  e.currentTarget.style.borderColor = isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.2)';
                   e.currentTarget.style.boxShadow = 'none';
                 }
               }}
@@ -392,10 +483,10 @@ export default function ArticulationRound() {
               alignItems: 'center',
               gap: '4px',
               fontSize: '12px',
-              color: '#52525b',
+              color: isLight ? '#64748b' : '#52525b',
               fontWeight: '500',
             }}>
-              <span style={{ color: charCount >= 20 ? '#934CF0' : '#52525b' }}>{charCount}</span>
+              <span style={{ color: charCount >= 20 ? (isLight ? '#9067C6' : '#934CF0') : (isLight ? '#64748b' : '#52525b') }}>{charCount}</span>
               <span>/ 20 min characters</span>
             </div>
           </div>
@@ -409,8 +500,8 @@ export default function ArticulationRound() {
               padding: '24px',
               borderRadius: '16px',
               background: isSubmitEnabled
-                ? (error ? '#f43f5e' : 'linear-gradient(135deg, #934CF0, #4338CA)')
-                : 'linear-gradient(135deg, #934CF0, #4338CA)',
+                ? (error ? '#f43f5e' : `linear-gradient(135deg, ${isLight ? '#9067C6' : '#934CF0'}, ${isLight ? '#4338CA' : '#4338CA'})`)
+                : `linear-gradient(135deg, ${isLight ? '#9067C6' : '#934CF0'}, ${isLight ? '#4338CA' : '#4338CA'})`,
               color: '#fff',
               fontWeight: '800',
               border: 'none',
@@ -422,16 +513,17 @@ export default function ArticulationRound() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '12px',
+              boxShadow: isSubmitEnabled && isLight ? '0 10px 20px rgba(144, 103, 198, 0.2)' : 'none',
             }}
             onMouseEnter={e => {
               if (isSubmitEnabled) {
                 e.currentTarget.style.transform = 'scale(1.02)';
-                e.currentTarget.style.boxShadow = '0 0 30px rgba(147, 76, 240, 0.4)';
+                e.currentTarget.style.boxShadow = isLight ? '0 10px 40px rgba(144, 103, 198, 0.3)' : '0 0 30px rgba(147, 76, 240, 0.4)';
               }
             }}
             onMouseLeave={e => {
               e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.boxShadow = isSubmitEnabled && isLight ? '0 10px 20px rgba(144, 103, 198, 0.2)' : 'none';
             }}
             onMouseDown={e => {
               if (isSubmitEnabled) e.currentTarget.style.transform = 'scale(0.98)';
@@ -441,14 +533,13 @@ export default function ArticulationRound() {
             }}
           >
             <span>
-              {isAnalyzing ? 'Processing Neural Audit...' : error ? 'Retry Audit' : 'Analyze My Explanation'}
+              {isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : isSaving ? <Loader2 size={18} className="animate-spin" /> : error ? 'Retry Audit' : 'Analyze My Explanation'}
             </span>
-            {!isAnalyzing && <span>✨</span>}
+            {!isAnalyzing && !isSaving && <Sparkles size={18} />}
           </button>
         </div>
       </main>
 
-      {/* Scoped CSS */}
       <style>{`
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(40px); }
@@ -465,7 +556,7 @@ export default function ArticulationRound() {
           100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
         }
         @keyframes pulse-green {
-          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+          0% { transform: scale(0.95); box-shadow: 0 0 0 0 ${isLight ? 'rgba(5, 150, 105, 0.2)' : 'rgba(16, 185, 129, 0.4)'}; }
           70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
           100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
@@ -475,22 +566,25 @@ export default function ArticulationRound() {
         .pulse-green {
           animation: pulse-green 2s infinite;
         }
-        textarea::-webkit-scrollbar {
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        .articulation-textarea::-webkit-scrollbar {
           width: 6px;
         }
-        textarea::-webkit-scrollbar-track {
+        .articulation-textarea::-webkit-scrollbar-track {
           background: transparent;
         }
-        textarea::-webkit-scrollbar-thumb {
-          background: rgba(147, 76, 240, 0.3);
+        .articulation-textarea::-webkit-scrollbar-thumb {
+          background: ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.3)'};
           border-radius: 10px;
         }
-        textarea::-webkit-scrollbar-thumb:hover {
-          background: rgba(147, 76, 240, 0.5);
+        .articulation-textarea::-webkit-scrollbar-thumb:hover {
+          background: ${isLight ? 'rgba(144, 103, 198, 0.4)' : 'rgba(147, 76, 240, 0.5)'};
         }
-        textarea {
+        .articulation-textarea {
           scrollbar-width: thin;
-          scrollbar-color: rgba(147, 76, 240, 0.3) transparent;
+          scrollbar-color: ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.3)'} transparent;
         }
 
         /* Layout responsiveness */

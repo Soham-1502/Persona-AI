@@ -14,7 +14,7 @@ export default function DashboardLayout({ children }) {
     if (!isAuthenticated()) {
       // Token is either missing, invalid, or expired. 
       // isAuthenticated() automatically securely clears it if it was expired.
-      router.push('/login');
+      router.push('/');
     } else {
       // Token exists and is valid
       setIsAuthenticatedState(true);

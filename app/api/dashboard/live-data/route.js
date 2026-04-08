@@ -1,205 +1,247 @@
-// app/api/dashboard/live-data/route.js
-// Unified endpoint: returns real InQuizzo UserAttempt records shaped like
-// mockSessions, plus all-time module-progress stats and streak.
+import { NextResponse } from "next/server";
+import { authenticate } from "@/lib/auth";
+import UserAttempt from "@/models/UserAttempt";
+import ActiveQuizSession from "@/models/ActiveQuizSession";
+import ChatSession from "@/models/chatSession.model";
+import { startOfDay, endOfDay, subDays, format } from "date-fns";
+import User from "@/models/User";
 
-import { NextResponse } from 'next/server';
-import { authenticate } from '@/lib/auth';
-import connectDB from '@/lib/db';
-import UserAttempt from '@/models/UserAttempt';
-import ActiveQuizSession from '@/models/ActiveQuizSession';
-import mongoose from 'mongoose';
+const buildDateFilter = (start) => ({
+    timestamp: { $gte: start }
+});
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+const buildPrevDateFilter = (start, end) => ({
+    timestamp: { $gte: start, $lte: end }
+});
 
-function toLocalDateStr(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
+const buildChatDateFilter = (start) => ({
+    updatedAt: { $gte: start }
+});
 
-/** Convert a raw UserAttempt document into the session shape dashboard expects */
-function attemptToSession(attempt) {
-    return {
-        _id: attempt._id.toString(),
-        date: toLocalDateStr(new Date(attempt.timestamp)),
-        module: 'inQuizzo',            // ActivityChart groups on this key
-        isVoiceQuiz: attempt.gameType === 'voice',
-        confidenceDelta: attempt.isCorrect ? 2 : 1,
-        duration: attempt.timeTaken ?? 30,
-    };
-}
+const buildChatPrevDateFilter = (start, end) => ({
+    updatedAt: { $gte: start, $lte: end }
+});
 
-/**
- * Compute the current consecutive-day streak from an array of unique date strings
- * (e.g. ['2026-03-03', '2026-03-02', ...]) sorted descending.
- */
-function computeStreak(uniqueDatesSortedDesc) {
-    if (!uniqueDatesSortedDesc.length) return 0;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let streak = 0;
-    let cursor = new Date(today);
-
-    for (const dateStr of uniqueDatesSortedDesc) {
-        const d = new Date(dateStr);
-        d.setHours(0, 0, 0, 0);
-
-        if (d.getTime() === cursor.getTime()) {
-            streak++;
-            cursor.setDate(cursor.getDate() - 1);
-        } else if (d.getTime() > cursor.getTime()) {
-            continue; // skip future dates
-        } else {
-            break; // gap found
-        }
-    }
-    return streak;
-}
-
-// ─── route ────────────────────────────────────────────────────────────────────
-
-export async function GET(req) {
+export async function GET(request) {
     try {
-        await connectDB();
-        const user = await authenticate(req);
-
-        if (!user) {
-            return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
-        }
-
-        const userId = new mongoose.Types.ObjectId(user._id);
-
-        // --- Parse range ---
-        const { searchParams } = new URL(req.url);
+        const user = await authenticate(request);
+        const { searchParams } = new URL(request.url);
         const range = searchParams.get('range') || 'last7';
 
-        const now = new Date();
+        let currentStart = startOfDay(subDays(new Date(), 7));
+        let prevStart = startOfDay(subDays(new Date(), 14));
+        let prevEnd = endOfDay(subDays(new Date(), 8));
 
-        function buildDateFilter(start) {
-            return { timestamp: { $gte: start } };
+        if (range === 'last30') {
+            currentStart = startOfDay(subDays(new Date(), 30));
+            prevStart = startOfDay(subDays(new Date(), 60));
+            prevEnd = endOfDay(subDays(new Date(), 31));
+        } else if (range === 'today') {
+            currentStart = startOfDay(new Date());
+            prevStart = startOfDay(subDays(new Date(), 1));
+            prevEnd = endOfDay(subDays(new Date(), 1));
         }
 
-        function buildPrevDateFilter(start, end) {
-            return { timestamp: { $gte: start, $lte: end } };
-        }
-
-        let currentStart, prevStart, prevEnd;
-
-        if (range === 'today') {
-            currentStart = new Date(now); currentStart.setHours(0, 0, 0, 0);
-            prevStart = new Date(currentStart); prevStart.setDate(prevStart.getDate() - 1);
-            prevEnd = new Date(currentStart); prevEnd.setMilliseconds(prevEnd.getMilliseconds() - 1);
-        } else if (range === 'last7') {
-            currentStart = new Date(now); currentStart.setDate(now.getDate() - 6); currentStart.setHours(0, 0, 0, 0);
-            prevStart = new Date(currentStart); prevStart.setDate(prevStart.getDate() - 7);
-            prevEnd = new Date(currentStart); prevEnd.setMilliseconds(prevEnd.getMilliseconds() - 1);
-        } else { // last30
-            currentStart = new Date(now); currentStart.setDate(now.getDate() - 29); currentStart.setHours(0, 0, 0, 0);
-            prevStart = new Date(currentStart); prevStart.setDate(prevStart.getDate() - 30);
-            prevEnd = new Date(currentStart); prevEnd.setMilliseconds(prevEnd.getMilliseconds() - 1);
-        }
-
-        const baseFilter = { userId, moduleId: 'inQuizzo' };
+        const userId = user._id;
+        const baseFilter = { userId };
 
         // --- Fetch all queries in parallel ---
-        const [currentAttempts, previousAttempts, allTimeAgg, allTimeDates, activeSession] = await Promise.all([
+        const [
+            currentAttemptsRaw,
+            previousAttemptsRaw,
+            activeSession,
+            aggregatedData,
+            currentMentorSessionsRaw,
+            previousMentorSessionsRaw
+        ] = await Promise.all([
             // Current period attempts
             UserAttempt.find({ ...baseFilter, ...buildDateFilter(currentStart) })
+                .select('_id timestamp gameType isCorrect timeTaken sessionId moduleId')
                 .sort({ timestamp: -1 })
                 .lean(),
 
-            // Previous period attempts (for badges)
+            // Previous period attempts
             UserAttempt.find({ ...baseFilter, ...buildPrevDateFilter(prevStart, prevEnd) })
+                .select('_id timestamp gameType isCorrect timeTaken sessionId moduleId')
                 .sort({ timestamp: -1 })
                 .lean(),
-
-            // All-time aggregation for module progress section
-            UserAttempt.aggregate([
-                { $match: baseFilter },
-                {
-                    $group: {
-                        _id: '$sessionId',
-                        sessionCorrect: { $sum: { $cond: ['$isCorrect', 1, 0] } },
-                        sessionCount: { $sum: 1 },
-                    },
-                },
-                {
-                    $group: {
-                        _id: null,
-                        totalQuestions: { $sum: '$sessionCount' },
-                        totalCorrect: { $sum: '$sessionCorrect' },
-                        totalSessions: { $sum: 1 },
-                    },
-                },
-            ]),
-
-            // All-time unique session dates for streak calculation
-            UserAttempt.aggregate([
-                { $match: baseFilter },
-                {
-                    $group: {
-                        _id: {
-                            $dateToString: {
-                                format: '%Y-%m-%d',
-                                date: '$timestamp',
-                                timezone: 'Asia/Kolkata',
-                            }
-                        }
-                    }
-                },
-                { $sort: { _id: -1 } },
-            ]),
 
             // Active session (if any)
             ActiveQuizSession.findOne({ userId }).lean(),
+
+            UserAttempt.aggregate([
+                { $match: baseFilter },
+                {
+                    $facet: {
+                        sessionData: [
+                            {
+                                $group: {
+                                    _id: '$sessionId',
+                                    sessionCorrect: { $sum: { $cond: ['$isCorrect', 1, 0] } },
+                                    sessionCount: { $sum: 1 },
+                                    lastTimestamp: { $max: '$timestamp' },
+                                    moduleId: { $first: '$moduleId' }
+                                }
+                            }
+                        ],
+                        uniqueDates: [
+                            {
+                                $group: {
+                                    _id: {
+                                        $dateToString: { format: '%Y-%m-%d', date: '$timestamp', timezone: 'Asia/Kolkata' }
+                                    }
+                                }
+                            },
+                            { $sort: { _id: -1 } }
+                        ]
+                    }
+                }
+            ]),
+
+            // Current Social Mentor sessions
+            ChatSession.find({ ...baseFilter, ...buildChatDateFilter(currentStart) })
+                .select('_id updatedAt sessionId')
+                .lean(),
+
+            // Previous Social Mentor sessions
+            ChatSession.find({ ...baseFilter, ...buildChatPrevDateFilter(prevStart, prevEnd) })
+                .select('_id updatedAt sessionId')
+                .lean(),
         ]);
 
-        // --- Shape sessions ---
-        const currentSessions = currentAttempts.map(attemptToSession);
-        const previousSessions = previousAttempts.map(attemptToSession);
+        const mapAttempt = (a) => ({
+            ...a,
+            date: format(new Date(a.timestamp), 'yyyy-MM-dd'),
+            module: a.moduleId || 'inQuizzo',
+            isVoiceQuiz: a.gameType === 'voice'
+        });
 
-        // --- Unique Session Counting (Group by sessionId) ---
-        const currentUniqueSessionIds = new Set(currentAttempts.map(a => a.sessionId).filter(Boolean));
-        const previousUniqueSessionIds = new Set(previousAttempts.map(a => a.sessionId).filter(Boolean));
+        const mapChatSession = (c) => ({
+            _id: c._id,
+            timestamp: c.updatedAt,
+            date: format(new Date(c.updatedAt), 'yyyy-MM-dd'),
+            module: 'socialMentor',
+            sessionId: c.sessionId,
+            isCorrect: false, // Not applicable for mentors
+            isVoiceQuiz: false
+        });
+
+        const currentSessions = [
+            ...currentAttemptsRaw.map(mapAttempt),
+            ...(currentMentorSessionsRaw || []).map(mapChatSession)
+        ];
+
+        const previousSessions = [
+            ...previousAttemptsRaw.map(mapAttempt),
+            ...(previousMentorSessionsRaw || []).map(mapChatSession)
+        ];
+
+        // --- Compatibility Mapping ---
+        const currentUniqueSessionIds = new Set([
+            ...currentAttemptsRaw.map(s => s.sessionId),
+            ...(currentMentorSessionsRaw || []).map(s => s.sessionId)
+        ].filter(Boolean));
+
+        const previousUniqueSessionIds = new Set([
+            ...previousAttemptsRaw.map(s => s.sessionId),
+            ...(previousMentorSessionsRaw || []).map(s => s.sessionId)
+        ].filter(Boolean));
 
         const totalSessions = currentUniqueSessionIds.size;
         const prevTotalSessions = previousUniqueSessionIds.size;
 
-        // --- Voice quiz counts (current & previous period) ---
-        const voiceQuizCount = currentAttempts.filter(a => a.gameType === 'voice').length;
-        const prevVoiceQuizCount = previousAttempts.filter(a => a.gameType === 'voice').length;
+        const voiceQuizCount = currentSessions.filter(s => s.isVoiceQuiz && s.module === 'inQuizzo').length;
+        const prevVoiceQuizCount = previousSessions.filter(s => s.isVoiceQuiz && s.module === 'inQuizzo').length;
 
-        // --- Streak ---
-        const uniqueDates = allTimeDates.map(d => d._id).filter(Boolean);
-        const currentStreak = computeStreak(uniqueDates);
+        const aggResult = aggregatedData[0] || {};
+        const currentStreak = (aggResult.uniqueDates || []).length;
 
-        // --- Confidence score ---
-        // Base 70 + sum of confidenceDeltas in current period sessions
-        const BASE_SCORE = 70;
-        const confidenceScore = Math.min(
-            100,
-            BASE_SCORE + currentSessions.reduce((sum, s) => sum + (s.confidenceDelta || 0), 0)
-        );
+        const currentTotalCorrect = currentSessions.filter(s => s.isCorrect).length;
+        const currentTotalAttempts = currentSessions.length;
+        const confidenceScore = currentTotalAttempts > 0 ? Math.round((currentTotalCorrect / currentTotalAttempts) * 100) : 70;
 
-        // --- Previous confidence score (for badge delta) ---
-        const prevConfidenceScore = Math.min(
-            100,
-            BASE_SCORE + previousSessions.reduce((sum, s) => sum + (s.confidenceDelta || 0), 0)
-        );
+        const prevTotalCorrect = previousSessions.filter(s => s.isCorrect).length;
+        const prevTotalAttempts = previousSessions.length;
+        const prevConfidenceScore = prevTotalAttempts > 0 ? Math.round((prevTotalCorrect / prevTotalAttempts) * 100) : 70;
 
-        // --- Module progress stats ---
-        const agg = allTimeAgg[0] ?? { totalQuestions: 0, totalCorrect: 0, totalSessions: 0 };
+        // --- Robust Statistics Aggregation (Range source of truth matching InQuizzo page) ---
+        let statsStart = new Date();
+        if (range === 'today') {
+            statsStart.setHours(statsStart.getHours() - 24);
+        } else if (range === 'last30') {
+            statsStart.setDate(statsStart.getDate() - 30);
+        } else {
+            statsStart.setDate(statsStart.getDate() - 7);
+        }
 
-        const accuracyProgress = agg.totalQuestions > 0
-            ? Math.round((agg.totalCorrect / agg.totalQuestions) * 100)
+        const statsAgg = await UserAttempt.aggregate([
+            { $match: { userId: user._id, moduleId: 'inQuizzo', timestamp: { $gte: statsStart } } },
+            {
+                $group: {
+                    _id: "$sessionId",
+                    sessionScore: { $sum: "$score" },
+                    sessionCorrect: { $sum: { $cond: ["$isCorrect", 1, 0] } },
+                    sessionCount: { $sum: 1 }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: "$sessionCount" },
+                    correct: { $sum: "$sessionCorrect" },
+                    totalScore: { $sum: "$sessionScore" },
+                    totalSessions: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const rangeData = statsAgg[0] || { count: 0, correct: 0, totalScore: 0, totalSessions: 0 };
+        const rangeCount = rangeData.count;
+        const rangeCorrect = rangeData.correct;
+        const rangeScore = rangeData.totalScore;
+
+        const accuracyProgress = rangeCount > 0
+            ? Math.round((rangeCorrect / rangeCount) * 100)
             : 0;
-        const questionsProgress = Math.min(100, Math.round((agg.totalQuestions / 200) * 100));
-        const sessionsProgress = Math.min(100, Math.round((agg.totalSessions / 20) * 100));
+
+        const questionsProgress = Math.min(100, Math.round((rangeCount / 100) * 100));
+
+        // Cap the visual progress bar for score at an arbitrary value (e.g. 5000), but show exact score in label
+        const scoreProgress = Math.min(100, Math.round((rangeScore / 5000) * 100));
+
+        // Social Mentor session count logic
+        let smCount = 0;
+        if (currentMentorSessionsRaw) {
+            const uniqueSmIds = new Set(currentMentorSessionsRaw.map(s => s.sessionId).filter(Boolean));
+            smCount = uniqueSmIds.size;
+        }
+
+        // Last completed session logic
+        const lastSessionRaw = aggResult.sessionData?.[0];
+        const lastCompletedSessionData = lastSessionRaw ? {
+            sessionId: lastSessionRaw._id,
+            title: lastSessionRaw.moduleId?.toLowerCase() === 'microlearning' ? 'Micro-Learning Review' : 'Quiz Review',
+            progress: 100,
+            lastTimestamp: lastSessionRaw.lastTimestamp
+        } : null;
+
+        // --- Tags for Main Metric Cards ---
+        let questsTag = "";
+        let accuracyTag = "";
+
+        if (range === 'today') {
+            questsTag = "Today";
+            accuracyTag = "Today";
+        } else if (range === 'last7') {
+            questsTag = "Last 7 Days";
+            accuracyTag = "Last 7 Days";
+        } else {
+            questsTag = "Last 30 Days";
+            accuracyTag = "Last 30 Days";
+        }
 
         return NextResponse.json({
+            success: true,
             currentSessions,
             previousSessions,
             voiceQuizCount,
@@ -209,40 +251,49 @@ export async function GET(req) {
             prevConfidenceScore,
             totalSessions,
             prevTotalSessions,
+            activeSession: activeSession ? {
+                id: activeSession._id,
+                sessionId: activeSession.sessionId || activeSession._id,
+                title: activeSession.title || (activeSession.moduleId === 'microLearning' ? 'Micro-Learning' : 'In-Progress Challenge'),
+                progress: activeSession.questionsAnswered || 0,
+                startTime: activeSession.startTime,
+                moduleId: activeSession.moduleId || 'inquizzo',
+                stage: activeSession.quizState?.stage || null,
+                videoId: activeSession.quizState?.videoId || null,
+                playlistId: activeSession.quizState?.playlistId || null,
+            } : null,
+            lastCompletedSession: lastCompletedSessionData,
             moduleProgress: {
                 accuracyProgress,
                 questionsProgress,
-                sessionsProgress,
-                totalQuestions: agg.totalQuestions,
-                totalCorrect: agg.totalCorrect,
-                totalSessions: agg.totalSessions,
+                scoreProgress,
+                socialMentorSessionsVal: smCount,
+                socialMentorSessionsProgress: Math.min(100, Math.round((smCount / 20) * 100)), // arbitrary cap
+                // Display labels for the UI
+                accuracyLabel: `${accuracyProgress}% Accuracy`,
+                questionsLabel: `${rangeCount} Questions`,
+                scoreLabel: `${rangeScore} Pts`,
+                socialMentorSessionsLabel: `${smCount} Sessions`,
+                // Legacy support
+                accuracy: accuracyProgress,
+                logic: accuracyProgress
             },
-            activeSession: activeSession ? {
-                sessionId: activeSession.sessionId,
-                gameType: activeSession.gameType,
-                progress: activeSession.questionsAnswered,
-                totalQuestions: 10,
-                title: activeSession.config?.topic || activeSession.config?.category || 'Active Session',
-                lastUpdated: activeSession.updatedAt
-            } : null,
-            lastCompletedSession: await UserAttempt.aggregate([
-                { $match: baseFilter },
-                { $group: { _id: '$sessionId', count: { $sum: 1 }, lastTimestamp: { $max: '$timestamp' }, question: { $first: '$question' } } },
-                { $match: { count: { $gte: 10 } } },
-                { $sort: { lastTimestamp: -1 } },
-                { $limit: 1 }
-            ]).then(res => res[0] ? {
-                sessionId: res[0]._id,
-                title: 'Last Completed Session',
-                timestamp: res[0].lastTimestamp
-            } : null)
+            stats: {
+                questsAnswered: rangeCount,
+                accuracyRate: accuracyProgress,
+                questsChangeTag: questsTag,
+                accuracyTag: accuracyTag,
+                totalXP: user.gameStats?.totalScore || 0,
+                rank: user.gameStats?.rank || "Explorer",
+                lessonsCompleted: rangeData.totalSessions || 0
+            }
         });
 
     } catch (error) {
-        console.error('live-data error:', error);
-        return NextResponse.json(
-            { message: error.message || 'Failed to fetch live data' },
-            { status: error.message === 'No token provided' ? 401 : 500 }
-        );
+        console.error("Dashboard Live Data Error:", error);
+        return NextResponse.json({
+            success: false,
+            message: "Failed to fetch dashboard data"
+        }, { status: 500 });
     }
 }

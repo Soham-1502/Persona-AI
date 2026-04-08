@@ -2,11 +2,29 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
+import BackButton from '@/app/components/micro-learning/BackButton';
+import { 
+  Brain, 
+  Lock, 
+  Check, 
+  ArrowLeft, 
+  ArrowRight, 
+  CheckCircle, 
+  Target, 
+  BarChart2, 
+  AlertTriangle,
+  XCircle,
+  FastForward,
+  Loader2
+} from 'lucide-react';
 
 function QuizContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const videoId = searchParams.get('videoId');
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const [mcqs, setMcqs] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -16,24 +34,73 @@ function QuizContent() {
   const [error, setError] = useState(null);
   const [skipped, setSkipped] = useState(new Set());
   const [maxReached, setMaxReached] = useState(0);
+  const [sessionId] = useState(() => `ml_q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Theme constants from HTML
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isLight = resolvedTheme === 'light';
+
+  // Theme constants
   const t = {
-    bg: '#181022',
-    accent: '#934CF0',
-    accentEnd: '#4338CA',
-    glass: 'rgba(147, 76, 240, 0.05)',
-    border: 'rgba(255, 255, 255, 0.1)',
+    bg: 'transparent',
+    accent: isLight ? '#9067C6' : '#934CF0',
+    accentEnd: isLight ? '#4338CA' : '#4338CA',
+    glass: isLight ? 'rgba(144, 103, 198, 0.05)' : 'rgba(147, 76, 240, 0.05)',
+    border: isLight ? 'rgba(144, 103, 198, 0.15)' : 'rgba(255, 255, 255, 0.1)',
     success: '#10b981',
     error: '#f43f5e',
     warning: '#eab308',
-    textMuted: '#94a3b8',
+    textPrimary: isLight ? '#242038' : '#ffffff',
+    textMuted: isLight ? '#655A7C' : '#94a3b8',
   };
 
   useEffect(() => {
-    async function fetchQuiz() {
+    async function initSession() {
+      // 1. Check for URL session ID (Resume from dashboard)
+      const urlSessionId = searchParams.get('sessionId');
+      if (urlSessionId) {
+        // We could explicitly set it, but we'll try to load the latest microLearning session
+        // Assuming there's only one active microLearning session per user
+      }
+
+      // 2. Try to load existing active session
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const res = await fetch('/api/micro-learning/active-session', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data?.session) {
+            const s = data.session;
+            // Restore state
+            if (s.questions && s.questions.length > 0) {
+              setMcqs(s.questions);
+              if (s.quizState) {
+                setSelectedAnswers(s.quizState.selectedAnswers || {});
+                setSkipped(new Set(s.quizState.skipped || []));
+                setCurrentIndex(s.quizState.currentIndex || 0);
+                setMaxReached(s.quizState.maxReached || 0);
+              }
+              // If we already finished the quiz part of this session, fast forward or show results
+              if (s.questionsAnswered >= s.questions.length) {
+                setSubmitted(true);
+              }
+              setLoading(false);
+              return; // Successfully restored, don't fetch new
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load active session:', err);
+      }
+
+      // 3. If no active session, fetch a new quiz
       if (!videoId) {
-        setError('No videoId found in URL');
+        setError('No videoId found in URL or Active Session');
         setLoading(false);
         return;
       }
@@ -44,6 +111,8 @@ function QuizContent() {
 
         if (data.success && data.mcqs?.length > 0) {
           setMcqs(data.mcqs);
+          // Initial save of the new session
+          saveActiveSession(data.mcqs, {}, [], 0, 0);
         } else {
           setError(data.message || 'No quiz data available');
         }
@@ -55,35 +124,96 @@ function QuizContent() {
       }
     }
 
-    fetchQuiz();
-  }, [videoId]);
+    initSession();
+  }, [videoId, searchParams]);
+
+  // Helper to sync state to backend
+  const saveActiveSession = async (
+    currentMcqs = mcqs,
+    answers = selectedAnswers,
+    skipSet = skipped,
+    idx = currentIndex,
+    maxAcc = maxReached
+  ) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const answeredCount = Object.keys(answers).length + skipSet.size;
+      // Carry over title/videoId from localStorage if stored by video page
+      const videoTitle = localStorage.getItem('ml_videoTitle') || 'Micro-Learning Quiz';
+
+      await fetch('/api/micro-learning/active-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          sessionId,
+          gameType: 'mcq',
+          title: videoTitle,
+          questions: currentMcqs,
+          questionsAnswered: answeredCount,
+          quizState: {
+            stage: 'quiz',
+            selectedAnswers: answers,
+            skipped: Array.from(skipSet),
+            currentIndex: idx,
+            maxReached: maxAcc,
+            videoId: videoId,
+            videoTitle
+          }
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save active session:', err);
+    }
+  };
 
   const handleOptionSelect = (questionIndex, option) => {
     if (submitted) return;
-    setSelectedAnswers(prev => ({ ...prev, [questionIndex]: option }));
-    setSkipped(prev => {
-      const next = new Set(prev);
-      next.delete(questionIndex);
-      return next;
+    setSelectedAnswers(prev => {
+      const nextAnswers = { ...prev, [questionIndex]: option };
+
+      setSkipped(prevSkipped => {
+        const nextSkipped = new Set(prevSkipped);
+        nextSkipped.delete(questionIndex);
+
+        // Save immediately with next state
+        saveActiveSession(mcqs, nextAnswers, nextSkipped, currentIndex, maxReached);
+
+        return nextSkipped;
+      });
+
+      return nextAnswers;
     });
   };
 
   const handlePrevious = () => {
-    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+    if (currentIndex > 0) {
+      const nextIdx = currentIndex - 1;
+      setCurrentIndex(nextIdx);
+      saveActiveSession(mcqs, selectedAnswers, skipped, nextIdx, maxReached);
+    }
   };
 
   const handleNext = () => {
+    let nextSkipped = new Set(skipped);
     if (!selectedAnswers.hasOwnProperty(currentIndex)) {
-      setSkipped(prev => new Set(prev).add(currentIndex));
+      nextSkipped = new Set(skipped).add(currentIndex);
+      setSkipped(nextSkipped);
     }
     if (currentIndex < mcqs.length - 1) {
       const nextIdx = currentIndex + 1;
+      const nextMax = Math.max(maxReached, nextIdx);
       setCurrentIndex(nextIdx);
-      setMaxReached(prev => Math.max(prev, nextIdx));
+      setMaxReached(nextMax);
+      saveActiveSession(mcqs, selectedAnswers, nextSkipped, nextIdx, nextMax);
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Mark any unanswered as skipped
     const finalSkipped = new Set(skipped);
     mcqs.forEach((_, idx) => {
@@ -93,6 +223,7 @@ function QuizContent() {
     });
     setSkipped(finalSkipped);
     setSubmitted(true);
+    setIsSaving(true);
 
     // Calculate correct count for XP
     const correctCount = mcqs.filter(
@@ -101,7 +232,58 @@ function QuizContent() {
 
     // Save to localStorage for articulation-results page
     localStorage.setItem('mainMcqPoints', correctCount.toString());
+
+    // ─── PERSIST TO BACKEND ───
+    try {
+      const startTime = Date.now();
+      const promises = mcqs.map((q, i) => {
+        const userAnswer = selectedAnswers[i] || 'Skipped';
+        const isCorrect = userAnswer === q.answer;
+
+        return fetch('/api/micro-learning/attempt', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            moduleId: 'microLearning',
+            gameType: 'mcq',
+            sessionId,
+            question: q.question,
+            userAnswer,
+            correctAnswer: q.answer,
+            isCorrect,
+            score: isCorrect ? 10 : 2, // 10 XP for correct, 2 for attempt
+            difficulty: 'medium',
+            timeTaken: Math.round((Date.now() - startTime) / 1000 / mcqs.length) // Rough estimate per Q
+          })
+        });
+      });
+
+      await Promise.all(promises);
+      console.log('✅ Micro-learning results persisted to backend');
+
+      // ─── CLEAR ACTIVE SESSION ON COMPLETION ───
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          await fetch('/api/micro-learning/active-session', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to clear active session:', err);
+      }
+    } catch (err) {
+      console.error('❌ Failed to persist results:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  if (!mounted) return null;
 
   // ─── Loading State ───
   if (loading) {
@@ -111,20 +293,13 @@ function QuizContent() {
         height: '100vh',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: t.bg,
-        color: '#fff',
+        backgroundColor: 'transparent',
+        color: t.textPrimary,
         position: 'relative',
         overflow: 'hidden',
       }}>
-        <div className="scanline" />
-        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
-        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
         <div style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
-          <div style={{
-            width: '40px', height: '40px', margin: '0 auto 20px',
-            border: `3px solid ${t.border}`, borderTopColor: t.accent,
-            borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-          }} />
+          <Loader2 size={40} className="animate-spin" style={{ margin: '0 auto 20px', color: t.accent }} />
           <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>Initializing Neural Assessment...</p>
         </div>
       </div>
@@ -139,13 +314,11 @@ function QuizContent() {
         height: '100vh',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: t.bg,
-        color: '#fff',
+        backgroundColor: 'transparent',
+        color: t.textPrimary,
         position: 'relative',
         overflow: 'hidden',
       }}>
-        <div className="scanline" />
-        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
         <div style={{ textAlign: 'center', position: 'relative', zIndex: 10 }}>
           <p style={{ marginBottom: '20px', color: t.error, fontWeight: '700', fontSize: '1.2rem' }}>{error}</p>
           <button
@@ -154,7 +327,7 @@ function QuizContent() {
               padding: '14px 28px', borderRadius: '16px',
               background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
               color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer',
-              boxShadow: '0 10px 25px rgba(67, 56, 202, 0.3)',
+              boxShadow: isLight ? '0 10px 25px rgba(144, 103, 198, 0.2)' : '0 10px 25px rgba(67, 56, 202, 0.3)',
             }}
           >
             Go Back
@@ -171,24 +344,20 @@ function QuizContent() {
   // Results calculations
   const correctCount = mcqs.filter((q, i) => selectedAnswers[i] === q.answer).length;
   const attemptedCount = Object.keys(selectedAnswers).length;
-  const accuracy = attemptedCount > 0 ? Math.round((correctCount / attemptedCount) * 100) : 0;
+  const accuracy = mcqs.length > 0 ? Math.round((correctCount / mcqs.length) * 100) : 0;
   const skippedCount = skipped.size;
 
   // ─── Results View ───
   if (submitted) {
     return (
       <div style={{
-        backgroundColor: t.bg,
+        backgroundColor: 'transparent',
         minHeight: '100vh',
-        color: '#fff',
+        color: t.textPrimary,
         padding: '40px',
         position: 'relative',
-        overflow: 'hidden',
+        minHeight: '100vh',
       }}>
-        <div className="scanline" />
-        <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
-        <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
-
         <div style={{ maxWidth: '960px', margin: '0 auto', position: 'relative', zIndex: 10 }}>
           {/* Results Header */}
           <h2 style={{
@@ -196,11 +365,7 @@ function QuizContent() {
             fontWeight: '800',
             marginBottom: '32px',
             letterSpacing: '-0.02em',
-            background: `linear-gradient(to right, #fff 30%, ${t.accent} 100%)`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}>
+          }} className="gradient-text">
             Neural Performance Stats
           </h2>
 
@@ -212,15 +377,16 @@ function QuizContent() {
             marginBottom: '48px',
           }}>
             {[
-              { label: 'Correct', value: `${correctCount}/${mcqs.length}`, color: t.success },
-              { label: 'Attempted', value: `${attemptedCount}/${mcqs.length}`, color: t.accent },
-              { label: 'Accuracy', value: `${accuracy}%`, color: '#60a5fa' },
-              { label: 'Skipped', value: skippedCount, color: t.warning },
+              { label: 'Correct', value: `${correctCount}/${mcqs.length}`, color: t.success, icon: CheckCircle },
+              { label: 'Attempted', value: `${attemptedCount}/${mcqs.length}`, color: t.accent, icon: Target },
+              { label: 'Accuracy', value: `${accuracy}%`, color: isLight ? '#2563eb' : '#60a5fa', icon: BarChart2 },
+              { label: 'Skipped', value: skippedCount, color: t.warning, icon: AlertTriangle },
             ].map((stat, i) => (
               <div
                 key={stat.label}
+                className="glass-card"
                 style={{
-                  background: t.glass,
+                  background: isLight ? 'rgba(255, 255, 255, 0.6)' : t.glass,
                   backdropFilter: 'blur(12px)',
                   border: `1px solid ${t.border}`,
                   borderTop: `4px solid ${stat.color}`,
@@ -231,18 +397,21 @@ function QuizContent() {
                   opacity: 0,
                 }}
               >
-                <p style={{
-                  color: t.textMuted,
-                  fontSize: '10px',
-                  fontWeight: '800',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.15em',
-                  marginBottom: '8px',
-                }}>{stat.label}</p>
+                  <div style={{ color: stat.color, marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
+                    <stat.icon size={24} />
+                  </div>
+                  <p style={{
+                    color: t.textMuted,
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.15em',
+                    marginBottom: '8px',
+                  }}>{stat.label}</p>
                 <p style={{
                   fontSize: '2.5rem',
                   fontWeight: '900',
-                  color: '#fff',
+                  color: t.textPrimary,
                   margin: 0,
                 }}>{stat.value}</p>
               </div>
@@ -250,8 +419,8 @@ function QuizContent() {
           </div>
 
           {/* XP Bar */}
-          <div style={{
-            background: t.glass,
+          <div className="glass-card" style={{
+            background: isLight ? 'rgba(255, 255, 255, 0.6)' : t.glass,
             backdropFilter: 'blur(12px)',
             border: `1px solid ${t.border}`,
             borderRadius: '16px',
@@ -276,20 +445,21 @@ function QuizContent() {
               const userAnswer = selectedAnswers[idx];
               const isCorrect = userAnswer === q.answer;
               const isSkippedQ = skipped.has(idx);
-              let statusLabel, statusColor, statusBg;
+              let statusLabel, statusColor, statusBg, StatusIcon;
               if (isSkippedQ) {
-                statusLabel = 'SKIPPED'; statusColor = t.warning; statusBg = 'rgba(234, 179, 8, 0.1)';
+                statusLabel = 'SKIPPED'; statusColor = t.warning; StatusIcon = AlertTriangle; statusBg = isLight ? 'rgba(234, 179, 8, 0.05)' : 'rgba(234, 179, 8, 0.1)';
               } else if (isCorrect) {
-                statusLabel = 'CORRECT'; statusColor = t.success; statusBg = 'rgba(16, 185, 129, 0.1)';
+                 statusLabel = 'CORRECT'; statusColor = t.success; StatusIcon = CheckCircle; statusBg = isLight ? 'rgba(16, 185, 129, 0.05)' : 'rgba(16, 185, 129, 0.1)';
               } else {
-                statusLabel = 'INCORRECT'; statusColor = t.error; statusBg = 'rgba(244, 63, 94, 0.1)';
+                statusLabel = 'INCORRECT'; statusColor = t.error; StatusIcon = XCircle; statusBg = isLight ? 'rgba(244, 63, 94, 0.05)' : 'rgba(244, 63, 94, 0.1)';
               }
 
               return (
                 <div
                   key={idx}
+                  className="glass-card"
                   style={{
-                    background: t.glass,
+                    background: isLight ? 'rgba(255, 255, 255, 0.6)' : t.glass,
                     backdropFilter: 'blur(12px)',
                     border: `1px solid ${t.border}`,
                     borderRadius: '16px',
@@ -309,25 +479,24 @@ function QuizContent() {
 
                     {isSkippedQ ? (
                       <div style={{ fontSize: '0.85rem' }}>
-                        <p style={{ color: t.warning, margin: '0 0 4px 0' }}>⚠ You skipped this question.</p>
-                        <p style={{ color: t.success, margin: 0 }}>
-                          ✓ Correct Answer (Option {String.fromCharCode(65 + q.options.indexOf(q.answer))}): <span style={{ color: '#fff' }}>{q.answer}</span>
+                        <p style={{ color: t.warning, margin: '0 0 4px 0', fontWeight: '700' }}>⚠ SKIPPED</p>
+                        <p style={{ color: t.success, margin: 0, fontWeight: '600' }}>
+                          Correct Answer: <span style={{ color: t.textPrimary }}>{q.answer}</span>
                         </p>
                       </div>
                     ) : isCorrect ? (
                       <div style={{ fontSize: '0.85rem' }}>
-                        <p style={{ color: t.success, margin: '0 0 4px 0' }}>
-                          ✓ Your Answer (Option {String.fromCharCode(65 + q.options.indexOf(userAnswer))}): <span style={{ color: '#fff' }}>{userAnswer}</span>
-                        </p>
-                        {q.explanation && <p style={{ color: t.textMuted, margin: 0 }}>{q.explanation}</p>}
+                        <p style={{ color: t.success, margin: '0 0 4px 0', fontWeight: '700' }}>✓ CORRECT</p>
+                        <p style={{ color: t.textMuted, margin: 0 }}>{q.explanation}</p>
                       </div>
                     ) : (
                       <div style={{ fontSize: '0.85rem' }}>
+                        <p style={{ color: t.error, margin: '0 0 4px 0', fontWeight: '700' }}>✗ INCORRECT</p>
                         <p style={{ color: t.error, margin: '0 0 4px 0' }}>
-                          ✗ Your Answer (Option {String.fromCharCode(65 + q.options.indexOf(userAnswer))}): <span style={{ color: '#fca5a5' }}>{userAnswer}</span>
+                          Your Answer: <span style={{ color: isLight ? '#ef4444' : '#fca5a5' }}>{userAnswer}</span>
                         </p>
-                        <p style={{ color: t.success, margin: '0 0 4px 0' }}>
-                          ✓ Correct Answer (Option {String.fromCharCode(65 + q.options.indexOf(q.answer))}): <span style={{ color: '#fff' }}>{q.answer}</span>
+                        <p style={{ color: t.success, margin: '0 0 4px 0', fontWeight: '600' }}>
+                          Correct Answer: <span style={{ color: t.textPrimary }}>{q.answer}</span>
                         </p>
                         {q.explanation && <p style={{ color: t.textMuted, margin: 0, marginTop: '8px' }}>{q.explanation}</p>}
                       </div>
@@ -345,6 +514,7 @@ function QuizContent() {
                     whiteSpace: 'nowrap',
                     flexShrink: 0,
                   }}>
+                    <StatusIcon size={14} style={{ marginRight: '6px' }} />
                     {statusLabel}
                   </span>
                 </div>
@@ -357,6 +527,7 @@ function QuizContent() {
             onClick={() => {
               const transcript = localStorage.getItem(`transcript_${videoId}`) || '';
               localStorage.setItem('quizTranscript', transcript);
+              localStorage.setItem('ml_sessionId', sessionId);
               router.push('/micro-learning/articulation-round');
             }}
             style={{
@@ -369,20 +540,20 @@ function QuizContent() {
               fontWeight: '900',
               fontSize: '1rem',
               cursor: 'pointer',
-              boxShadow: '0 10px 40px rgba(67, 56, 202, 0.3)',
+              boxShadow: isLight ? '0 10px 40px rgba(144, 103, 198, 0.3)' : '0 10px 40px rgba(67, 56, 202, 0.3)',
               transition: 'transform 0.2s, box-shadow 0.2s',
               letterSpacing: '0.05em',
             }}
             onMouseEnter={e => {
               e.currentTarget.style.transform = 'scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 15px 50px rgba(67, 56, 202, 0.5)';
+              e.currentTarget.style.boxShadow = isLight ? '0 15px 50px rgba(144, 103, 198, 0.5)' : '0 15px 50px rgba(67, 56, 202, 0.5)';
             }}
             onMouseLeave={e => {
               e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 10px 40px rgba(67, 56, 202, 0.3)';
+              e.currentTarget.style.boxShadow = isLight ? '0 10px 40px rgba(144, 103, 198, 0.3)' : '0 10px 40px rgba(67, 56, 202, 0.3)';
             }}
           >
-            Proceed to Neural Articulation Round →
+            Proceed to Neural Articulation Round <ArrowRight size={20} style={{ marginLeft: '10px' }} />
           </button>
         </div>
 
@@ -393,6 +564,9 @@ function QuizContent() {
           }
           @keyframes spin {
             to { transform: rotate(360deg); }
+          }
+          .animate-spin {
+            animation: spin 1s linear infinite;
           }
         `}</style>
       </div>
@@ -410,29 +584,22 @@ function QuizContent() {
         width: '100%',
         maxWidth: '100%',
         backgroundColor: t.bg,
-        color: '#fff',
-        overflow: 'hidden',
+        color: t.textPrimary,
         position: 'relative',
       }}
     >
-      {/* Theme overlays */}
-      <div className="scanline" />
-      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -160, left: -160 }} />
-      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -80, right: -80 }} />
-
+      <BackButton target={`/micro-learning/video/${videoId}`} />
       {/* ── Sidebar ── */}
       <aside
         className="ml-quiz-sidebar quiz-sidebar-scroll"
         style={{
           width: '280px',
-          height: 'calc(100vh - 32px)',
           margin: '16px',
           marginRight: 0,
-          background: t.glass,
+          background: isLight ? 'rgba(255, 255, 255, 0.4)' : t.glass,
           backdropFilter: 'blur(12px)',
           border: `1px solid ${t.border}`,
-          borderRight: 'none',
-          borderRadius: '16px 0 0 16px',
+          borderRadius: '16px',
           display: 'flex',
           flexDirection: 'column',
           padding: '24px',
@@ -443,12 +610,7 @@ function QuizContent() {
       >
         {/* Sidebar Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '40px' }}>
-          <div style={{
-            width: '40px', height: '40px', borderRadius: '12px',
-            background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.2rem',
-          }}>🧠</div>
+            <Brain size={20} color="#fff" strokeWidth={2.5} />
           <h2 style={{ fontSize: '1.15rem', fontWeight: '700', letterSpacing: '-0.01em', margin: 0 }}>
             Progress Board
           </h2>
@@ -459,7 +621,7 @@ function QuizContent() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '12px' }}>
             <p style={{
               fontSize: '10px', fontWeight: '900', letterSpacing: '0.1em',
-              color: '#a5b4fc', textTransform: 'uppercase', margin: 0,
+              color: isLight ? '#9067C6' : '#a5b4fc', textTransform: 'uppercase', margin: 0,
             }}>Assessment Neural Path</p>
             <span style={{ fontSize: '12px', fontWeight: '700', color: t.accent }}>
               {Math.round(progress)}%
@@ -467,7 +629,7 @@ function QuizContent() {
           </div>
           <div style={{
             width: '100%', height: '6px',
-            background: 'rgba(0,0,0,0.3)', borderRadius: '999px', overflow: 'hidden',
+            background: isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(0,0,0,0.3)', borderRadius: '999px', overflow: 'hidden',
           }}>
             <div style={{
               height: '100%', borderRadius: '999px',
@@ -481,12 +643,12 @@ function QuizContent() {
 
         {/* Segment Nav */}
         <nav
+          className="custom-scrollbar-area"
           style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
-            overflowY: 'auto',
             paddingRight: '8px',
           }}
         >
@@ -503,8 +665,8 @@ function QuizContent() {
                 className={isAccessible ? 'segment-item' : ''}
                 style={{
                   background: isActive
-                    ? 'rgba(147, 76, 240, 0.1)'
-                    : t.glass,
+                    ? (isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(147, 76, 240, 0.1)')
+                    : isLight ? 'rgba(255, 255, 255, 0.4)' : t.glass,
                   backdropFilter: 'blur(12px)',
                   border: `1px solid ${isActive ? t.accent : t.border}`,
                   borderRadius: '16px',
@@ -520,21 +682,21 @@ function QuizContent() {
                 <span style={{
                   fontSize: '0.875rem',
                   fontWeight: '600',
-                  color: isActive || isAnswered ? '#fff' : t.textMuted,
+                  color: isActive || isAnswered ? t.textPrimary : t.textMuted,
                 }}>
                   Segment {String(idx + 1).padStart(2, '0')}
                 </span>
                 {isAnswered ? (
-                  <span style={{ color: t.success, fontSize: '14px' }}>✓</span>
+                  <Check size={14} color={t.success} strokeWidth={3} />
                 ) : isSkippedItem ? (
-                  <span style={{ color: t.warning, fontSize: '10px', fontWeight: '800' }}>SKIP</span>
+                  <FastForward size={14} color={t.warning} strokeWidth={2.5} />
                 ) : isActive ? (
                   <div style={{
                     width: '8px', height: '8px', borderRadius: '50%',
                     background: t.accent, animation: 'pulse 2s infinite',
                   }} />
                 ) : (
-                  <span style={{ fontSize: '14px', color: t.textMuted }}>🔒</span>
+                  <Lock size={14} color={t.textMuted} strokeWidth={2} />
                 )}
               </div>
             );
@@ -546,17 +708,15 @@ function QuizContent() {
       <main
         style={{
           flex: 1,
-          height: '100vh',
           padding: '24px',
           paddingTop: '32px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           position: 'relative',
-          overflowY: 'auto',
           zIndex: 10,
         }}
-        className="quiz-main-scroll"
+        className="quiz-main-scroll custom-scrollbar-area"
       >
         <div style={{ width: '100%', maxWidth: '900px', paddingTop: '40px', paddingBottom: '80px' }}>
           {/* Question Header */}
@@ -564,9 +724,9 @@ function QuizContent() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
               <span style={{
                 padding: '4px 12px',
-                background: t.glass,
+                background: isLight ? 'rgba(144, 103, 198, 0.1)' : t.glass,
                 backdropFilter: 'blur(12px)',
-                border: `1px solid rgba(147, 76, 240, 0.3)`,
+                border: `1px solid ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'}`,
                 borderRadius: '16px',
                 fontSize: '10px',
                 fontWeight: '700',
@@ -588,6 +748,7 @@ function QuizContent() {
               lineHeight: '1.3',
               letterSpacing: '-0.02em',
               margin: 0,
+              color: t.textPrimary,
             }}>
               {currentQ?.question}
             </h1>
@@ -608,11 +769,11 @@ function QuizContent() {
                 <button
                   key={optIdx}
                   onClick={() => handleOptionSelect(currentIndex, option)}
-                  className="option-btn"
+                  className="option-btn glass-card"
                   style={{
                     background: isSelected
-                      ? 'rgba(147, 76, 240, 0.15)'
-                      : t.glass,
+                      ? (isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(147, 76, 240, 0.15)')
+                      : isLight ? 'rgba(255, 255, 255, 0.6)' : t.glass,
                     backdropFilter: 'blur(12px)',
                     border: `1px solid ${isSelected ? t.accent : t.border}`,
                     borderRadius: '16px',
@@ -622,17 +783,17 @@ function QuizContent() {
                     gap: '20px',
                     cursor: 'pointer',
                     textAlign: 'left',
-                    color: '#fff',
+                    color: t.textPrimary,
                     transition: 'all 0.3s ease',
                     boxShadow: isSelected
-                      ? '0 0 30px rgba(147, 76, 240, 0.4)'
+                      ? `0 0 30px ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.4)'}`
                       : 'none',
                   }}
                 >
                   <div style={{
                     width: '40px',
                     height: '40px',
-                    background: isSelected ? t.accent : t.glass,
+                    background: isSelected ? t.accent : (isLight ? 'rgba(144, 103, 198, 0.1)' : t.glass),
                     backdropFilter: 'blur(12px)',
                     border: `1px solid ${t.border}`,
                     borderRadius: '16px',
@@ -643,13 +804,14 @@ function QuizContent() {
                     fontSize: '0.9rem',
                     flexShrink: 0,
                     transition: 'all 0.3s ease',
+                    color: isSelected ? '#fff' : t.textPrimary,
                   }}>
                     {labels[optIdx]}
                   </div>
                   <span style={{
                     fontSize: '1.05rem',
                     fontWeight: '500',
-                    color: isSelected ? '#fff' : '#cbd5e1',
+                    color: isSelected ? t.textPrimary : t.textMuted,
                     lineHeight: '1.5',
                   }}>
                     {option}
@@ -664,33 +826,35 @@ function QuizContent() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            width: '100%'
           }}>
-            <button
-              onClick={handlePrevious}
-              disabled={currentIndex === 0}
-              style={{
-                padding: '16px 32px',
-                background: t.glass,
-                backdropFilter: 'blur(12px)',
-                border: `1px solid rgba(100, 116, 139, 0.3)`,
-                borderRadius: '16px',
-                color: '#fff',
-                fontWeight: '700',
-                cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
-                opacity: currentIndex === 0 ? 0.4 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s',
-                fontSize: '0.9rem',
-              }}
-            >
-              ← Previous
-            </button>
+            {currentIndex > 0 ? (
+              <button
+                onClick={handlePrevious}
+                style={{
+                  padding: '16px 32px',
+                  background: isLight ? 'rgba(144, 103, 198, 0.1)' : t.glass,
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(100, 116, 139, 0.3)'}`,
+                  borderRadius: '16px',
+                  color: t.textPrimary,
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s',
+                  fontSize: '0.9rem',
+                }}
+              >
+                <ArrowLeft size={18} /> Previous
+              </button>
+            ) : <div />}
 
             {currentIndex === mcqs.length - 1 ? (
               <button
                 onClick={handleSubmit}
+                disabled={isSaving}
                 style={{
                   padding: '16px 40px',
                   background: `linear-gradient(135deg, ${t.accent}, ${t.accentEnd})`,
@@ -699,7 +863,7 @@ function QuizContent() {
                   fontWeight: '900',
                   border: 'none',
                   cursor: 'pointer',
-                  boxShadow: '0 10px 25px rgba(67, 56, 202, 0.3)',
+                  boxShadow: isLight ? '0 10px 25px rgba(144, 103, 198, 0.3)' : '0 10px 25px rgba(67, 56, 202, 0.3)',
                   transition: 'transform 0.2s, box-shadow 0.2s',
                   display: 'flex',
                   alignItems: 'center',
@@ -713,7 +877,8 @@ function QuizContent() {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                Submit Assessment ✓
+                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                Submit Assessment
               </button>
             ) : (
               <button
@@ -726,7 +891,7 @@ function QuizContent() {
                   fontWeight: '900',
                   border: 'none',
                   cursor: 'pointer',
-                  boxShadow: '0 10px 25px rgba(67, 56, 202, 0.3)',
+                  boxShadow: isLight ? '0 10px 25px rgba(144, 103, 198, 0.3)' : '0 10px 25px rgba(67, 56, 202, 0.3)',
                   transition: 'transform 0.2s, box-shadow 0.2s',
                   display: 'flex',
                   alignItems: 'center',
@@ -740,7 +905,7 @@ function QuizContent() {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                Next Neural Segment →
+                Next Segment <ArrowRight size={18} />
               </button>
             )}
           </div>
@@ -795,33 +960,29 @@ function QuizContent() {
           }
         }
 
-        .quiz-sidebar-scroll::-webkit-scrollbar,
-        .quiz-main-scroll::-webkit-scrollbar {
+        .custom-scrollbar-area::-webkit-scrollbar {
           width: 4px;
         }
-        .quiz-sidebar-scroll::-webkit-scrollbar-track,
-        .quiz-main-scroll::-webkit-scrollbar-track {
+        .ml-quiz-sidebar::-webkit-scrollbar {
+          width: 2px;
+        }
+        .custom-scrollbar-area::-webkit-scrollbar-track {
           background: transparent;
         }
-        .quiz-sidebar-scroll::-webkit-scrollbar-thumb,
-        .quiz-main-scroll::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
+        .custom-scrollbar-area::-webkit-scrollbar-thumb {
+          background: ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(255, 255, 255, 0.1)'};
           border-radius: 10px;
         }
-        .quiz-sidebar-scroll,
-        .quiz-main-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(255,255,255,0.1) transparent;
-        }
         .option-btn:hover {
-          box-shadow: 0 0 20px rgba(147, 76, 240, 0.2);
-          border-color: #934CF0 !important;
+          box-shadow: 0 0 20px ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.2)'};
+          border-color: ${t.accent} !important;
         }
         .option-btn:hover div:first-child {
-          background: #934CF0 !important;
+          background: ${t.accent} !important;
+          color: #fff !important;
         }
         .segment-item:hover {
-          background: rgba(147, 76, 240, 0.08) !important;
+          background: ${isLight ? 'rgba(144, 103, 198, 0.08)' : 'rgba(147, 76, 240, 0.08)'} !important;
         }
       `}</style>
     </div>
@@ -836,7 +997,7 @@ export default function QuizPage() {
         height: '100vh',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#181022',
+        backgroundColor: 'transparent',
         color: '#fff',
       }}>
         <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>Loading Assessment...</p>

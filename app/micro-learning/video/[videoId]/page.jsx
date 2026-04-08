@@ -4,14 +4,66 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import DigitalSmartNotesTab from '@/app/components/micro-learning/DigitalSmartNotesTab';
 import { segmentTranscript } from '@/lib/segmenter';
+import { useTheme } from 'next-themes';
+import BackButton from '@/app/components/micro-learning/BackButton';
+import { 
+  FileText, 
+  ChevronLeft, 
+  RefreshCw, 
+  CheckCircle, 
+  RotateCcw, 
+  Play, 
+  Loader2, 
+  Lock, 
+  Check 
+} from 'lucide-react';
+
+// Saves current video progress to the active session API
+// Guard prevents multiple concurrent requests from stacking up
+let _videoSaveInFlight = false;
+async function saveVideoSession({ sessionId, videoId, playlistId, videoTitle, currentTime }) {
+  if (_videoSaveInFlight) return; // Skip if a save is already running
+  _videoSaveInFlight = true;
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token || !sessionId) return;
+    await fetch('/api/micro-learning/active-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        sessionId,
+        gameType: 'mcq',
+        moduleId: 'microLearning',
+        title: videoTitle || 'Micro-Learning Video',
+        quizState: {
+          stage: 'video',
+          videoId,
+          playlistId,
+          progress: Math.round(currentTime || 0),
+          videoTitle: videoTitle || 'Micro-Learning Video'
+        }
+      })
+    });
+  } catch { /* silent */ } finally {
+    _videoSaveInFlight = false;
+  }
+}
 
 export default function VideoPlayerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   const videoId = params.videoId;
   const playlistId = searchParams.get('list');
+  const urlSessionId = searchParams.get('sessionId');
+  const sessionIdRef = useRef(null);
+
+  useEffect(() => {
+    sessionIdRef.current = `ml_${videoId}_${Date.now()}`;
+  }, [videoId]);
 
   const [videos, setVideos] = useState([]);
   const [player, setPlayer] = useState(null);
@@ -31,13 +83,21 @@ export default function VideoPlayerPage() {
   const hasSentToMCQ = useRef(false);
   const [mcqStatus, setMcqStatus] = useState('not_started');
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isLight = resolvedTheme === 'light';
+
   const theme = {
-    accent: '#934CF0',
-    bg: '#181022',
-    border: 'rgba(255, 255, 255, 0.1)',
-    sidebar: 'rgba(147, 76, 240, 0.05)',
-    textMuted: '#94a3b8',
-    success: '#10b981'
+    accent: isLight ? '#9067C6' : '#934CF0',
+    bg: isLight ? '#ffffff' : '#0a080d',
+    border: isLight ? 'rgba(144, 103, 198, 0.15)' : 'rgba(255, 255, 255, 0.1)',
+    sidebar: isLight ? 'rgba(144, 103, 198, 0.04)' : 'rgba(147, 76, 240, 0.05)',
+    textPrimary: isLight ? '#242038' : '#ffffff',
+    textMuted: isLight ? '#655A7C' : '#94a3b8',
+    success: '#10b981',
+    isLight: isLight
   };
 
   // Reset everything on video change
@@ -60,10 +120,19 @@ export default function VideoPlayerPage() {
         if (duration > 0) {
           const progress = (currentTime / duration) * 100;
 
+          // ─── Persist video progress to ActiveSession (every 5s) ───
+          saveVideoSession({
+            sessionId: sessionIdRef.current,
+            videoId,
+            playlistId,
+            videoTitle: videoDetails?.title,
+            currentTime
+          });
+
           if (progress >= 70 && !hasTriggeredGladia.current && transcriptStatus === 'not_started') {
             hasTriggeredGladia.current = true;
             setTranscriptStatus('generating');
-            console.log("70% reached → Starting Gladia transcript");
+            console.log("70% reached → Starting transcript generation");
 
             try {
               const response = await fetch('/api/micro-learning/generate-transcript', {
@@ -72,23 +141,23 @@ export default function VideoPlayerPage() {
                 body: JSON.stringify({ videoId }),
               });
 
-              if (!response.ok) throw new Error(`Gladia failed: ${response.status}`);
+              if (!response.ok) throw new Error(`Transcript fetch failed: ${response.status}`);
 
               const data = await response.json();
               if (data.transcript) {
                 localStorage.setItem(`transcript_${videoId}`, data.transcript);
                 setTranscriptStatus('ready');
-                console.log("Gladia transcript ready");
+                console.log("Transcript ready and cached");
               } else {
                 throw new Error('No transcript data');
               }
             } catch (err) {
-              console.error("Gladia error:", err);
+              console.error("Transcript error:", err);
               setTranscriptStatus('error');
             }
           }
 
-          if (transcriptStatus === 'ready' && !hasSentToMCQ.current) {
+          if (transcriptStatus === 'ready' && !hasSentToMCQ.current && mcqStatus === 'not_started') {
             hasSentToMCQ.current = true;
             setMcqStatus('generating');
             console.log("Transcript ready → Starting MCQ generation");
@@ -108,7 +177,7 @@ export default function VideoPlayerPage() {
                   setMcqStatus('ready');
                   console.log("MCQs generated and cached");
                 } else {
-                  console.error("MCQ failed:", mcqResponse.status);
+                  console.error("MCQ fail:", mcqResponse.status);
                   setMcqStatus('error');
                 }
               } catch (err) {
@@ -122,12 +191,16 @@ export default function VideoPlayerPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [player, videoId, transcriptStatus]);
+  }, [player, videoId, transcriptStatus, mcqStatus]);
 
   // Fetch playlist
   useEffect(() => {
     async function fetchPlaylist() {
-      if (!playlistId) return;
+      if (!playlistId) {
+        // No playlist — still need to stop the loading spinner
+        setLoading(false);
+        return;
+      }
       try {
         const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
         const res = await fetch(
@@ -171,6 +244,8 @@ export default function VideoPlayerPage() {
             title: item.title,
             description: item.description || "No description available."
           });
+          // Store title so quiz/articulation pages can carry it forward as session label
+          localStorage.setItem('ml_videoTitle', item.title);
         }
       } catch (err) {
         console.error("Video details error:", err);
@@ -287,8 +362,10 @@ export default function VideoPlayerPage() {
     }
   };
 
+  if (!mounted) return null;
+
   if (loading && videos.length === 0) {
-    return <div style={{ background: theme.bg, color: '#fff', height: '100vh', padding: '40px' }}>Loading...</div>;
+    return <div style={{ background: 'transparent', color: theme.textPrimary, height: '100vh', padding: '40px' }}>Loading...</div>;
   }
 
   const isAssessmentEnabled = isVideoEnded && mcqStatus === 'ready';
@@ -299,33 +376,35 @@ export default function VideoPlayerPage() {
       style={{
         display: 'flex',
         flexDirection: 'row',
-        minHeight: '100vh',
         width: '100%',
         maxWidth: '100%',
-        backgroundColor: theme.bg,
-        color: '#fff',
-        overflow: 'hidden',
+        backgroundColor: 'transparent',
+        color: theme.textPrimary,
+        height: '115vh', // Slightly more than screen size
+        overflowY: 'auto', // Allow root scroll
+        overflowX: 'hidden',
         position: 'relative',
       }}
     >
-      {/* ── Theme Overlays ── */}
-      <div className="scanline" />
-      <div className="orb" style={{ background: '#6B21A8', width: 600, height: 600, top: -192, left: -192 }} />
-      <div className="orb" style={{ background: '#4F46E5', width: 500, height: 500, bottom: -96, right: '25%' }} />
-      <div className="orb" style={{ background: '#934CF0', width: 400, height: 400, top: '50%', right: 0, opacity: 0.15 }} />
-
+      <BackButton target={`/micro-learning/playlist/${playlistId}`} />
       {/* Left: Video + Info */}
       <div
         style={{
           flex: 1,
           padding: '24px',
           paddingTop: '32px',
-          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
           position: 'relative',
           zIndex: 10,
         }}
-        className="custom-scrollbar-area ml-video-main"
+        className="ml-video-main"
       >
+        {/* Top: Video + Controls (Fixed) */}
+        <div style={{ flexShrink: 0 }}>
         <div style={{
           position: 'relative',
           width: '100%',
@@ -333,10 +412,10 @@ export default function VideoPlayerPage() {
           backgroundColor: '#000',
           borderRadius: '24px',
           overflow: 'hidden',
-          background: 'rgba(147, 76, 240, 0.05)',
+          background: theme.sidebar,
           border: `1px solid ${theme.border}`,
           backdropFilter: 'blur(12px)',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          boxShadow: isLight ? '0 25px 50px -12px rgba(144, 103, 198, 0.1)' : '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         }}>
           {/* Smart overlay: blocks YouTube suggested video clicks when paused/ended */}
           {(isVideoPaused || isVideoEnded) && (
@@ -359,7 +438,7 @@ export default function VideoPlayerPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'rgba(0, 0, 0, 0.45)',
+                background: isLight ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)',
                 backdropFilter: 'blur(2px)',
                 transition: 'opacity 0.3s ease',
               }}
@@ -368,28 +447,23 @@ export default function VideoPlayerPage() {
                 width: '80px',
                 height: '80px',
                 borderRadius: '50%',
-                background: 'rgba(147, 76, 240, 0.85)',
+                background: theme.accent,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 0 30px rgba(147, 76, 240, 0.5)',
+                boxShadow: `0 0 30px ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.5)'}`,
                 transition: 'transform 0.2s ease',
               }}>
                 {isVideoEnded ? (
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="1 4 1 10 7 10"></polyline>
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                  </svg>
+                  <RotateCcw size={32} strokeWidth={2.5} color="#fff" />
                 ) : (
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="#fff">
-                    <polygon points="6,3 20,12 6,21"></polygon>
-                  </svg>
+                  <Play size={36} fill="#fff" color="#fff" />
                 )}
               </div>
               <span style={{
                 position: 'absolute',
                 bottom: '20px',
-                color: 'rgba(255,255,255,0.7)',
+                color: isLight ? theme.textPrimary : 'rgba(255,255,255,0.7)',
                 fontSize: '0.85rem',
                 fontWeight: '600',
                 letterSpacing: '0.05em',
@@ -417,7 +491,7 @@ export default function VideoPlayerPage() {
               margin: 0,
               letterSpacing: '-0.02em',
               lineHeight: 1.2,
-              color: '#fff',
+              color: theme.textPrimary,
             }}>
               {videoDetails?.title || "Loading..."}
             </h1>
@@ -433,19 +507,30 @@ export default function VideoPlayerPage() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  color: '#c084fc',
+                  color: theme.accent,
                   fontSize: '0.9rem',
                   fontWeight: '600',
                 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}>
-                    <polyline points="23 4 23 10 17 10"></polyline>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                  </svg>
+                  <Loader2 size={16} strokeWidth={2.5} className="animate-spin" />
                   <span>Transcript Processing</span>
                 </div>
               )}
 
-              {transcriptStatus === 'ready' && (
+              {transcriptStatus === 'ready' && mcqStatus === 'generating' && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: theme.accent,
+                  fontSize: '0.9rem',
+                  fontWeight: '600',
+                }}>
+                   <Loader2 size={16} strokeWidth={2.5} className="animate-spin" />
+                  <span>Transcript Ready. Generating Questions...</span>
+                </div>
+              )}
+
+              {mcqStatus === 'ready' && (
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -454,11 +539,8 @@ export default function VideoPlayerPage() {
                   fontSize: '0.9rem',
                   fontWeight: '600',
                 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                  </svg>
-                  <span>Transcript Ready</span>
+                  <CheckCircle size={16} strokeWidth={2.5} />
+                  <span>Questions Ready!</span>
                 </div>
               )}
             </div>
@@ -480,44 +562,52 @@ export default function VideoPlayerPage() {
               cursor: isAssessmentEnabled ? 'pointer' : 'not-allowed',
               transition: 'all 0.3s ease',
               background: isAssessmentEnabled
-                ? 'linear-gradient(135deg, #934CF0 0%, #4338CA 100%)'
-                : 'rgba(255, 255, 255, 0.03)',
-              color: isAssessmentEnabled ? '#fff' : 'rgba(148, 163, 184, 0.4)',
+                ? `linear-gradient(135deg, ${theme.accent} 0%, #4338CA 100%)`
+                : isLight ? 'rgba(144, 103, 198, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+              color: isAssessmentEnabled ? '#fff' : theme.textMuted,
               border: isAssessmentEnabled
                 ? 'none'
-                : '1px solid rgba(255, 255, 255, 0.08)',
+                : `1px solid ${theme.border}`,
               boxShadow: isAssessmentEnabled
-                ? '0 0 20px rgba(147, 76, 240, 0.3)'
+                ? `0 0 20px ${isLight ? 'rgba(144, 103, 198, 0.2)' : 'rgba(147, 76, 240, 0.3)'}`
                 : 'none',
             }}
           >
             {isAssessmentEnabled ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-              </svg>
+              <Check size={18} strokeWidth={2.5} />
             ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5 }}>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
+              <Lock size={18} strokeWidth={2} style={{ opacity: 0.5 }} />
             )}
             <span>{isAssessmentEnabled ? "TAKE ASSESSMENT" : "LOCKED"}</span>
           </button>
         </div>
+      </div>
 
-        {/* Description glass panel */}
+        {/* Bottom Area: Description (Scrollable) */}
+        <div 
+          style={{
+            height: 'auto',
+            maxHeight: '800px',
+            overflowY: 'auto',
+            minHeight: 0,
+            marginTop: '32px',
+            paddingRight: '12px',
+            overscrollBehaviorY: 'contain',
+          }} 
+          className="custom-scrollbar-area"
+        >
         <div style={{
           marginTop: '32px',
           padding: '24px',
-          background: 'rgba(147, 76, 240, 0.05)',
+          background: theme.sidebar,
           backdropFilter: 'blur(12px)',
           border: `1px solid ${theme.border}`,
           borderRadius: '16px',
           transition: 'all 0.4s ease',
+          marginBottom: '24px',
         }}>
           <p style={{
-            color: '#cbd5e1',
+            color: theme.textMuted,
             fontSize: '1rem',
             lineHeight: '1.7',
             whiteSpace: 'pre-wrap',
@@ -527,6 +617,7 @@ export default function VideoPlayerPage() {
           </p>
         </div>
       </div>
+    </div>
 
       {/* Right: Sidebar */}
       <div
@@ -534,11 +625,13 @@ export default function VideoPlayerPage() {
         style={{
           width: '400px',
           maxWidth: '100%',
-          background: 'rgba(147, 76, 240, 0.05)',
+          background: theme.sidebar,
           backdropFilter: 'blur(12px)',
           borderLeft: `1px solid ${theme.border}`,
           display: 'flex',
           flexDirection: 'column',
+          height: '100%',
+          minHeight: 0,
           position: 'relative',
           zIndex: 10,
           flexShrink: 0,
@@ -567,9 +660,9 @@ export default function VideoPlayerPage() {
           <button
             onClick={() => setActiveRightTab(activeRightTab === 'course' ? 'notes' : 'course')}
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: `1px solid rgba(255, 255, 255, 0.05)`,
-              color: '#94a3b8',
+              background: isLight ? 'rgba(144, 103, 198, 0.05)' : 'rgba(255, 255, 255, 0.05)',
+              border: `1px solid ${theme.border}`,
+              color: theme.textMuted,
               padding: '6px 12px',
               borderRadius: '8px',
               cursor: 'pointer',
@@ -581,14 +674,16 @@ export default function VideoPlayerPage() {
               gap: '6px',
             }}
           >
-            {activeRightTab === 'course' ? '📝 Notes' : '← Back to Course'}
+            {activeRightTab === 'course' ? <><FileText size={14} /> Notes</> : <><ChevronLeft size={14} /> Back to Course</>}
           </button>
         </div>
 
         <div style={{
           flex: 1,
           overflowY: 'auto',
+          minHeight: 0,
           padding: '16px',
+          overscrollBehaviorY: 'contain',
         }} className="custom-scrollbar-area">
 
           {activeRightTab === 'course' ? (
@@ -604,8 +699,8 @@ export default function VideoPlayerPage() {
                     padding: '12px',
                     borderRadius: '12px',
                     cursor: 'pointer',
-                    backgroundColor: videoId === v.id ? 'rgba(147, 76, 240, 0.1)' : 'transparent',
-                    border: `1px solid ${videoId === v.id ? 'rgba(147, 76, 240, 0.2)' : 'rgba(255, 255, 255, 0.03)'}`,
+                    backgroundColor: videoId === v.id ? (isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(147, 76, 240, 0.1)') : 'transparent',
+                    border: `1px solid ${videoId === v.id ? theme.accent + '33' : theme.border}`,
                     transition: 'all 0.3s ease',
                   }}
                 >
@@ -631,7 +726,7 @@ export default function VideoPlayerPage() {
                     fontSize: '0.85rem',
                     fontWeight: '600',
                     lineHeight: '1.4',
-                    color: videoId === v.id ? '#fff' : '#cbd5e1',
+                    color: videoId === v.id ? theme.textPrimary : theme.textMuted,
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
@@ -659,6 +754,9 @@ export default function VideoPlayerPage() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
 
         /* Layout responsiveness */
         .ml-video-root {
@@ -671,9 +769,11 @@ export default function VideoPlayerPage() {
           }
           .ml-video-main {
             padding: 40px;
+            height: 115vh;
           }
           .ml-video-sidebar {
             width: 400px;
+            height: 115vh;
           }
         }
 
@@ -692,19 +792,19 @@ export default function VideoPlayerPage() {
           background: rgba(255, 255, 255, 0.02);
         }
         .custom-scrollbar-area::-webkit-scrollbar-thumb {
-          background: rgba(147, 76, 240, 0.3);
+          background: ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'};
           border-radius: 10px;
         }
         .custom-scrollbar-area::-webkit-scrollbar-thumb:hover {
-          background: rgba(147, 76, 240, 0.6);
+          background: ${isLight ? 'rgba(144, 103, 198, 0.6)' : 'rgba(147, 76, 240, 0.6)'};
         }
         .custom-scrollbar-area {
           scrollbar-width: thin;
-          scrollbar-color: rgba(147, 76, 240, 0.3) rgba(255, 255, 255, 0.02);
+          scrollbar-color: ${isLight ? 'rgba(144, 103, 198, 0.3)' : 'rgba(147, 76, 240, 0.3)'} transparent;
         }
         .playlist-item-el:hover {
-          background: rgba(147, 76, 240, 0.1) !important;
-          border-color: rgba(147, 76, 240, 0.15) !important;
+          background: ${isLight ? 'rgba(144, 103, 198, 0.1)' : 'rgba(147, 76, 240, 0.1)'} !important;
+          border-color: ${theme.accent}33 !important;
         }
       `}</style>
     </div>

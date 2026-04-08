@@ -17,20 +17,23 @@ export default function DigitalSmartNotesTab({
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState('');
 
-  // ─── Theme constants from HTML ───
+  // ─── Theme constants derived from props ───
+  const isLight = theme?.isLight || false;
   const t = {
-    primary: '#934CF0',
+    primary: theme?.accent || '#934CF0',
     gradientEnd: '#4338CA',
-    bgDark: '#181022',
-    cardGlass: 'rgba(147, 76, 240, 0.05)',
-    cardGlassAlt: 'rgba(255, 255, 255, 0.03)',
-    borderGlass: 'rgba(255, 255, 255, 0.1)',
-    textMuted: 'rgba(255, 255, 255, 0.4)',
-    textBody: 'rgba(255, 255, 255, 0.9)',
+    bgDark: isLight ? 'rgba(144, 103, 198, 0.05)' : '#181022',
+    headerBg: isLight ? 'rgba(144, 103, 198, 0.08)' : 'rgba(24, 16, 34, 0.4)',
+    cardGlass: isLight ? 'rgba(144, 103, 198, 0.04)' : 'rgba(147, 76, 240, 0.05)',
+    cardGlassAlt: isLight ? 'rgba(144, 103, 198, 0.06)' : 'rgba(255, 255, 255, 0.03)',
+    borderGlass: isLight ? 'rgba(144, 103, 198, 0.15)' : 'rgba(255, 255, 255, 0.1)',
+    textMuted: isLight ? '#655A7C' : 'rgba(255, 255, 255, 0.4)',
+    textBody: isLight ? '#242038' : 'rgba(255, 255, 255, 0.9)',
     blue: '#60a5fa',
     blueHover: '#93c5fd',
     red: '#f87171',
     redHover: '#fca5a5',
+    inputBg: isLight ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0,0,0,0.2)',
   };
 
   // ─── Load notes from localStorage ───
@@ -197,7 +200,7 @@ export default function DigitalSmartNotesTab({
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
-      color: '#fff',
+      color: t.textBody,
     }}>
       {/* ── Header ── */}
       <div style={{
@@ -209,7 +212,7 @@ export default function DigitalSmartNotesTab({
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: `1px solid ${t.borderGlass}`,
-        background: 'rgba(24, 16, 34, 0.4)',
+        background: t.headerBg,
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
       }}>
@@ -282,10 +285,10 @@ export default function DigitalSmartNotesTab({
               style={{
                 width: '100%',
                 minHeight: '120px',
-                background: 'transparent',
-                border: 'none',
+                background: t.inputBg,
+                border: isLight ? `1px solid ${t.borderGlass}` : 'none',
                 outline: 'none',
-                color: '#fff',
+                color: t.textBody,
                 fontSize: '1rem',
                 lineHeight: '1.6',
                 resize: 'none',
@@ -308,8 +311,8 @@ export default function DigitalSmartNotesTab({
                   fontSize: '0.875rem',
                   transition: 'color 0.2s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
+                onMouseEnter={e => e.currentTarget.style.color = t.textBody}
+                onMouseLeave={e => e.currentTarget.style.color = t.textMuted}
               >
                 Cancel
               </button>
@@ -338,10 +341,12 @@ export default function DigitalSmartNotesTab({
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '16px 24px',
+        minHeight: 0,
+        padding: '16px 24px 100px 24px', // Extra bottom padding for "Add Note" bar
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
+        overscrollBehaviorY: 'contain',
       }} className="smart-notes-scroll">
         {notes.length === 0 ? (
           <p style={{
@@ -413,8 +418,8 @@ export default function DigitalSmartNotesTab({
                         borderRadius: '8px',
                         transition: 'color 0.2s',
                       }}
-                      onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+                      onMouseEnter={e => e.currentTarget.style.color = t.textBody}
+                      onMouseLeave={e => e.currentTarget.style.color = t.textMuted}
                     >
                       Cancel
                     </button>
@@ -532,7 +537,7 @@ export default function DigitalSmartNotesTab({
         bottom: 0,
         padding: '20px 24px',
         borderTop: `1px solid ${t.borderGlass}`,
-        background: 'rgba(24, 16, 34, 0.6)',
+        background: t.headerBg,
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         display: 'flex',

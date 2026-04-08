@@ -2,7 +2,8 @@
 // Question text uses Raleway via inline style={{ fontFamily: "'Raleway', sans-serif" }}
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ChevronRight, Play, Zap, Target, Mic, MicOff, Volume2,
   CheckCircle, XCircle, RotateCcw, Search, BookOpen, Brain, Code, Sigma,
@@ -11,7 +12,7 @@ import {
 import Header from '@/app/components/shared/header/Header.jsx';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
 import NoiseMesh from '@/app/components/inquizzo/NoiseMesh';
-import CursorAura from '@/app/components/inquizzo/CursorAura';
+// import CursorAura removed
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,8 +48,11 @@ const CARD_HOVER_VARIANTS = {
   hover: { y: -8, scale: 1.02, boxShadow: "0 24px 48px rgba(0,0,0,0.5)", transition: { duration: 0.25, ease: "easeOut" } },
 };
 
-const QuizDomainSelection = () => {
+const QuizDomainSelectionInner = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const shouldResume = searchParams.get('resume') === 'true' || !!searchParams.get('sessionId');
+
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
@@ -83,12 +87,16 @@ const QuizDomainSelection = () => {
   const [isTimeout, setIsTimeout] = useState(false);
 
   const SESSION_LENGTH = 10;
+  const STORAGE_KEY = 'inquizzo_active_session';
   const sessionIdRef = useRef(null);
   const [sessionQCount, setSessionQCount] = useState(0);
   const [sessionScore, setSessionScore] = useState(0);
   const [showSessionEnd, setShowSessionEnd] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
   const questionStartTimeRef = useRef(Date.now());
+  const isRestoringSessionRef = useRef(false);
+  const hasRestoredRef = useRef(false);  // guard against StrictMode double-fire
+  const allQuestionsRef = useRef([]);  // stores all fetched {question, answer} objects
   const isTransitioningRef = useRef(false);
   const recognitionRef = useRef(null);
   const currentQuestionRef = useRef({ question: "", answer: "" });
@@ -302,44 +310,134 @@ const QuizDomainSelection = () => {
   };
 
   useEffect(() => {
-    const init = async () => {
-      // Check for review mode first
-      const params = new URLSearchParams(window.location.search);
-      const reviewSessionId = params.get('review');
-
-      if (reviewSessionId) {
-        try {
-          const token = getAuthToken();
-          const response = await fetch(`/api/inquizzo/session-results?sessionId=${reviewSessionId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setScore(data.totalScore);
-            setSessionScore(data.totalScore);
-            setQuestionsAnswered(data.totalQuestions);
-            setSessionQCount(data.totalQuestions);
-            setCorrectCount(data.correctCount);
-            setShowSessionEnd(true);
-            setCurrentView("quiz"); // Ensure quiz view is shown for the overlay
-            return;
+    parseCurrentURL();
+    setParticles([...Array(20)].map(() => ({ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, delay: `${Math.random() * 5}s` })));
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) setIsBrowserSupported(false);
+    // Check for existing session to resume
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const session = JSON.parse(saved);
+        if (session && session.quiz_id && session.quiz_id !== 'random' && Array.isArray(session.questions) && session.questions.length > 0 && session.current_index > 0 && session.current_index < SESSION_LENGTH) {
+          if (!hasRestoredRef.current) {
+            hasRestoredRef.current = true;
+            if (shouldResume) {
+              // Navigated from dashboard — resume immediately without the toast
+              restoreSession(session);
+            } else {
+              const pct = Math.round((session.current_index / SESSION_LENGTH) * 100);
+              toast(
+                `You have an incomplete quiz (${pct}% completed). Would you like to resume or start a new session?`,
+                {
+                  duration: 15000,
+                  action: {
+                    label: 'Resume',
+                    onClick: () => restoreSession(session),
+                  },
+                  cancel: {
+                    label: 'New Session',
+                    onClick: () => {
+                      localStorage.removeItem(STORAGE_KEY);
+                    },
+                  },
+                }
+              );
+            }
           }
-        } catch (err) {
-          console.error("Failed to load review session:", err);
+        } else if (shouldResume && !hasRestoredRef.current) {
+          // No valid localStorage session but ?resume=true — try the DB
+          hasRestoredRef.current = true;
+          loadActiveSession();
         }
+      } else if (shouldResume && !hasRestoredRef.current) {
+        // No localStorage session at all but ?resume=true — try the DB
+        hasRestoredRef.current = true;
+        loadActiveSession();
       }
-
-      const restored = await loadActiveSession();
-      if (!restored) {
-        parseCurrentURL();
+    } catch (e) {
+      console.warn('Failed to check saved session:', e);
+      if (shouldResume && !hasRestoredRef.current) {
+        hasRestoredRef.current = true;
+        loadActiveSession();
       }
-      setParticles([...Array(20)].map(() => ({ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, delay: `${Math.random() * 5}s` })));
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) setIsBrowserSupported(false);
-    };
-    init();
+    }
     return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
   }, []);
+
+  // ── Session Persistence Helpers ────────────────────────────
+  const getQuizId = () => [selectedDomain, selectedCategory, selectedSubCategory, selectedTopic].filter(Boolean).join(':');
+
+  const saveSession = (overrides = {}) => {
+    try {
+      const sessionData = {
+        quiz_id: overrides.quiz_id || getQuizId(),
+        session_id: sessionIdRef.current,
+        questions: overrides.questions || allQuestionsRef.current,
+        current_index: overrides.current_index ?? sessionQCount,
+        answers_map: overrides.answers_map ?? chatHistory,
+        score: overrides.score ?? score,
+        accuracy: questionsAnswered > 0 ? Math.round((correctCount / questionsAnswered) * 100) : 0,
+        start_time: overrides.start_time || Date.now(),
+        difficulty: selectedDifficulty,
+        correct_count: overrides.correct_count ?? correctCount,
+        questions_answered: overrides.questions_answered ?? questionsAnswered,
+        session_score: overrides.session_score ?? sessionScore,
+        // Domain selection context for restoration
+        domain: selectedDomain,
+        category: selectedCategory,
+        subCategory: selectedSubCategory,
+        topic: selectedTopic,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    } catch (e) {
+      console.warn('Failed to save session:', e);
+    }
+  };
+
+  const clearSession = () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { console.warn('Failed to clear session:', e); }
+  };
+
+  const restoreSession = (session) => {
+    isRestoringSessionRef.current = true;
+    sessionIdRef.current = session.session_id || crypto.randomUUID();
+    allQuestionsRef.current = session.questions;
+    const idx = session.current_index || 0;
+    const currentQ = session.questions[idx];
+
+    // Restore domain selection context
+    if (session.domain) setSelectedDomain(session.domain);
+    if (session.category) setSelectedCategory(session.category);
+    if (session.subCategory) setSelectedSubCategory(session.subCategory);
+    if (session.topic) setSelectedTopic(session.topic);
+    setCurrentView('quiz');
+
+    setSessionQCount(idx);
+    setSessionScore(session.session_score || 0);
+    setScore(session.score || 0);
+    setCorrectCount(session.correct_count || 0);
+    setQuestionsAnswered(session.questions_answered || idx);
+    setChatHistory(session.answers_map || []);
+    setSelectedDifficulty(session.difficulty || 'medium');
+
+    if (currentQ) {
+      setCurrentQuestion(currentQ.question);
+      setCorrectAnswer(currentQ.answer);
+      currentQuestionRef.current = { question: currentQ.question, answer: currentQ.answer };
+    }
+    setIsLoading(false);
+    setTimer(30);
+    setTimerActive(false);
+    setTranscript('');
+    setFeedback('');
+    setShowResult(false);
+    setIsAnswering(false);
+    setError('');
+    questionStartTimeRef.current = Date.now();
+    isRestoringSessionRef.current = false;
+    toast.success(`Quiz resumed at question ${idx + 1}/${SESSION_LENGTH}`);
+  };
 
   useEffect(() => {
     if (currentView === "quiz" && timerActive && timer > 0 && !showResult) {
@@ -413,8 +511,12 @@ const QuizDomainSelection = () => {
         setCurrentQuestion(currentData.question); setCorrectAnswer(currentData.answer);
         currentQuestionRef.current = { question: currentData.question, answer: currentData.answer };
         saveSeenQuestion(currentData.question);
+        // Track question for session persistence
+        allQuestionsRef.current = [...allQuestionsRef.current, { question: currentData.question, answer: currentData.answer }];
         setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsTimeout(false);
         questionStartTimeRef.current = Date.now();
+        // Auto-save session after fetching a new question
+        saveSession({ questions: allQuestionsRef.current });
       }
     } catch (err) {
       console.warn("API failed or timed out. Initiating fallback...", err);
@@ -658,9 +760,22 @@ const QuizDomainSelection = () => {
       }
       await saveAttempt({ question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer || currentQuestionRef.current.answer, isCorrect: data.result.isCorrect || false, score: gained, timeTaken });
       const newCount = sessionQCount + 1; setSessionQCount(newCount); setQuestionsAnswered((p) => p + 1);
-      setChatHistory((p) => [...p, { question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer, isCorrect: data.result.isCorrect, feedback: data.result.explanation || data.result.feedback, score: gained }]);
+      const resultData = { question: currentQuestionRef.current.question, userAnswer: finalAnswer, correctAnswer: data.result.correctAnswer, isCorrect: data.result.isCorrect, feedback: data.result.explanation || data.result.feedback, score: gained };
+      setChatHistory((p) => [...p, resultData]);
+
+      // Auto-save session after answering
+      saveSession({
+        current_index: newCount,
+        answers_map: [...chatHistory, resultData],
+        score: score + (gained > 0 ? gained : 0),
+        correct_count: correctCount + (data.result.isCorrect ? 1 : 0),
+        questions_answered: questionsAnswered + 1,
+        session_score: sessionScore + (gained > 0 ? gained : 0),
+      });
+
       if (newCount >= SESSION_LENGTH) {
         setShowSessionEnd(true);
+        clearSession();
         stopListening(true); // CRITICAL: Stop mic immediately when session ends
         await deleteActiveSession();
       }
@@ -680,8 +795,18 @@ const QuizDomainSelection = () => {
     setSessionQCount(newCount);
     setQuestionsAnswered((p) => p + 1);
     setIsManualStop(false);
+
+    // Auto-save session after timeout
+    const timeoutResult = { question: currentQuestionRef.current.question, userAnswer: '(Timeout)', correctAnswer: currentQuestionRef.current.answer, isCorrect: false, score: 0 };
+    saveSession({
+      current_index: newCount,
+      answers_map: [...chatHistory, timeoutResult],
+      questions_answered: questionsAnswered + 1,
+    });
+
     if (newCount >= SESSION_LENGTH) {
       setShowSessionEnd(true);
+      clearSession();
       stopListening(true); // CRITICAL: Stop mic on timeout session end
       deleteActiveSession();
     }
@@ -703,8 +828,9 @@ const QuizDomainSelection = () => {
     setTimer(30); setTimerActive(false); setTranscript(""); setFeedback(""); setShowResult(false); setIsTimeout(false); setIsManualStop(false);
     fetchQuestion(selectedDomain, selectedCategory, selectedSubCategory, selectedTopic, a);
   };
-  const startNewSession = async () => {
-    await deleteActiveSession();
+  const startNewSession = () => {
+    clearSession();
+    allQuestionsRef.current = [];
     sessionIdRef.current = crypto.randomUUID(); setSessionQCount(0); setSessionScore(0); setShowSessionEnd(false); setScore(0); setCorrectCount(0); setChatHistory([]); setQuestionsAnswered(0);
     if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch { } recognitionRef.current = null; setIsListening(false); }
     nextQuestion();
@@ -824,7 +950,7 @@ const QuizDomainSelection = () => {
     <motion.div
       key={idx} initial={{ opacity: 0, y: 20 }} animate="initial" transition={{ delay: idx * 0.05 }}
       onClick={onClick} data-cursor="card" whileHover="hover" variants={CARD_HOVER_VARIANTS}
-      className="group relative rounded-3xl overflow-hidden cursor-none"
+      className="group relative rounded-3xl overflow-hidden"
       style={{
         minHeight: height,
         height: 'auto',
@@ -1309,11 +1435,10 @@ const QuizDomainSelection = () => {
   // ─── MAIN RENDER ───────────────────────────────────────────────────────────
   return (
     <div
-      className={cn("relative min-h-screen font-dm cursor-none flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
+      className={cn("relative min-h-screen font-dm flex flex-col transition-colors duration-500 overflow-x-hidden", !isLight && "iq-mesh-bg")}
       style={isLight ? { backgroundColor: t.pageBg } : undefined}
     >
       {!isLight && <NoiseMesh />}
-      <CursorAura />
       <Toaster richColors position="top-center" />
 
       {/* Decorative Orbs */}
@@ -1339,19 +1464,19 @@ const QuizDomainSelection = () => {
       {(selectedDomain || selectedCategory || selectedSubCategory || selectedTopic) && currentView !== "quiz" && (
         <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 pt-10 md:pt-16">
           <div className="flex items-center flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: t.textMuted }}>
-            <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" onClick={resetToHome}>InQuizzo</span>
+            <span data-cursor="button" className="transition-colors hover:text-pink-500" onClick={resetToHome}>InQuizzo</span>
             <ChevronRight className="w-3 h-3 opacity-30" />
             {selectedDomain && (
               <>
-                <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" style={{ color: !selectedCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("categories"); setSelectedCategory(null); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, null, null, null); }}>{selectedDomain}</span>
+                <span data-cursor="button" className="transition-colors hover:text-pink-500" style={{ color: !selectedCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("categories"); setSelectedCategory(null); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, null, null, null); }}>{selectedDomain}</span>
                 {selectedCategory && (
                   <>
                     <ChevronRight className="w-3 h-3 opacity-30" />
-                    <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" style={{ color: !selectedSubCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("subCategories"); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, null, null); }}>{selectedCategory}</span>
+                    <span data-cursor="button" className="transition-colors hover:text-pink-500" style={{ color: !selectedSubCategory ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("subCategories"); setSelectedSubCategory(null); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, null, null); }}>{selectedCategory}</span>
                     {selectedSubCategory && (
                       <>
                         <ChevronRight className="w-3 h-3 opacity-30" />
-                        <span data-cursor="button" className="cursor-none transition-colors hover:text-pink-500" style={{ color: !selectedTopic ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("topics"); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}>{selectedSubCategory}</span>
+                        <span data-cursor="button" className="transition-colors hover:text-pink-500" style={{ color: !selectedTopic ? t.textPrimary : t.textMuted }} onClick={() => { setCurrentView("topics"); setSelectedTopic(null); updateURL(selectedDomain, selectedCategory, selectedSubCategory, null); }}>{selectedSubCategory}</span>
                         {selectedTopic && (
                           <>
                             <ChevronRight className="w-3 h-3 opacity-30" />
@@ -1424,4 +1549,11 @@ const QuizDomainSelection = () => {
   );
 };
 
+const QuizDomainSelection = () => (
+  <Suspense fallback={null}>
+    <QuizDomainSelectionInner />
+  </Suspense>
+);
+
 export default QuizDomainSelection;
+

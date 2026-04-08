@@ -125,9 +125,9 @@ const userAttemptSchema = new mongoose.Schema({
 });
 
 // Index for better query performance
+userAttemptSchema.index({ userId: 1, moduleId: 1, timestamp: -1 });
 userAttemptSchema.index({ userId: 1, timestamp: -1 });
 userAttemptSchema.index({ sessionId: 1 });
-userAttemptSchema.index({ username: 1, gameType: 1 });
 
 // Virtual for score percentage
 userAttemptSchema.virtual('scorePercentage').get(function () {

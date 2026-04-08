@@ -8,6 +8,9 @@ import connectDB from "@/lib/db.js";
 import { authenticate } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { startReminderCron } from "@/lib/cron";
+import ActiveQuizSession from "@/models/ActiveQuizSession";
+import UserAttempt from "@/models/UserAttempt";
+import mongoose from "mongoose";
 
 startReminderCron();
 

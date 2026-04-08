@@ -21,29 +21,53 @@ const moduleIcons = {
 export default function ModuleProgressRow({ submodule, parentModule }) {
   const Icon = moduleIcons[parentModule.name];
 
-  const isPending = submodule.progress === 0;
-  const isCompleted = submodule.progress === 100;
+  const isStatRow = submodule.id === 'accuracy' || submodule.id === 'questions' || submodule.id === 'score';
 
-  const status = isCompleted
-    ? "Completed"
-    : isPending
-      ? "Pending"
-      : "In Progress";
+  const isPending = !isStatRow && submodule.progress === 0;
+  const isCompleted = !isStatRow && submodule.progress >= 100;
 
-  const actionText = isCompleted
-    ? "Review"
-    : isPending
-      ? "Start"
-      : "Continue";
+  let status = "In Progress";
+  if (isStatRow) status = "View Stats";
+  else if (isCompleted) status = "Completed";
+  else if (isPending) status = "Pending";
+
+  let actionText = "Continue";
+  if (isStatRow) actionText = "View Details";
+  else if (isCompleted) actionText = "Review";
+  else if (isPending) actionText = "Start";
 
   const handleAction = () => {
     if (submodule.isVirtual) {
       if (submodule.type === 'continue') {
+        if (submodule.moduleId === 'microlearning' || submodule.moduleId === 'microLearning') {
+          // Route to the exact stage the user left at
+          const stage = submodule.stage;
+          if (stage === 'articulation') {
+            window.location.href = '/micro-learning/articulation-round?sessionId=' + submodule.sessionId;
+          } else if (stage === 'quiz') {
+            window.location.href = '/micro-learning/quiz?sessionId=' + submodule.sessionId;
+          } else if (stage === 'video' && submodule.videoId) {
+            const listParam = submodule.playlistId ? `&list=${submodule.playlistId}` : '';
+            window.location.href = `/micro-learning/video/${submodule.videoId}?sessionId=${submodule.sessionId}${listParam}`;
+          } else {
+            // Fallback — go to video if we have one, else categories
+            window.location.href = submodule.videoId
+              ? `/micro-learning/video/${submodule.videoId}?sessionId=${submodule.sessionId}`
+              : '/micro-learning/categories';
+          }
+          return;
+        }
+
         const route = submodule.name.toLowerCase().includes('random')
-          ? '/inquizzo/RandomQuiz'
-          : '/inquizzo/QuizDomainSelection';
+          ? '/inquizzo/RandomQuiz?resume=true&sessionId=' + submodule.sessionId
+          : '/inquizzo/QuizDomainSelection?resume=true&sessionId=' + submodule.sessionId;
         window.location.href = route;
       } else if (submodule.type === 'review') {
+        if (submodule.moduleId === 'microlearning' || submodule.moduleId === 'microLearning') {
+          window.location.href = '/micro-learning/articulation-results?sessionId=' + submodule.sessionId;
+          return;
+        }
+
         const route = submodule.name.toLowerCase().includes('random')
           ? '/inquizzo/RandomQuiz?review=' + submodule.sessionId
           : '/inquizzo/QuizDomainSelection?review=' + submodule.sessionId;
@@ -90,19 +114,23 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
       </div>
 
       {/* BOTTOM on mobile / right on desktop: BADGE + BUTTON */}
-      <div className="flex items-center justify-between md:contents">
-        <Badge
-          variant={isCompleted ? "default" : isPending ? "outline" : "secondary"}
-          className="w-fit"
-        >
-          {status}
-        </Badge>
-        <Button
-          variant={isCompleted ? "outline" : "default"}
-          className="md:ml-4"
-        >
-          {actionText}
-        </Button>
+      <div className="flex items-center justify-between md:flex-none md:justify-end gap-4 md:w-[240px]">
+        <div className="flex justify-start md:w-[100px]">
+          <Badge
+            variant={isCompleted ? "default" : isPending ? "outline" : "secondary"}
+            className="w-fit whitespace-nowrap"
+          >
+            {status}
+          </Badge>
+        </div>
+        <div className="flex justify-end md:w-[120px]">
+          <Button
+            variant={isCompleted ? "outline" : "default"}
+            className="w-full md:w-auto"
+          >
+            {actionText}
+          </Button>
+        </div>
       </div>
     </div>
   );
