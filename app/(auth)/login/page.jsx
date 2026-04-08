@@ -88,6 +88,7 @@ export default function SignInPage() {
               <button
                 onClick={() => googleLogin()}
                 disabled={isGoogleLoading}
+                suppressHydrationWarning
                 className="flex items-center justify-center gap-3 w-full max-w-xs px-6 py-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">

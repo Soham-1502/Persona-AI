@@ -89,6 +89,7 @@ export default function SignUpForm() {
                         type="text"
                         placeholder="Username"
                         disabled={isLoading}
+                        suppressHydrationWarning
                         className="w-full px-4 py-3.5 rounded-xl bg-muted/50 border border-transparent focus:border-primary focus:bg-background transition-all duration-200 text-foreground placeholder:text-muted-foreground"
                         {...form.register('username')}
                     />
@@ -108,6 +109,7 @@ export default function SignUpForm() {
                         type="text"
                         placeholder="First Name"
                         disabled={isLoading}
+                        suppressHydrationWarning
                         className="w-full px-4 py-3.5 rounded-xl bg-muted/50 border border-transparent focus:border-primary focus:bg-background transition-all duration-200 text-foreground placeholder:text-muted-foreground"
                         {...form.register('firstName')}
                     />
@@ -124,6 +126,7 @@ export default function SignUpForm() {
                         type="text"
                         placeholder="Last Name"
                         disabled={isLoading}
+                        suppressHydrationWarning
                         className="w-full px-4 py-3.5 rounded-xl bg-muted/50 border border-transparent focus:border-primary focus:bg-background transition-all duration-200 text-foreground placeholder:text-muted-foreground"
                         {...form.register('lastName')}
                     />
@@ -140,6 +143,7 @@ export default function SignUpForm() {
                         type="email"
                         placeholder="Email"
                         disabled={isLoading}
+                        suppressHydrationWarning
                         className="w-full px-4 py-3.5 rounded-xl bg-muted/50 border border-transparent focus:border-primary focus:bg-background transition-all duration-200 text-foreground placeholder:text-muted-foreground"
                         {...form.register('email')}
                     />
@@ -157,6 +161,7 @@ export default function SignUpForm() {
                             type={isShowPassword ? 'text' : 'password'}
                             placeholder="Password (min. 6 characters)"
                             disabled={isLoading}
+                            suppressHydrationWarning
                             className="w-full px-4 py-3.5 rounded-xl bg-muted/50 border border-transparent focus:border-primary focus:bg-background transition-all duration-200 text-foreground placeholder:text-muted-foreground pr-12"
                             {...form.register('password')}
                         />
@@ -165,6 +170,7 @@ export default function SignUpForm() {
                             title={isShowPassword ? 'Hide password' : 'Show password'}
                             aria-label={isShowPassword ? 'Hide password' : 'Show password'}
                             onClick={handleShowPassword}
+                            suppressHydrationWarning
                             className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             {isShowPassword ? <Eye size={18} /> : <EyeOff size={18} />}
@@ -183,6 +189,7 @@ export default function SignUpForm() {
                         id="agree_terms"
                         checked={agreeTerms}
                         onCheckedChange={setAgreeTerms}
+                        suppressHydrationWarning
                     />
                     <label 
                         htmlFor="agree_terms"
@@ -210,6 +217,7 @@ export default function SignUpForm() {
                 <button
                     type="submit"
                     disabled={isLoading || !agreeTerms}
+                    suppressHydrationWarning
                     className="w-full bg-primary hover:bg-primary/90 transition-colors duration-200 py-3.5 px-6 font-semibold text-primary-foreground text-sm rounded-full shadow-persona-purple hover:shadow-persona-hover disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isLoading ? 'Creating Account...' : 'Sign Up'}
