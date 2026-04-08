@@ -59,8 +59,8 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
         }
 
         const route = submodule.name.toLowerCase().includes('random')
-          ? '/inquizzo/RandomQuiz?sessionId=' + submodule.sessionId
-          : '/inquizzo/QuizDomainSelection?sessionId=' + submodule.sessionId;
+          ? '/inquizzo/RandomQuiz?resume=true&sessionId=' + submodule.sessionId
+          : '/inquizzo/QuizDomainSelection?resume=true&sessionId=' + submodule.sessionId;
         window.location.href = route;
       } else if (submodule.type === 'review') {
         if (submodule.moduleId === 'microlearning' || submodule.moduleId === 'microLearning') {
