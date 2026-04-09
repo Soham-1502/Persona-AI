@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react';
+import { NotebookPen } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { saveAs } from 'file-saver';
@@ -217,7 +218,7 @@ export default function DigitalSmartNotesTab({
         WebkitBackdropFilter: 'blur(12px)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ color: t.primary, fontSize: '1.1rem' }}>📝</span>
+          <NotebookPen size={20} color={t.primary} />
           <h2 style={{ fontSize: '1.15rem', fontWeight: '600', margin: 0, letterSpacing: '-0.01em' }}>
             Smart Notes
           </h2>
@@ -342,7 +343,7 @@ export default function DigitalSmartNotesTab({
         flex: 1,
         overflowY: 'auto',
         minHeight: 0,
-        padding: '16px 24px 100px 24px', // Extra bottom padding for "Add Note" bar
+        padding: '16px 24px 100px 24px',
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
