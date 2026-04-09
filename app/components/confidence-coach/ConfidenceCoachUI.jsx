@@ -92,6 +92,8 @@ export function ConfidenceCoachUI() {
     const [aiFeedbackError, setAiFeedbackError] = useState(false);
     const [recommendedTraining, setRecommendedTraining] = useState(null);
     const [isLoadingTraining, setIsLoadingTraining] = useState(false);
+    const [idealAnswer, setIdealAnswer] = useState(null); // { idealAnswer, annotation }
+    const [isGeneratingIdeal, setIsGeneratingIdeal] = useState(false);
 
     // Latest State Refs (to avoid hook dependency loops)
     const mlStatsRef = useRef(mlStats);
@@ -229,11 +231,27 @@ export function ConfidenceCoachUI() {
         if (stream && videoRef.current) {
             console.log("📺 Attaching stream to video element");
             videoRef.current.srcObject = stream;
+            
+            // Listen for track ending (e.g. unplugged or system override)
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) {
+                const handleEnd = () => {
+                    console.log("📹 Camera track ended unexpectedly");
+                    setStream(null);
+                    streamRef.current = null;
+                };
+                videoTrack.addEventListener('ended', handleEnd);
+                return () => videoTrack.removeEventListener('ended', handleEnd);
+            }
+
             videoRef.current.onloadedmetadata = () => {
                 videoRef.current.play().catch(e => console.error("Video play failed:", e));
             };
         }
     }, [stream]);
+
+    // Derived state for actual video track active status
+    const isCameraEnabled = stream && stream.getVideoTracks().some(track => track.readyState === 'live' && track.enabled);
 
     // Live Metrics Update Loop
     useEffect(() => {
@@ -528,7 +546,7 @@ export function ConfidenceCoachUI() {
         }
     };
 
-    const fetchAiFeedback = async (metrics) => {
+    const fetchAiFeedback = async (metrics, transcript, questionText) => {
         if (!metrics) return;
         setIsGeneratingFeedback(true);
         setAiFeedbackError(false);
@@ -540,7 +558,9 @@ export function ConfidenceCoachUI() {
                 body: JSON.stringify({
                     metrics,
                     scenarioType: scenarioCategory,
-                    difficulty: difficulty
+                    difficulty: difficulty,
+                    question: questionText || question,
+                    userTranscript: transcript || userAnswer
                 })
             });
             const data = await res.json();
@@ -614,6 +634,17 @@ export function ConfidenceCoachUI() {
             audioAnalyzerRef.current = null;
         }
         setAudioStats(audioMetrics);
+
+        // Crucial Fix: Completely shut down the camera/mic hardware hardware when the session ends
+        if (streamRef.current) {
+            console.log("🛑 Stopping camera/mic streams for results screen");
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+            setStream(null);
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
 
         const endTimeStamp = Date.now();
         const timeTaken = Math.floor((endTimeStamp - startTime) / 1000);
@@ -722,8 +753,9 @@ export function ConfidenceCoachUI() {
 
         const token = getAuthToken();
         setFinalDataPayload(payload);
-        fetchAiFeedback(payload.metrics);
+        fetchAiFeedback(payload.metrics, finalTranscript, question);
         fetchRecommendedTraining(payload.metrics);
+        fetchIdealAnswer(question, finalTranscript);
 
         // Fire-and-forget asynchronous save to JWT-protected backend (Plan 4.3)
         fetch('/api/confidence-coach/session', {
@@ -736,6 +768,32 @@ export function ConfidenceCoachUI() {
         }).catch(err => console.error("❌ Failed to save session:", err));
     };
 
+    const fetchIdealAnswer = async (questionText, transcript) => {
+        if (!questionText) return;
+        setIsGeneratingIdeal(true);
+        setIdealAnswer(null);
+        try {
+            const res = await fetch('/api/confidence-coach/ideal-answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: questionText,
+                    userTranscript: transcript || '',
+                    scenarioType: scenarioCategory,
+                    difficulty
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setIdealAnswer({ idealAnswer: data.idealAnswer, annotation: data.annotation });
+            }
+        } catch (err) {
+            console.error('❌ Failed to generate ideal answer:', err);
+        } finally {
+            setIsGeneratingIdeal(false);
+        }
+    };
+
     const getProgressColor = (value) => {
         if (value < 40) return "bg-red-500";
         if (value < 70) return "bg-orange-400";
@@ -744,34 +802,340 @@ export function ConfidenceCoachUI() {
 
     return (
         <div className="w-full h-fit lg:h-full flex flex-col lg:flex-row gap-4 overflow-y-auto lg:overflow-hidden pb-4 lg:pb-0 custom-scroll" data-lenis-prevent>
-            {/* Left Panel: Video Feed */}
-            <div className="w-full lg:w-[60%] min-h-[40vh] lg:min-h-0 bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center shrink-0 lg:shrink">
-                <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full flex-1 h-full object-cover transform scale-x-[-1]"
-                />
 
-                <div className="absolute top-4 left-4 flex gap-2">
-                    <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white border border-white/10 text-sm">
-                        <Video size={16} className={stream ? "text-green-400" : "text-red-400"} />
-                        <span>{stream ? "Camera Active" : "No Camera"}</span>
-                        {/* DEBUG: {stream?.id} */}
+            {sessionStatus === "ended" ? (
+                /* ── RESULTS LAYOUT: two full-width panels side by side ── */
+                <>
+                    {/* LEFT RESULTS PANEL: Score + Metrics + AI Feedback */}
+                    <div className="w-full lg:w-[55%] bg-card rounded-xl border border-border flex flex-col shadow-sm lg:overflow-y-auto custom-scroll" data-lenis-prevent>
+                        <div className="p-5 lg:p-6 flex flex-col gap-6">
+                            {finalScore === null ? (
+                                <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[60vh]">
+                                    <Loader2 size={48} className="text-primary animate-spin" />
+                                    <h2 className="text-2xl font-black uppercase tracking-widest animate-pulse">Analyzing...</h2>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Score Hero */}
+                                    <div className="bg-primary/5 p-8 rounded-3xl border border-primary/20 shadow-xl relative overflow-hidden">
+                                        <div className="relative z-10 flex flex-col items-center text-center">
+                                            <span className="text-[10px] font-black uppercase tracking-[0.4em] mb-4 text-primary/70">Holistic Confidence Score</span>
+                                            <div className="flex items-baseline gap-2 mb-4">
+                                                <span className="text-8xl font-black leading-none text-primary">{finalScore}</span>
+                                                <span className="text-2xl font-bold opacity-30 text-primary">/10</span>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                <span>Scenario: <span className="text-primary">{scenarioCategory}</span></span>
+                                                <div className="w-1 h-1 rounded-full bg-border"></div>
+                                                <span>Difficulty: <span className="text-primary">{difficulty}</span></span>
+                                                <div className="w-1 h-1 rounded-full bg-border"></div>
+                                                <span>Duration: <span className="text-primary">{finalDataPayload?.timeTaken}s</span></span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 6-Card Metrics Grid */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="bg-secondary/20 p-4 rounded-2xl border border-border flex flex-col items-center text-center">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-2">Eye Contact</span>
+                                            <span className="text-xl font-black text-primary mb-0.5">
+                                                {mlStats.faceFrames > 0 ? Math.round((mlStats.visibleFaceFrames / mlStats.faceFrames * 100)) : 0}%
+                                            </span>
+                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Camera time</span>
+                                        </div>
+                                        <div className="bg-secondary/20 p-4 rounded-2xl border border-border flex flex-col items-center text-center">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-2">Expression</span>
+                                            <span className="text-xl font-black text-primary mb-0.5">
+                                                {(() => {
+                                                    if (mlStats.faceFrames === 0) return 'Neutral';
+                                                    const posRatio = mlStats.positiveFrames / mlStats.faceFrames;
+                                                    const tenseRatio = mlStats.tenseFrames / mlStats.faceFrames;
+                                                    if (posRatio > 0.08) return 'Confident';
+                                                    if (tenseRatio > 0.1) return 'Tense';
+                                                    return 'Neutral';
+                                                })()}
+                                            </span>
+                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Dominant emotion</span>
+                                        </div>
+                                        <div className="bg-secondary/20 p-4 rounded-2xl border border-border flex flex-col items-center text-center">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-2">Posture</span>
+                                            <span className="text-xl font-black text-primary mb-0.5">
+                                                {Math.round(mlStats.currentPostureRatio * 100) > 60 ? 'Strong' : (Math.round(mlStats.currentPostureRatio * 100) > 30 ? 'Moderate' : 'Weak')}
+                                            </span>
+                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">{Math.round(mlStats.currentPostureRatio * 100)}% avg</span>
+                                        </div>
+                                        <div className="bg-secondary/20 p-4 rounded-2xl border border-border flex flex-col items-center text-center">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-2">Vocal Energy</span>
+                                            <span className="text-xl font-black text-primary mb-0.5">
+                                                {(() => {
+                                                    const wpm = finalDataPayload?.meta?.wpm || 0;
+                                                    if (wpm === 0) return 'No Speech';
+                                                    if (wpm < 15) return 'Too Slow';
+                                                    if (wpm < 20) return 'Slow';
+                                                    if (wpm < 40) return 'Moderate';
+                                                    if (wpm < 65) return 'Good';
+                                                    return 'Very Good';
+                                                })()}
+                                            </span>
+                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">{Math.round(finalDataPayload?.meta?.wpm || 0)} WPM</span>
+                                        </div>
+                                        <div className="bg-secondary/20 p-4 rounded-2xl border border-border flex flex-col items-center text-center">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-2">Fillers</span>
+                                            <span className="text-xl font-black text-primary mb-0.5">{finalDataPayload?.meta?.fillers || 0}</span>
+                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Um, uh, like...</span>
+                                        </div>
+                                        <div className="bg-secondary/20 p-4 rounded-2xl border border-border flex flex-col items-center text-center">
+                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-2">Clarity</span>
+                                            <span className="text-xl font-black text-primary mb-0.5">
+                                                {(() => {
+                                                    const wordsCount = (finalDataPayload?.meta?.wordCount || 1);
+                                                    const fillersPerWord = (finalDataPayload?.meta?.fillers || 0) / wordsCount;
+                                                    const pitchBase = Math.min(100, audioStats?.pitchStability || 50);
+                                                    const fillerPenalty = Math.round(fillersPerWord * 200);
+                                                    return Math.max(0, Math.round(pitchBase - fillerPenalty)) + '%';
+                                                })()}
+                                            </span>
+                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Linguistic clarity</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Vocal Pacing Details */}
+                                    <div className="bg-secondary/10 rounded-2xl p-5 border border-border">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vocal Pacing Details</span>
+                                            <span className="text-xs font-black text-primary">{Math.round(finalDataPayload?.meta?.wpm || 0)} WPM</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                                            <div className="flex justify-between items-center text-[10px]">
+                                                <span className="text-muted-foreground font-bold">Pitch Stability</span>
+                                                <span className={audioStats?.pitchStability > 70 ? 'text-green-500 font-black' : 'text-red-500 font-black'}>{audioStats?.pitchStability || 0}%</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[10px]">
+                                                <span className="text-muted-foreground font-bold">Fillers / 100 words</span>
+                                                <span className="text-green-500 font-black">{((finalDataPayload?.meta?.fillers || 0) / (Math.max(1, (finalDataPayload?.meta?.wordCount || 1)) / 100)).toFixed(1)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[10px]">
+                                                <span className="text-muted-foreground font-bold">Energy Trend</span>
+                                                <span className="text-green-500 font-black">{audioStats?.energyTrend || 'Stable'}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[10px]">
+                                                <span className="text-muted-foreground font-bold">Pitch Stability</span>
+                                                <span className={audioStats?.pitchStability > 70 ? 'text-green-500 font-black' : 'text-orange-400 font-black'}>{audioStats?.pitchStability > 70 ? 'Stable' : 'Variable'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* AI Areas for Improvement */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Areas for Improvement</h3>
+                                        </div>
+                                        <div className="grid gap-3">
+                                            {isGeneratingFeedback ? (
+                                                <div className="space-y-3">
+                                                    {[1, 2, 3].map(i => (
+                                                        <div key={i} className="h-24 bg-secondary/5 rounded-xl animate-pulse flex gap-4 p-4 border border-border/50">
+                                                            <div className="w-10 h-10 rounded-lg bg-secondary/10 shrink-0" />
+                                                            <div className="flex-1 space-y-2">
+                                                                <div className="h-3 w-24 bg-secondary/10 rounded" />
+                                                                <div className="h-4 w-full bg-secondary/10 rounded" />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : aiFeedback.length > 0 ? (
+                                                aiFeedback.map((item, idx) => (
+                                                    <div key={idx} className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex gap-4 items-start shadow-sm hover:shadow-md transition-shadow group">
+                                                        <div className="bg-primary/10 p-2 rounded-lg text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                                                            {(() => {
+                                                                const iconType = (item.iconType || 'zap').toLowerCase();
+                                                                if (iconType.includes('camera') || iconType.includes('video')) return <Video size={18} />;
+                                                                if (iconType.includes('mic') || iconType.includes('voice')) return <Mic size={18} />;
+                                                                if (iconType.includes('activity')) return <Activity size={18} />;
+                                                                if (iconType.includes('eye')) return <Eye size={18} />;
+                                                                if (iconType.includes('trending')) return <TrendingUp size={18} />;
+                                                                return <Zap size={18} />;
+                                                            })()}
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs font-black uppercase opacity-60 tracking-tight">{item.title}</p>
+                                                            <p className="text-sm font-medium leading-relaxed">{item.description}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : aiFeedbackError ? (
+                                                <div className="p-6 border-2 border-dashed border-red-500/30 rounded-2xl flex flex-col items-center text-center bg-red-500/5">
+                                                    <p className="text-sm font-bold text-red-500 uppercase tracking-widest mb-3">AI Connection Failed</p>
+                                                    <button onClick={() => fetchAiFeedback(finalDataPayload?.metrics, finalDataPayload?.userAnswer, finalDataPayload?.question)} className="px-5 py-2 bg-red-500 text-white rounded-xl font-bold text-xs hover:scale-105 transition-transform">
+                                                        Try Again
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="p-6 border-2 border-dashed border-primary/30 rounded-2xl flex flex-col items-center text-center bg-primary/5">
+                                                    <Loader2 size={28} className="text-primary animate-spin mb-3" />
+                                                    <p className="text-xs font-black text-primary uppercase tracking-widest">Generating coaching tips...</p>
+                                                    <button onClick={() => fetchAiFeedback(finalDataPayload?.metrics, finalDataPayload?.userAnswer, finalDataPayload?.question)} className="mt-3 px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-xl font-bold text-xs hover:bg-primary hover:text-white transition-all">
+                                                        Taking too long? Retry
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {!isGeneratingFeedback && finalDataPayload && (
+                                            <div className="flex justify-center mt-1">
+                                                <button onClick={() => fetchAiFeedback(finalDataPayload.metrics, finalDataPayload.userAnswer, finalDataPayload.question)} className="text-xs font-bold text-muted-foreground hover:text-primary flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border hover:border-primary/30 transition-all">
+                                                    <Zap size={12} /> Regenerate AI Feedback
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Recommended Training */}
+                                    <div className="bg-secondary/10 rounded-3xl p-6 border border-border overflow-hidden relative group min-h-28 flex flex-col justify-center">
+                                        {isLoadingTraining ? (
+                                            <div className="flex flex-col items-center justify-center space-y-3 py-2">
+                                                <Loader2 size={24} className="text-primary animate-spin" />
+                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Finding best training for you...</p>
+                                            </div>
+                                        ) : recommendedTraining ? (
+                                            <>
+                                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
+                                                    <TrendingUp size={80} />
+                                                </div>
+                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
+                                                    Improve your {METRIC_DISPLAY_NAMES[recommendedTraining.weakMetric] || 'Skills'}
+                                                </h3>
+                                                <div className="flex gap-4 items-center">
+                                                    <div className="w-24 h-16 bg-black rounded-lg overflow-hidden shrink-0 relative border border-white/10">
+                                                        <img src={recommendedTraining.snippet.thumbnails?.high?.url || recommendedTraining.snippet.thumbnails?.medium?.url} className="w-full h-full object-cover" alt="Training Thumbnail" />
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                                            <Play size={12} fill="white" className="text-white" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm font-black leading-tight line-clamp-1">{recommendedTraining.snippet.title}</p>
+                                                        <p className="text-[10px] font-medium text-muted-foreground">{recommendedTraining.snippet.channelTitle}</p>
+                                                        <Link href={`/micro-learning/playlist/${recommendedTraining.id}`} className="text-[10px] font-black text-primary hover:underline flex items-center gap-1 mt-1 uppercase">
+                                                            Start Micro-Learning Course →
+                                                        </Link>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-center">Complete more sessions to get personalized training.</p>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        onClick={() => {
+                                            setSessionStatus('idle');
+                                            setFinalScore(null);
+                                            setAiFeedback([]);
+                                            setIdealAnswer(null);
+                                        }}
+                                        className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black hover:brightness-110 active:scale-[0.98] transition-all flex justify-center items-center gap-3 shadow-xl shadow-primary/20"
+                                    >
+                                        PRACTICE AGAIN
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
-                </div>
 
-                {sessionStatus === "analyzing" && (
-                    <div className="absolute top-4 right-4 bg-red-500/80 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-2 text-white text-sm font-bold animate-pulse shadow-lg">
-                        <div className="w-2.5 h-2.5 rounded-full bg-white"></div>
-                        RECORDING
+                    {/* RIGHT RESULTS PANEL: Transcript + Ideal Answer */}
+                    <div className="w-full lg:w-[45%] bg-card rounded-xl border border-border flex flex-col shadow-sm lg:overflow-y-auto custom-scroll" data-lenis-prevent>
+                        <div className="p-5 lg:p-6 flex flex-col gap-6 h-full">
+                            {/* Question asked */}
+                            <div className="border border-border bg-secondary/20 p-5 rounded-2xl relative">
+                                <div className="absolute -top-3 left-4 bg-card px-2 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Question Asked</div>
+                                <p className="text-sm font-semibold leading-relaxed">&quot;{finalDataPayload?.question || question}&quot;</p>
+                            </div>
+
+                            {/* User's Transcript */}
+                            <div className="flex flex-col flex-1">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-3">Your Answer (Transcript)</h3>
+                                <div className="bg-secondary/30 rounded-2xl border border-border p-5 flex-1 min-h-32 max-h-56 overflow-y-auto custom-scroll">
+                                    {finalDataPayload?.userAnswer && finalDataPayload.userAnswer !== '(No transcript captured)' ? (
+                                        <p className="text-sm font-medium leading-relaxed">{finalDataPayload.userAnswer}</p>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground italic">No speech was captured during this session.</p>
+                                    )}
+                                </div>
+                                {idealAnswer?.annotation && (
+                                    <div className="mt-3 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                        <p className="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">AI Coach Note</p>
+                                        <p className="text-xs text-muted-foreground leading-relaxed">{idealAnswer.annotation}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Ideal Answer */}
+                            <div className="flex flex-col flex-1">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">What AI Would Say</h3>
+                                    {!isGeneratingIdeal && idealAnswer && (
+                                        <button
+                                            onClick={() => fetchIdealAnswer(finalDataPayload?.question || question, finalDataPayload?.userAnswer)}
+                                            className="text-[10px] font-bold text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                                        >
+                                            <Zap size={10} /> Regenerate
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="bg-primary/5 rounded-2xl border border-primary/20 p-5 flex-1 min-h-40 overflow-y-auto custom-scroll">
+                                    {isGeneratingIdeal ? (
+                                        <div className="flex flex-col items-center justify-center h-full py-6 space-y-3">
+                                            <Loader2 size={28} className="text-primary animate-spin" />
+                                            <p className="text-xs font-black text-primary uppercase tracking-widest animate-pulse">Crafting ideal response...</p>
+                                        </div>
+                                    ) : idealAnswer?.idealAnswer ? (
+                                        <p className="text-sm font-medium leading-relaxed whitespace-pre-line">{idealAnswer.idealAnswer}</p>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full py-6 space-y-3">
+                                            <Loader2 size={28} className="text-primary animate-spin" />
+                                            <p className="text-xs font-black text-primary uppercase tracking-widest animate-pulse">Crafting ideal response...</p>
+                                            <button
+                                                onClick={() => fetchIdealAnswer(finalDataPayload?.question || question, finalDataPayload?.userAnswer)}
+                                                className="mt-2 px-4 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-xl font-bold text-xs hover:bg-primary hover:text-white transition-all"
+                                            >
+                                                Taking too long? Retry
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                )}
-            </div>
+                </>
+            ) : (
+                /* ── LIVE / IDLE LAYOUT: Camera left, Controls right ── */
+                <>
+                    {/* Left Panel: Video Feed */}
+                    <div className="w-full lg:w-[60%] min-h-[40vh] lg:min-h-0 bg-black rounded-xl overflow-hidden relative shadow-lg border border-border flex items-center justify-center shrink-0 lg:shrink">
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full flex-1 h-full object-cover transform scale-x-[-1]"
+                        />
 
-            {/* Right Panel: Controls & Instructions */}
-            <div className="w-full lg:w-[40%] bg-card rounded-xl border border-border flex flex-col shadow-sm flex-1 lg:overflow-y-auto custom-scroll" data-lenis-prevent>
+                        <div className="absolute top-4 left-4 flex gap-2">
+                            <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 text-white border border-white/10 text-sm">
+                                <Video size={16} className={isCameraEnabled ? 'text-green-400' : 'text-red-400'} />
+                                <span>{isCameraEnabled ? 'Camera Active' : 'No Camera'}</span>
+                            </div>
+                        </div>
+
+                        {sessionStatus === "analyzing" && (
+                            <div className="absolute top-4 right-4 bg-red-500/80 backdrop-blur-md px-4 py-1.5 rounded-full flex items-center gap-2 text-white text-sm font-bold animate-pulse shadow-lg">
+                                <div className="w-2.5 h-2.5 rounded-full bg-white"></div>
+                                RECORDING
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Panel: Controls & Instructions */}
+                    <div className="w-full lg:w-[40%] bg-card rounded-xl border border-border flex flex-col shadow-sm flex-1 lg:overflow-y-auto custom-scroll" data-lenis-prevent>
                 <div className="p-5 lg:p-6 flex flex-col flex-1">
 
                     {sessionStatus === "idle" && (
@@ -839,7 +1203,7 @@ export function ConfidenceCoachUI() {
 
                             <button
                                 onClick={startSession}
-                                disabled={!stream || isGeneratingQuestion}
+                                disabled={!isCameraEnabled || isGeneratingQuestion}
                                 className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black text-lg shadow-xl hover:-translate-y-0.5 active:translate-y-0 transition-all flex justify-center items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                             >
                                 {isGeneratingQuestion ? (
@@ -917,306 +1281,11 @@ export function ConfidenceCoachUI() {
                         </div>
                     )}
 
-                    {sessionStatus === "ended" && (
-                        <div className="flex flex-col h-full pb-4">
-                            {finalScore === null ? (
-                                <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-                                    <Loader2 size={48} className="text-primary animate-spin" />
-                                    <h2 className="text-2xl font-black uppercase tracking-widest animate-pulse">Analyzing...</h2>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    <div className="text-center space-y-2 mb-4">
-                                        <div className="flex justify-center mb-2">
-                                            <div className="bg-green-500/10 p-2 rounded-full">
-                                                <CheckCircle size={32} className="text-green-500" />
-                                            </div>
-                                        </div>
-                                        <h2 className="text-3xl font-black tracking-tighter">SUCCESS</h2>
-                                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Session analyzed against AI models</p>
-                                    </div>
-
-                                    {/* 6-CARD RESULTS LAYOUT */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {/* Eye Contact */}
-                                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Eye Contact</span>
-                                            <span className="text-2xl font-black text-primary mb-1">
-                                                {mlStats.faceFrames > 0 ? Math.round((mlStats.visibleFaceFrames / mlStats.faceFrames * 100)) : 0}%
-                                            </span>
-                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Time looking at camera</span>
-                                        </div>
-
-                                        {/* Expression */}
-                                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Expression</span>
-                                            <span className="text-2xl font-black text-primary mb-1">
-                                                {(() => {
-                                                    if (mlStats.faceFrames === 0) return "Neutral";
-                                                    const posRatio = mlStats.positiveFrames / mlStats.faceFrames;
-                                                    const tenseRatio = mlStats.tenseFrames / mlStats.faceFrames;
-                                                    if (posRatio > 0.08) return "Confident";
-                                                    if (tenseRatio > 0.1) return "Tense";
-                                                    return "Neutral";
-                                                })()}
-                                            </span>
-                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Dominant facial emotion</span>
-                                        </div>
-
-                                        {/* Vocal Energy - matches Vocal Pacing Details */}
-                                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Vocal Energy</span>
-                                            <span className="text-2xl font-black text-primary mb-1">
-                                                {(() => {
-                                                    const wpm = finalDataPayload?.meta?.wpm || 0;
-                                                    if (wpm === 0) return "No Speech";
-                                                    if (wpm < 15) return "Too Slow";
-                                                    if (wpm < 20) return "Slow";
-                                                    if (wpm < 40) return "Moderate";
-                                                    if (wpm < 65) return "Good";
-                                                    return "Very Good";
-                                                })()}
-                                            </span>
-                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">{Math.round(finalDataPayload?.meta?.wpm || 0)} WPM average</span>
-                                        </div>
-
-                                        {/* Posture */}
-                                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Posture</span>
-                                            <span className="text-2xl font-black text-primary mb-1">
-                                                {Math.round(mlStats.currentPostureRatio * 100) > 60 ? "Strong" : (Math.round(mlStats.currentPostureRatio * 100) > 30 ? "Moderate" : "Weak")}
-                                            </span>
-                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">{Math.round(mlStats.currentPostureRatio * 100)}% session average</span>
-                                        </div>
-
-                                        {/* Fillers */}
-                                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Fillers</span>
-                                            <span className="text-2xl font-black text-primary mb-1">
-                                                {finalDataPayload?.meta?.fillers || 0}
-                                            </span>
-                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Um, uh, like, etc.</span>
-                                        </div>
-
-                                        {/* Clarity */}
-                                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border flex flex-col items-center text-center">
-                                            <span className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mb-3">Clarity</span>
-                                            <span className="text-2xl font-black text-primary mb-1">
-                                                {(() => {
-                                                    const wordsCount = (finalDataPayload?.meta?.wordCount || 1);
-                                                    const fillersPerWord = (finalDataPayload?.meta?.fillers || 0) / wordsCount;
-                                                    // Clarity = pitch stability minus filler penalty
-                                                    const pitchBase = Math.min(100, audioStats?.pitchStability || 50);
-                                                    const fillerPenalty = Math.round(fillersPerWord * 200); // each 1% filler rate = 2pt penalty
-                                                    return Math.max(0, Math.round(pitchBase - fillerPenalty)) + "%";
-                                                })()}
-                                            </span>
-                                            <span className="text-[9px] text-muted-foreground font-bold opacity-60">Linguistic clarity</span>
-                                        </div>
-                                    </div>
-
-                                    {/* DETAILED VOCAL PACING BREAKDOWN */}
-                                    <div className="bg-secondary/10 rounded-2xl p-5 border border-border mt-2">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Vocal Pacing Details</span>
-                                            <span className="text-xs font-black text-primary">{Math.round(finalDataPayload?.meta?.wpm || 0)} WPM</span>
-                                        </div>
-                                        <div className="flex items-center gap-4 mb-4">
-                                            <span className="text-2xl font-black text-yellow-500">
-                                                {(() => {
-                                                    const wpm = finalDataPayload?.meta?.wpm || 0;
-                                                    if (wpm === 0) return "No Speech";
-                                                    if (wpm < 15) return "Too Slow";
-                                                    if (wpm < 20) return "Slow";
-                                                    if (wpm < 40) return "Moderate";
-                                                    if (wpm < 65) return "Good";
-                                                    return "Very Good";
-                                                })()}
-                                            </span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-muted-foreground font-bold">Pitch Stability</span>
-                                                <span className={audioStats?.pitchStability > 70 ? "text-green-500 font-black" : "text-red-500 font-black"}>{audioStats?.pitchStability || 0}%</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-muted-foreground font-bold">Fillers / 100 words</span>
-                                                <span className="text-green-500 font-black">{((finalDataPayload?.meta?.fillers || 0) / (Math.max(1, (finalDataPayload?.meta?.wordCount || 1)) / 100)).toFixed(1)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-muted-foreground font-bold">Volume</span>
-                                                <span className="text-green-500 font-black">Good</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-muted-foreground font-bold">Energy Trend</span>
-                                                <span className="text-green-500 font-black">{audioStats?.energyTrend || "Stable"}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-muted-foreground font-bold">Pause Ratio</span>
-                                                <span className="text-blue-500 font-black">0%</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <span className="text-muted-foreground font-bold">Filler Severity</span>
-                                                <span className="text-green-500 font-black">Excellent</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Holistic Score Area */}
-                                    <div className="bg-primary/5 p-8 rounded-3xl border border-primary/20 shadow-xl relative overflow-hidden">
-                                        <div className="relative z-10 flex flex-col items-center">
-                                            <span className="text-[10px] font-black uppercase tracking-[0.4em] mb-4 text-primary/70">Holistic Confidence Score</span>
-                                            <div className="flex items-baseline gap-2 mb-4">
-                                                <span className="text-8xl font-black leading-none text-primary">{finalScore}</span>
-                                                <span className="text-2xl font-bold opacity-30 text-primary">/10</span>
-                                            </div>
-
-                                            <div className="flex items-center gap-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-2">
-                                                <span>Difficulty: <span className="text-primary">{difficulty}</span></span>
-                                                <div className="w-1 h-1 rounded-full bg-border"></div>
-                                                <span>Duration: <span className="text-primary">{finalDataPayload?.timeTaken}s</span></span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between mt-4">
-                                            <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Areas for Improvement</h3>
-                                            {aiFeedback.length > 0 && !isGeneratingFeedback && (
-                                                <button
-                                                    onClick={() => fetchAiFeedback(finalDataPayload.metrics)}
-                                                    className="text-[10px] font-black text-primary hover:underline flex items-center gap-1"
-                                                >
-                                                    <Zap size={10} /> REGENERATE
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="grid gap-3">
-                                            {isGeneratingFeedback ? (
-                                                <div className="space-y-3">
-                                                    {[1, 2, 3].map(i => (
-                                                        <div key={i} className="h-24 bg-secondary/5 rounded-xl animate-pulse flex gap-4 p-4 border border-border/50">
-                                                            <div className="w-10 h-10 rounded-lg bg-secondary/10 shrink-0" />
-                                                            <div className="flex-1 space-y-2">
-                                                                <div className="h-3 w-24 bg-secondary/10 rounded" />
-                                                                <div className="h-4 w-full bg-secondary/10 rounded" />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : aiFeedback.length > 0 ? (
-                                                aiFeedback.map((item, idx) => (
-                                                    <div key={idx} className="bg-primary/5 border border-primary/20 p-4 rounded-xl flex gap-4 items-start shadow-sm hover:shadow-md transition-shadow group">
-                                                        <div className="bg-primary/10 p-2 rounded-lg text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                                                            {(() => {
-                                                                const iconType = (item.iconType || "zap").toLowerCase();
-                                                                if (iconType.includes("camera") || iconType.includes("video")) return <Video size={18} />;
-                                                                if (iconType.includes("mic") || iconType.includes("voice")) return <Mic size={18} />;
-                                                                if (iconType.includes("activity")) return <Activity size={18} />;
-                                                                if (iconType.includes("eye")) return <Eye size={18} />;
-                                                                if (iconType.includes("trending")) return <TrendingUp size={18} />;
-                                                                return <Zap size={18} />;
-                                                            })()}
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <p className="text-xs font-black uppercase opacity-60 tracking-tight">{item.title}</p>
-                                                            <p className="text-sm font-medium leading-relaxed">{item.description}</p>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (isGeneratingFeedback || (finalScore !== null && aiFeedback.length === 0 && !aiFeedbackError)) ? (
-                                                <div className="p-10 border-2 border-dashed border-primary/30 rounded-3xl flex flex-col items-center justify-center text-center bg-primary/5">
-                                                    <div className="bg-primary/10 p-4 rounded-full mb-4">
-                                                        <Loader2 size={32} className="text-primary animate-spin" />
-                                                    </div>
-                                                    <p className="text-sm font-black text-primary uppercase tracking-widest mb-1">AI COACHING TIPS</p>
-                                                    <p className="text-[10px] text-muted-foreground font-bold animate-pulse">GENERATING ANALYTICS...</p>
-                                                </div>
-                                            ) : aiFeedbackError ? (
-                                                <div className="p-8 border-2 border-dashed border-red-500/30 rounded-3xl flex flex-col items-center justify-center text-center bg-red-500/5">
-                                                    <div className="bg-red-500/10 p-4 rounded-full mb-4">
-                                                        <Zap size={32} className="text-red-500" />
-                                                    </div>
-                                                    <p className="text-sm font-bold text-red-500 uppercase tracking-widest mb-2">AI Connection Failed</p>
-                                                    <button
-                                                        onClick={() => fetchAiFeedback(finalDataPayload.metrics)}
-                                                        className="px-6 py-2 bg-red-500 text-white rounded-xl font-bold text-xs hover:scale-105 transition-transform shadow-lg"
-                                                    >
-                                                        Tap to Try Again
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="p-10 border-2 border-dashed border-border rounded-3xl flex flex-col items-center justify-center text-center bg-secondary/5">
-                                                    <div className="bg-primary/10 p-4 rounded-full mb-4">
-                                                        <CheckCircle size={32} className="text-muted-foreground opacity-20" />
-                                                    </div>
-                                                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Feedback ready</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* DYNAMIC MICRO-LEARNING INTEGRATION */}
-                                    <div className="bg-secondary/10 rounded-3xl p-6 border border-border mt-2 overflow-hidden relative group min-h-35 flex flex-col justify-center">
-                                        {isLoadingTraining ? (
-                                            <div className="flex flex-col items-center justify-center space-y-3 py-4">
-                                                <Loader2 size={24} className="text-primary animate-spin" />
-                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Finding the best training for you...</p>
-                                            </div>
-                                        ) : recommendedTraining ? (
-                                            <>
-                                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
-                                                    <TrendingUp size={80} />
-                                                </div>
-                                                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
-                                                    Improve your {METRIC_DISPLAY_NAMES[recommendedTraining.weakMetric] || "Skills"}
-                                                </h3>
-                                                <div className="flex gap-4 items-center">
-                                                    <div className="w-24 h-16 bg-black rounded-lg overflow-hidden shrink-0 relative border border-white/10">
-                                                        <img
-                                                            src={recommendedTraining.snippet.thumbnails?.high?.url || recommendedTraining.snippet.thumbnails?.medium?.url}
-                                                            className="w-full h-full object-cover"
-                                                            alt="Training Thumbnail"
-                                                        />
-                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                                            <Play size={12} fill="white" className="text-white" />
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <p className="text-sm font-black leading-tight line-clamp-1">{recommendedTraining.snippet.title}</p>
-                                                        <p className="text-[10px] font-medium text-muted-foreground">{recommendedTraining.snippet.channelTitle}</p>
-                                                        <Link
-                                                            href={`/micro-learning/playlist/${recommendedTraining.id}`}
-                                                            className="text-[10px] font-black text-primary hover:underline flex items-center gap-1 mt-1 uppercase"
-                                                        >
-                                                            Start Micro-Learning Course →
-                                                        </Link>
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="text-center py-4">
-                                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Complete more sessions to get personalized training.</p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <button
-                                        onClick={() => {
-                                            setSessionStatus("idle");
-                                            setFinalScore(null);
-                                            setAiFeedback([]);
-                                        }}
-                                        className="w-full py-5 bg-primary text-primary-foreground rounded-2xl font-black hover:brightness-110 active:scale-[0.98] transition-all flex justify-center items-center gap-3 mt-6 shadow-xl shadow-primary/20"
-                                    >
-                                        PRACTICE AGAIN
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             </div>
+                </>
+            )}
         </div>
     );
 }
+

@@ -19,9 +19,7 @@ function getUserFromToken(req) {
 
 export async function POST(req) {
     try {
-        const groq = new Groq({
-            apiKey: process.env.GROQ_API_KEY || 'dummy-key-for-build'
-        });
+
 
         // Parse request body
         const { messages, sessionId, timeTaken = 0 } = await req.json();
