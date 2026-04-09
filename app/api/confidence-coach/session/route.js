@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { User } from "@/models/User";
+import { ConfidenceCoachSession } from "@/models/ConfidenceCoachSession";
 
 export async function POST(req) {
     try {
@@ -21,8 +22,8 @@ export async function POST(req) {
         }
 
         const body = await req.json();
-        const { score, timeTaken } = body;
-        console.log("📦 Request body:", { score, timeTaken });
+        const { score, timeTaken, sessionId, question, userAnswer, metrics, meta } = body;
+        console.log("📦 Request body:", { score, timeTaken, sessionId });
 
         if (score === undefined || score === null || timeTaken === undefined || timeTaken === null) {
             return NextResponse.json(
@@ -71,7 +72,23 @@ export async function POST(req) {
         // Use try-catch specifically for save to capture validation errors
         try {
             await user.save();
-            console.log("✅ Session saved successfully");
+            
+            // Save the detailed session
+            if (sessionId && question && userAnswer) {
+                await ConfidenceCoachSession.create({
+                    userId: user._id,
+                    sessionId: sessionId,
+                    question: question,
+                    userAnswer: userAnswer,
+                    score: score,
+                    timeTaken: timeTaken,
+                    metrics: metrics || {},
+                    meta: meta || {}
+                });
+                console.log("✅ Detailed session record stored");
+            }
+            
+            console.log("✅ Session stats updated successfully");
         } catch (saveError) {
             console.error("❌ Mongoose Save Error:", saveError);
             throw new Error("Failed to save user data: " + saveError.message);
@@ -88,5 +105,39 @@ export async function POST(req) {
             { success: false, error: "Internal Server Error: " + error.message },
             { status: 500 }
         );
+    }
+}
+
+export async function GET(req) {
+    try {
+        await connectDB();
+        let decodedUser;
+        try {
+            decodedUser = await authenticate(req);
+        } catch (authError) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const url = new URL(req.url);
+        const sessionId = url.searchParams.get("sessionId");
+
+        if (!sessionId) {
+            return NextResponse.json({ success: false, error: "Missing sessionId" }, { status: 400 });
+        }
+
+        const session = await ConfidenceCoachSession.findOne({ 
+            userId: decodedUser._id, 
+            sessionId: sessionId 
+        }).lean();
+
+        if (!session) {
+            return NextResponse.json({ success: false, error: "Session not found" }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, session });
+
+    } catch (error) {
+        console.error("❌ Confidence Coach Session Fetch Error:", error);
+        return NextResponse.json({ success: false, error: "Internal Server Error: " + error.message }, { status: 500 });
     }
 }

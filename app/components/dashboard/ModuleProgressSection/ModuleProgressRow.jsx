@@ -28,11 +28,13 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
 
   let status = "In Progress";
   if (isStatRow) status = "View Stats";
+  else if (submodule.type === 'review') status = "Completed";
   else if (isCompleted) status = "Completed";
   else if (isPending) status = "Pending";
 
   let actionText = "Continue";
   if (isStatRow) actionText = "View Details";
+  else if (submodule.type === 'review') actionText = "Review";
   else if (isCompleted) actionText = "Review";
   else if (isPending) actionText = "Start";
 
@@ -68,6 +70,12 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
           return;
         }
 
+        if (submodule.moduleId === 'confidenceCoach') {
+          // Future enhancement: Route to a specific results page if created
+          window.location.href = '/confidence-coach';
+          return;
+        }
+
         const route = submodule.name.toLowerCase().includes('random')
           ? '/inquizzo/RandomQuiz?review=' + submodule.sessionId
           : '/inquizzo/QuizDomainSelection?review=' + submodule.sessionId;
@@ -80,6 +88,14 @@ export default function ModuleProgressRow({ submodule, parentModule }) {
     if (parentModule.id === 'inquizzo') {
       if (submodule.id === 'accuracy' || submodule.id === 'questions' || submodule.id === 'sessions') {
         window.location.href = '/inquizzo';
+      }
+    }
+    
+    if (parentModule.id === 'confidencecoach') {
+      if (submodule.sessionId) {
+        window.location.href = `/confidence-coach?sessionId=${submodule.sessionId}`;
+      } else {
+        window.location.href = '/confidence-coach';
       }
     }
   };

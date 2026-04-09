@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Mic, Video, Square, Play, CheckCircle, Loader2, Eye, Activity, Zap, TrendingUp, Timer } from "lucide-react";
 // Porcupine removed to use native SpeechRecognition commands
@@ -100,16 +101,91 @@ export function ConfidenceCoachUI() {
     const userAnswerRef = useRef(userAnswer);
     const interimAnswerRef = useRef(interimAnswer);
 
+    const searchParams = useSearchParams();
+    const urlSessionId = searchParams?.get('sessionId');
+
     useEffect(() => { mlStatsRef.current = mlStats; }, [mlStats]);
     useEffect(() => { userAnswerRef.current = userAnswer; }, [userAnswer]);
     useEffect(() => { interimAnswerRef.current = interimAnswer; }, [interimAnswer]);
 
     const scenarios = ["Job Interview", "Presentation", "Networking", "Negotiation", "Crisis Management", "Impromptu Pitch", "Hostile Q&A", "Salary Discussion"];
 
+    // Fetch historical session if navigated via Review button
+    useEffect(() => {
+        if (!urlSessionId) return;
+
+        const fetchHistoricalSession = async () => {
+            setSessionStatus("analyzing");
+            setIsLoadingTraining(true);
+            try {
+                const token = getAuthToken();
+                const res = await fetch(`/api/confidence-coach/session?sessionId=${urlSessionId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    const s = json.session;
+                    
+                    setSessionId(s.sessionId);
+                    setQuestion(s.question);
+                    setUserAnswer(s.userAnswer);
+                    setFinalScore(s.score);
+                    
+                    // Re-construct the metrics object exactly as expected by the results UI
+                    const mappedMetrics = {
+                        eyeContact: s.metrics?.eyeContact || 0,
+                        posture: s.metrics?.posture || 0,
+                        emotion: s.metrics?.emotion || "Neutral",
+                        vocalStability: s.metrics?.vocalStability || 0,
+                        pacing: s.metrics?.pacing || 0,
+                        wpm: s.metrics?.wpm || 0,
+                        fillers: s.metrics?.fillers || 0
+                    };
+                    
+                    setFinalDataPayload({
+                        finalCalculatedScore: s.score,
+                        metrics: mappedMetrics,
+                        timeTaken: s.timeTaken,
+                        meta: {
+                            wpm: s.metrics?.wpm || 0,
+                            fillers: s.metrics?.fillers || 0,
+                            wordCount: s.meta?.wordCount || 0,
+                            pitchStability: s.metrics?.vocalStability || 0,
+                            energyTrend: s.meta?.energyTrend || 'Stable'
+                        }
+                    });
+                    
+                    // Pre-fill fallback stats so UI components don't crash when measuring averages
+                    setMlStats(prev => ({ ...prev, currentPostureRatio: (s.metrics?.posture || 0) / 100 }));
+                    setAudioStats({ pitchStability: s.metrics?.vocalStability || 0, energyTrend: s.meta?.energyTrend || 'Stable' });
+                    
+                    setSessionStatus("ended");
+
+                    // Trigger AI Feedback synchronously so the UI loads it automatically
+                    fetchAiFeedback(mappedMetrics, s.userAnswer, s.question);
+                    fetchRecommendedTraining(mappedMetrics);
+                    fetchIdealAnswer(s.question, s.userAnswer, mappedMetrics);
+                    
+                    setIsLoadingTraining(false);
+                } else {
+                    console.error("Failed to load past session");
+                    setSessionStatus("idle");
+                    setIsLoadingTraining(false);
+                }
+            } catch (err) {
+                console.error("Error loading session:", err);
+                setSessionStatus("idle");
+                setIsLoadingTraining(false);
+            }
+        };
+
+        fetchHistoricalSession();
+    }, [urlSessionId]);
+
     useEffect(() => {
         // Initialize camera for preview when idle
         const initCamera = async () => {
-            if (streamRef.current) return;
+            if (streamRef.current || urlSessionId) return;
 
             console.log("🎥 Requesting Camera/Mic Access...");
             try {

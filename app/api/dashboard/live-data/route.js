@@ -5,6 +5,7 @@ import ActiveQuizSession from "@/models/ActiveQuizSession";
 import ChatSession from "@/models/chatSession.model";
 import { startOfDay, endOfDay, subDays, format } from "date-fns";
 import User from "@/models/User";
+import { ConfidenceCoachSession } from "@/models/ConfidenceCoachSession";
 
 const buildDateFilter = (start) => ({
     timestamp: { $gte: start }
@@ -52,7 +53,8 @@ export async function GET(request) {
             activeSession,
             aggregatedData,
             currentMentorSessionsRaw,
-            previousMentorSessionsRaw
+            previousMentorSessionsRaw,
+            confidenceCoachSessionsRaw
         ] = await Promise.all([
             // Current period attempts
             UserAttempt.find({ ...baseFilter, ...buildDateFilter(currentStart) })
@@ -107,6 +109,9 @@ export async function GET(request) {
             ChatSession.find({ ...baseFilter, ...buildChatPrevDateFilter(prevStart, prevEnd) })
                 .select('_id updatedAt sessionId')
                 .lean(),
+                
+            // All Confidence Coach Sessions in range
+            ConfidenceCoachSession.find({ userId, completedAt: { $gte: currentStart } }).sort({ completedAt: -1 }).lean(),
         ]);
 
         const mapAttempt = (a) => ({
@@ -126,14 +131,26 @@ export async function GET(request) {
             isVoiceQuiz: false
         });
 
+        const mapCoachSession = (s) => ({
+            _id: s._id,
+            timestamp: s.completedAt,
+            date: format(new Date(s.completedAt), 'yyyy-MM-dd'),
+            module: 'confidenceCoach',
+            sessionId: s.sessionId || s._id,
+            isCorrect: s.score >= 5 ? true : false, // For baseline metric mapping
+            isVoiceQuiz: true
+        });
+
         const currentSessions = [
             ...currentAttemptsRaw.map(mapAttempt),
-            ...(currentMentorSessionsRaw || []).map(mapChatSession)
+            ...(currentMentorSessionsRaw || []).map(mapChatSession),
+            ...(confidenceCoachSessionsRaw || []).map(mapCoachSession)
         ];
 
         const previousSessions = [
             ...previousAttemptsRaw.map(mapAttempt),
             ...(previousMentorSessionsRaw || []).map(mapChatSession)
+            // Note: confidence coach hasn't been fetched for previous range yet
         ];
 
         // --- Compatibility Mapping ---
@@ -251,29 +268,34 @@ export async function GET(request) {
             prevConfidenceScore,
             totalSessions,
             prevTotalSessions,
-            activeSession: activeSession ? {
-                id: activeSession._id,
-                sessionId: activeSession.sessionId || activeSession._id,
-                title: activeSession.title || (activeSession.moduleId === 'microLearning' ? 'Micro-Learning' : 'In-Progress Challenge'),
-                progress: activeSession.questionsAnswered || 0,
-                startTime: activeSession.startTime,
-                moduleId: activeSession.moduleId || 'inquizzo',
-                stage: activeSession.quizState?.stage || null,
-                videoId: activeSession.quizState?.videoId || null,
-                playlistId: activeSession.quizState?.playlistId || null,
-            } : null,
-            lastCompletedSession: lastCompletedSessionData,
             moduleProgress: {
+                activeSession: activeSession ? {
+                    id: activeSession._id,
+                    sessionId: activeSession.sessionId || activeSession._id,
+                    title: activeSession.title || (activeSession.moduleId === 'microLearning' ? 'Micro-Learning' : 'In-Progress Challenge'),
+                    progress: activeSession.questionsAnswered || 0,
+                    startTime: activeSession.startTime,
+                    moduleId: activeSession.moduleId || 'inquizzo',
+                    stage: activeSession.quizState?.stage || null,
+                    videoId: activeSession.quizState?.videoId || null,
+                    playlistId: activeSession.quizState?.playlistId || null,
+                } : null,
+                lastCompletedSession: lastCompletedSessionData,
+                confidenceCoachSessionsList: confidenceCoachSessionsRaw || [],
                 accuracyProgress,
                 questionsProgress,
                 scoreProgress,
                 socialMentorSessionsVal: smCount,
                 socialMentorSessionsProgress: Math.min(100, Math.round((smCount / 20) * 100)), // arbitrary cap
+                confidenceCoachScore: user.confidenceCoachStats?.averageScore || 0,
+                confidenceCoachSessions: user.confidenceCoachStats?.sessionsCompleted || 0,
                 // Display labels for the UI
-                accuracyLabel: `${accuracyProgress}% Accuracy`,
-                questionsLabel: `${rangeCount} Questions`,
-                scoreLabel: `${rangeScore} Pts`,
+                accuracyLabel: `${accuracyProgress}%`,
+                questionsLabel: `${questionsProgress}%`,
+                scoreLabel: `${scoreProgress}%`,
                 socialMentorSessionsLabel: `${smCount} Sessions`,
+                confidenceCoachScoreLabel: `${user.confidenceCoachStats?.averageScore || 0}/10 Avg`,
+                confidenceCoachSessionsLabel: `${user.confidenceCoachStats?.sessionsCompleted || 0} Sessions`,
                 // Legacy support
                 accuracy: accuracyProgress,
                 logic: accuracyProgress

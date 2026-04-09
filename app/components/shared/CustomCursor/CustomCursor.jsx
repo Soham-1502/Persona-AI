@@ -118,8 +118,14 @@ const CustomCursor = () => {
 
     return (
         <div
-            className="fixed inset-0 pointer-events-none z-[9999]"
-            style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 0.2s ease-out' }}
+            className="fixed inset-0 pointer-events-none z-[9999] select-none"
+            style={{ 
+                opacity: isVisible ? 1 : 0, 
+                transition: 'opacity 0.2s ease-out',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                msUserSelect: 'none'
+            }}
         >
             <motion.div
                 style={{
@@ -130,18 +136,21 @@ const CustomCursor = () => {
                     // e.g., translateX: "-10%", translateY: "-10%"
                     translateX: "0%",
                     translateY: "0%",
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
                 }}
                 animate={{
                     scale: isClicked ? 0.6 : (isHovered ? 1.15 : 1),
                 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                className="absolute w-5 h-5 flex items-center justify-center pointer-events-none"
+                className="absolute w-5 h-5 flex items-center justify-center pointer-events-none select-none"
             >
                 <img
                     key={currentTheme}
                     src={customImage}
                     alt="cursor"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain pointer-events-none select-none"
+                    style={{ WebkitUserDrag: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
                     onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.parentElement.style.border = '2px solid white';

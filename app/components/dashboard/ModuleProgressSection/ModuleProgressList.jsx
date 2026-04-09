@@ -12,9 +12,17 @@ export default function ModuleProgressList({ modules, selectedCategory, statusFi
         }))
     );
 
+    // By default (All or InProgress tabs), hide static 0% progress rows so the list only contains active work.
+    // We only preserve 0% base rows if the user explicitly clicks the 'Pending' filter.
+    if (!statusFilter || statusFilter === 'all') {
+        submodulerows = submodulerows.filter(({ submodule }) => {
+            if (submodule.isVirtual) return true;
+            return submodule.progress && submodule.progress > 0;
+        });
+    }
+
     if (statusFilter && statusFilter !== 'all') {
         submodulerows = submodulerows.filter(({ submodule }) => {
-            // Virtual rows (Continue / Review) always show regardless of filter
             if (submodule.isVirtual) return true;
             const progress = submodule.progress;
             if (statusFilter === 'completed') return progress === 100;

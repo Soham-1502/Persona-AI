@@ -183,6 +183,33 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
         });
         return { ...module, submodules: smSubmodules };
       }
+      
+      // Inject Confidence Coach live progress
+      if (module.id === 'confidencecoach') {
+        const ccSubmodules = [];
+
+        // Push Review Row for ALL sessions in the filtered timeframe
+        if (liveData.confidenceCoachSessionsList && liveData.confidenceCoachSessionsList.length > 0) {
+          liveData.confidenceCoachSessionsList.forEach((sessionData, index) => {
+            const sessionTitle = sessionData.question || "Confidence Session";
+            // Truncate if it's a very long question text
+            const displayTitle = sessionTitle.length > 30 ? sessionTitle.substring(0, 30) + '...' : sessionTitle;
+
+            ccSubmodules.push({
+              id: `cc-completed-${sessionData.sessionId || index}`,
+              name: displayTitle,
+              progress: Math.min(100, Math.round(sessionData.score * 10)),
+              displayLabel: `Score: ${sessionData.score}/10`,
+              isVirtual: true,
+              type: 'review',
+              sessionId: sessionData.sessionId,
+              moduleId: 'confidenceCoach', 
+            });
+          });
+        }
+
+        return { ...module, submodules: ccSubmodules };
+      }
 
       return module;
     });
@@ -192,7 +219,7 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
     <motion.div
       whileHover={{ y: -2 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      className="col-span-full lg:col-span-3 h-125 backdrop-blur-md border rounded-2xl p-5 shadow-xl w-full flex flex-col"
+      className="col-span-full lg:col-span-3 h-[500px] backdrop-blur-md border rounded-2xl p-5 shadow-xl w-full flex flex-col"
       style={{
         backgroundColor: t.cardBg,
         borderColor: t.cardBorder,
@@ -250,7 +277,7 @@ export default function ModuleProgressSection({ liveData = null, liveLoading = t
 
 
         {/* Content Area */}
-        <div className='flex-1 overflow-y-auto custom-scroll pr-2 min-h-0'>
+        <div className='flex-1 overflow-y-auto custom-scroll pr-2 min-h-0' data-lenis-prevent>
           {liveLoading && !localActive ? (
             <div className="flex flex-col gap-3">
               {Array(3).fill(0).map((_, i) => (

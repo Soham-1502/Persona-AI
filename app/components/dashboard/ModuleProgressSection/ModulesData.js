@@ -23,4 +23,10 @@ export const modulesData = [
       { id: "sessions", name: "Total Sessions", progress: 0 },
     ],
   },
+  {
+    id: "confidencecoach",
+    name: "Confidence Coach",
+    icon: "Mic",
+    submodules: [],
+  },
 ];
