@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { withGeminiFallback } from "@/lib/gemini-keys";
 import { authenticate } from "@/lib/auth";
 import stringSimilarity from "string-similarity";
 import connectDB from "@/lib/db";
 import { runGroqAction } from "@/lib/ai-handler";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "", maxRetries: 0 });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(req) {
   try {
@@ -74,19 +73,13 @@ Respond ONLY in JSON with the following structure:
 
     // 3. Gemini Promise
     const geminiPromise = (async () => {
-      try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      return await withGeminiFallback(async (genAI, modelName) => {
+        const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(prompt);
         const content = result.response.text();
         if (!content) throw new Error("Gemini empty");
         return content;
-      } catch (err) {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        if (!content) throw new Error("Gemini lite empty");
-        return content;
-      }
+      });
     })();
     aiPromises.push(geminiPromise);
 

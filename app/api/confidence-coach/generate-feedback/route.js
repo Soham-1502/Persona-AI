@@ -1,45 +1,45 @@
 import { NextResponse } from 'next/server';
-import Groq from 'groq-sdk';
-
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
-});
+import { withGroqFallback } from '@/lib/groq-keys';
 
 export async function POST(req) {
     try {
         console.log("🤖 Received feedback generation request");
         const body = await req.json();
-        const { metrics, scenarioType, difficulty } = body;
+        const { metrics, scenarioType, difficulty, question, userTranscript } = body;
 
-        // Try primary and then substitutes if one fails
-        const keys = [
-            process.env.GROQ_API_KEY,
-            process.env.GROQ_API_KEY_SUB_1,
-            process.env.GROQ_API_KEY_SUB_2,
-            process.env.GROQ_API_KEY_REGULAR
-        ].filter(k => !!k);
+        // Build optional content section
+        const contentSection = question && userTranscript
+            ? `
+                    QUESTION ASKED:
+                    "${question}"
 
-        let lastError = null;
-        for (const key of keys) {
-            try {
-                console.log(`🤖 Attempting AI generation with key starting with: ${key.substring(0, 10)}...`);
-                const groqClient = new Groq({ apiKey: key.trim() }); // Ensure trimmed
+                    USER'S SPOKEN ANSWER (transcript):
+                    "${userTranscript.trim() || "(no speech detected)"}"
 
-                const prompt = `
+                    CONTENT RELEVANCE ANALYSIS:
+                    - Did the user actually address the question? Were their points relevant to the "${scenarioType}" scenario?
+                    - Did they stay focused or go off-topic?
+                    - Was the answer structured (intro, key points, conclusion)?
+                    - Were there any critical omissions for this scenario type?
+                    Include at least ONE of your 3 improvement areas addressing the CONTENT of what they said, not just delivery.
+            `
+            : ``;
+
+        const prompt = `
                     You are an elite communication and confidence coach. 
                     The user just completed a "${scenarioType}" practice session at "${difficulty}" difficulty.
                     
-                    METRICS:
+                    DELIVERY METRICS:
                     - Eye Contact: ${metrics.eyeContact}%
                     - Posture/Presence: ${metrics.posture}%
                     - Emotion: ${metrics.emotion}
                     - Pitch Stability: ${metrics.vocalStability}%
                     - Speaking Pace (WPM): ${metrics.wpm}
                     - Filler Words: ${metrics.fillers}
-
+                    ${contentSection}
                     CRITICAL: The user has a deliberate speaking style.
                     WPM Thresholds: < 15 EXTREMELY SLOW, 20-65 IDEAL, > 80 TOO FAST.
-                    Focus on substance and presence.
+                    Focus on substance, presence, AND content quality.
 
                     You MUST generate exactly 3 specific "Areas for Improvement". Be critical but constructive.
                     For each area, suggest a relevant training category from this list: 
@@ -68,36 +68,25 @@ export async function POST(req) {
                     }
                 `;
 
-                const chatCompletion = await groqClient.chat.completions.create({
-                    messages: [{ role: 'user', content: prompt }],
-                    model: 'llama-3.3-70b-versatile',
-                    response_format: { type: 'json_object' }
-                });
-
-                const rawContent = chatCompletion.choices[0].message.content;
-                const content = JSON.parse(rawContent);
-                const feedback = content.feedback || [];
-
-                console.log("✅ Success with key!");
-                return NextResponse.json({ success: true, feedback: feedback.slice(0, 3) });
-
-            } catch (err) {
-                console.warn(`⚠️ Key failed: ${err.message}`);
-                lastError = err;
-                continue; // Try next key
-            }
-        }
-
-        console.error("❌ All AI keys exhausted or failed:", lastError);
-        return NextResponse.json(
-            { success: false, error: lastError?.message || 'AI generation failed' },
-            { status: 500 }
+        const chatCompletion = await withGroqFallback((groqClient) =>
+            groqClient.chat.completions.create({
+                messages: [{ role: 'user', content: prompt }],
+                model: 'llama-3.3-70b-versatile',
+                response_format: { type: 'json_object' }
+            })
         );
 
+        const rawContent = chatCompletion.choices[0].message.content;
+        const content = JSON.parse(rawContent);
+        const feedback = content.feedback || [];
+
+        console.log("✅ Feedback generated successfully!");
+        return NextResponse.json({ success: true, feedback: feedback.slice(0, 3) });
+
     } catch (error) {
-        console.error('🛑 Fatal Error in AI route:', error);
+        console.error('🛑 Fatal Error in generate-feedback route:', error);
         return NextResponse.json(
-            { success: false, error: 'Internal Server Error' },
+            { success: false, error: error.message || 'Internal Server Error' },
             { status: 500 }
         );
     }

@@ -1,7 +1,5 @@
-import { Groq } from 'groq-sdk';
 import { NextResponse } from 'next/server';
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY_3 || process.env.GROQ_API_KEY || 'dummy-key-for-build' });
+import { withGroqFallback } from '@/lib/groq-keys';
 
 // In-memory cache with TTL (1 hour)
 const quizCache = new Map();
@@ -98,17 +96,19 @@ Now generate based on this content:
 
     while (retryCount <= maxRetries && !completion) {
       try {
-        completion = await groq.chat.completions.create({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: knowledgeSource }
-          ],
-          model: 'llama-3.3-70b-versatile', // best balance of quality + speed on Groq
-          temperature: 0.65,                // good creativity without chaos
-          max_tokens: 2048,
-          top_p: 0.9,
-          response_format: { type: 'json_object' },
-        });
+        completion = await withGroqFallback((groqClient) => 
+          groqClient.chat.completions.create({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: knowledgeSource }
+            ],
+            model: 'llama-3.3-70b-versatile', // best balance of quality + speed on Groq
+            temperature: 0.65,                // good creativity without chaos
+            max_tokens: 2048,
+            top_p: 0.9,
+            response_format: { type: 'json_object' },
+          })
+        );
       } catch (groqErr) {
         retryCount++;
         console.warn(`[MCQ] Groq attempt ${retryCount} failed:`, groqErr.message);

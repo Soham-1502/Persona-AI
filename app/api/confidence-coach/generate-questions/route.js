@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { withGeminiFallback } from '@/lib/gemini-keys';
 
 export async function POST(req) {
     try {
@@ -9,9 +9,6 @@ export async function POST(req) {
         if (!scenarioType) {
             return NextResponse.json({ success: false, error: 'scenarioType is required' }, { status: 400 });
         }
-
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         let difficultyModifiers = "";
         if (difficulty === "Beginner") {
@@ -29,8 +26,11 @@ export async function POST(req) {
 
         const prompt = `Generate exactly one realistic practice question for a "${scenarioType}" scenario, to be spoken aloud by the user. ${difficultyModifiers} Return ONLY the plain text string of the question. No markdown, no prefixes, no quotation marks.${antiRepetition}`;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text().trim();
+        const text = await withGeminiFallback(async (genAI, modelName) => {
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            return result.response.text().trim();
+        });
 
         return NextResponse.json({ success: true, question: text });
     } catch (error) {

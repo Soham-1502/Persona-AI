@@ -125,14 +125,17 @@ const CustomCursor = () => {
                 style={{
                     x: mouseX.current === -100 ? (typeof window !== "undefined" ? window.innerWidth / 2 : 0) : mouseX,
                     y: mouseY.current === -100 ? (typeof window !== "undefined" ? window.innerHeight / 2 : 0) : mouseY,
-                    translateX: "-50%",
-                    translateY: "-50%",
+                    // If the visual pointer is at the top-left of your cursor image, remove the -50% translation.
+                    // If you need to fine-tune it (e.g., the pointer is a few pixels inwards), adjust these values
+                    // e.g., translateX: "-10%", translateY: "-10%"
+                    translateX: "0%",
+                    translateY: "0%",
                 }}
                 animate={{
                     scale: isClicked ? 0.6 : (isHovered ? 1.15 : 1),
                 }}
                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                className="absolute w-7 h-7 flex items-center justify-center pointer-events-none"
+                className="absolute w-5 h-5 flex items-center justify-center pointer-events-none"
             >
                 <img
                     key={currentTheme}

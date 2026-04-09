@@ -44,6 +44,7 @@ export async function POST(req) {
         if (!user) {
             return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
         }
+        
 
         const { sessionId, messages, title } = await req.json();
 
