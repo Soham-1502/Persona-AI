@@ -1,14 +1,17 @@
-// location : app/inquizzo/QuizDomainSelection/page.jsx
-// Question text uses Raleway via inline style={{ fontFamily: "'Raleway', sans-serif" }}
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ChevronRight, Play, Zap, Target, Mic, MicOff, Volume2,
   CheckCircle, XCircle, RotateCcw, Search, BookOpen, Brain, Code, Sigma,
   Scroll, Landmark, Briefcase, User, Cpu, Palette, Gamepad2, FlaskConical, Atom, Clock,
-  X, Shuffle
+  Stethoscope, TrendingUp, Leaf, Hospital, Settings, Gavel, Coins, Languages, Puzzle,
+  Sprout, Gamepad, Music, Globe, Users, Telescope, Building, Shirt, Dumbbell,
+  Camera, Utensils, BarChart, Sparkles, FileText, Smartphone, Rocket, Heart,
+  Bot, Bird, PartyPopper, Wheat, Dna, Pill, Calculator, MessageSquare, Trophy,
+  Wifi, HeartPulse, History, Scale, Tv, Library, Lightbulb, Microscope,
+  Vote, Grid, X, Shuffle, Newspaper, Thermometer, Cloud, ClipboardList, Radio, Edit3, Waves
 } from "lucide-react";
 import Header from '@/app/components/shared/header/Header.jsx';
 import AnimeIcon from '@/app/components/inquizzo/AnimeIcon';
@@ -19,7 +22,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from "next-themes";
 import { QUIZ_STRUCTURE } from "@/lib/quizData";
 import { jsPDF } from "jspdf";
@@ -30,11 +32,44 @@ const DOMAIN_ICON_MAP = {
   science: FlaskConical, programming: Code, mathematics: Sigma, history: Landmark,
   humanities: Scroll, business: Briefcase, "personal-dev": User, psychology: Brain,
   technology: Cpu, arts: Palette, games: Gamepad2,
+  jee: Target, neet: Stethoscope, upsc: Landmark, economics: TrendingUp,
+  biology: Leaf, medicine: Hospital, engineering: Settings, law: Gavel,
+  "accountancy-finance": Coins, languages: Languages, "reasoning-aptitude": Puzzle,
+  "environment-ecology": Sprout, "digital-games": Gamepad, "puzzle-board-games": Puzzle,
+  music: Music, philosophy: Brain, "political-science": Vote, sociology: Users,
+  astronomy: Telescope, "architecture-design": Building, "fashion-textile": Shirt,
+  "physical-education": Dumbbell, "photography-film": Camera, culinary: Utensils,
+  "data-science": BarChart, mythology: Sparkles, "general-knowledge": Globe,
+  "competitive-exams": FileText, "digital-literacy": Smartphone, entrepreneurship: Rocket,
+  "health-wellness": Heart, "robotics-automation": Bot, "world-religions": Bird,
+  "trivia-fun": PartyPopper, agriculture: Wheat,
+  "biotech-genetics": Dna, "ai-ml": Bot, "current-affairs": Newspaper,
+  "medical-sciences": Stethoscope, "climate-change": Thermometer, "banking-ssc": Landmark,
+  "music-arts": Music, "literature-writing": BookOpen, "nuclear-modern-physics": Atom,
+  "geography-advanced": Globe, "cloud-devops": Cloud, "ancient-india-culture": History,
+  "media-journalism": Tv, "earth-science": Globe, "human-rights-gender": Scale, "state-psc": ClipboardList
 };
 const DOMAIN_ANIM = {
   science: "pulse", programming: "spin", mathematics: "wiggle", history: "bounce",
   humanities: "slide", business: "jump", "personal-dev": "pulse", psychology: "wiggle",
   technology: "spin", arts: "bounce", games: "jump",
+  jee: "pulse", neet: "pulse", upsc: "bounce", economics: "wiggle",
+  biology: "slide", medicine: "pulse", engineering: "spin", law: "bounce",
+  "accountancy-finance": "jump", languages: "slide", "reasoning-aptitude": "wiggle",
+  "environment-ecology": "pulse", "digital-games": "spin", "puzzle-board-games": "wiggle",
+  music: "bounce", philosophy: "pulse", "political-science": "bounce", sociology: "slide",
+  astronomy: "spin", "architecture-design": "bounce", "fashion-textile": "slide",
+  "physical-education": "jump", "photography-film": "bounce", culinary: "pulse",
+  "data-science": "wiggle", mythology: "pulse", "general-knowledge": "slide",
+  "competitive-exams": "bounce", "digital-literacy": "pulse", entrepreneurship: "jump",
+  "health-wellness": "pulse", "robotics-automation": "spin", "world-religions": "bounce",
+  "trivia-fun": "jump", agriculture: "slide",
+  "biotech-genetics": "pulse", "ai-ml": "spin", "current-affairs": "bounce",
+  "medical-sciences": "pulse", "climate-change": "wiggle", "banking-ssc": "jump",
+  "music-arts": "bounce", "literature-writing": "slide", "nuclear-modern-physics": "pulse",
+  "geography-advanced": "spin", "cloud-devops": "pulse", "ancient-india-culture": "bounce",
+  "media-journalism": "wiggle", "earth-science": "slide", "human-rights-gender": "bounce",
+  "state-psc": "jump"
 };
 const CATEGORY_ICON_MAP = {
   physics: Atom, chemistry: FlaskConical, fundamentals: Code, "web-dev": Play,
@@ -42,6 +77,41 @@ const CATEGORY_ICON_MAP = {
   management: Briefcase, marketing: Zap, communication: Volume2, eq: User,
   cognitive: Brain, social: Target, ai: Cpu, cybersecurity: Zap,
   writing: Palette, visual: Palette, indoor: Gamepad2, outdoor: Play,
+  // New Categories
+  "jee-physics": Atom, "jee-chemistry": FlaskConical, "jee-math": Sigma,
+  "neet-biology": Dna, "neet-physics": Atom,
+  "general-studies-1": Landmark, "general-studies-2": Gavel, "general-studies-3": BarChart, "general-studies-4": Users,
+  "microeconomics": TrendingUp, "macroeconomics": Globe,
+  "human-body": HeartPulse, "genetics": Dna, "microbiology": Microscope,
+  "clinical-medicine": Stethoscope, "pharmacology": Pill, "nutrition": Utensils,
+  "civil-engineering": Building, "mechanical-engineering": Settings, "electrical-engineering": Zap,
+  "constitutional-law": Scale, "criminal-law": Gavel, "corporate-law": Briefcase,
+  "accounting": Calculator, "taxation": FileText, "personal-finance": Coins,
+  "english": Languages, "hindi": Languages, "sanskrit": Scroll,
+  "verbal-reasoning": MessageSquare, "non-verbal-reasoning": Puzzle, "quantitative-aptitude": Sigma,
+  "esports": Trophy, "mobile-gaming": Smartphone, "iot": Wifi, "mental-health": HeartPulse,
+  "space-missions": Rocket, "startup-basics": Lightbulb, "funding-growth": TrendingUp,
+  "neet-chemistry": FlaskConical, "game-knowledge": Gamepad, "chess-advanced": Grid,
+  "music-theory": Music, "western-philosophy": Brain, "indian-philosophy": Sparkles,
+  "social-institutions": Users, "solar-system": Telescope, "photography": Camera,
+  "cooking-techniques": Utensils, "pop-culture": Tv, "crop-science": Leaf, "microbiology": Microscope,
+  "cognitive-psychology": Brain, "developmental-psychology": User, "abnormal-psychology": Search, "social-psychology": Users,
+  "indian-economy-eco": Landmark, "international-trade": Globe, "molecular-genetics": Dna,
+  "genetic-engineering": FlaskConical, "bioinformatics": Code, "ai-fundamentals": Cpu,
+  "machine-learning": BarChart, "deep-learning": Zap, "nlp": MessageSquare,
+  "network-security": Wifi, "ethical-hacking": Search, "national-affairs": Landmark,
+  "international-affairs": Globe, "static-gk": Library, "anatomy": Heart,
+  "pathology": Microscope, "global-warming": Thermometer, "renewable-energy": Zap,
+  "sustainable-development": Leaf, "banking-exams": Coins, "ssc-exams": FileText,
+  "indian-classical-music": Music, "western-music": Music, "dance-theatre": Palette,
+  "world-literature": Globe, "indian-literature": BookOpen, "creative-writing": Edit3,
+  "nuclear-physics": Atom, "quantum-mechanics": Zap, "relativity": Telescope,
+  "physical-geography": Globe, "human-geography": Users, "economic-geography": BarChart,
+  "cloud-fundamentals": Cloud, "devops": Settings, "vedic-ancient": History,
+  "ancient-science-art": Palette, "mass-communication": Radio, "journalism-skills": Edit3,
+  "geology": Globe, "natural-disasters": Zap, "oceanography-adv": Waves,
+  "human-rights": Scale, "gender-studies": Users, "maharashtra-mpsc": Target,
+  "rajasthan-rpsc": Target, "general-state-psc": Briefcase
 };
 
 const CARD_HOVER_VARIANTS = {
