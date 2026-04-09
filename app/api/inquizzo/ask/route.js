@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { withGeminiFallback } from "@/lib/gemini-keys";
 import { authenticate } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { runGroqAction } from "@/lib/ai-handler";
 import FallbackQuestion from "@/models/FallbackQuestion";
 
-// Initialize OpenAI and Gemini
+// Initialize OpenAI
 console.log("🛠️ Initializing secondary AI clients...");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "", maxRetries: 0 });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 // Helper to extract JSON from potentially markdown-wrapped responses
 function extractJSON(text) {
@@ -128,23 +127,16 @@ ${avoidClause}`;
     })();
     aiPromises.push(openAIPromise);
 
-    // 3. Gemini Promise (2.0-flash with fallback to 2.0-flash-lite)
+    // 3. Gemini Promise (with fallback chain)
     const geminiPromise = (async () => {
-      try {
-        console.log("🏁 Racing: Gemini (2.0-flash)...");
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      return await withGeminiFallback(async (genAI, modelName) => {
+        console.log(`🏁 Racing: Gemini (${modelName})...`);
+        const model = genAI.getGenerativeModel({ model: modelName });
         const result = await model.generateContent(prompt);
         const content = result.response.text();
         if (!content) throw new Error("Gemini returned empty content");
-        return { content, source: "Gemini (2.0-flash)" };
-      } catch (err) {
-        console.log("🏁 Gemini 2.0-flash failed, trying gemini-2.0-flash-lite...");
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        if (!content) throw new Error("Gemini lite returned empty content");
-        return { content, source: "Gemini (2.0-flash-lite)" };
-      }
+        return { content, source: `Gemini (${modelName})` };
+      });
     })();
     aiPromises.push(geminiPromise);
 

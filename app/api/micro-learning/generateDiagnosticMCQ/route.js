@@ -1,8 +1,4 @@
-import Groq from 'groq-sdk'
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY_3 || process.env.GROQ_API_KEY || 'dummy-key-for-build'
-})
+import { withGroqFallback } from '@/lib/groq-keys';
 
 function divideIntoSegments(transcript, numSegments = 8) {
   const words = transcript.split(/\s+/)
@@ -63,17 +59,19 @@ Requirements:
 - Return ONLY valid JSON, no other text
 `
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "user",
-          content: diagnosticPrompt
-        }
-      ],
-      temperature: 0.9,
-      max_tokens: 3000
-    })
+    const completion = await withGroqFallback((groqClient) => 
+      groqClient.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          {
+            role: "user",
+            content: diagnosticPrompt
+          }
+        ],
+        temperature: 0.9,
+        max_tokens: 3000
+      })
+    );
 
     const mcqText = completion.choices[0].message.content
     const mcqs = JSON.parse(mcqText)

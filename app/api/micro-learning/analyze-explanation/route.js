@@ -1,7 +1,5 @@
-import { Groq } from "groq-sdk";
 import { NextResponse } from "next/server";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY_3 || process.env.GROQ_API_KEY || 'dummy-key-for-build' });
+import { withGroqFallback } from '@/lib/groq-keys';
 
 const wait = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -72,18 +70,20 @@ export async function POST(req) {
 
     while (attempts < maxAttempts) {
       try {
-        completion = await groq.chat.completions.create({
-          messages: [
-            { role: "system", content: systemPrompt },
-            {
-              role: "user",
-              content: `SOURCE: ${transcript}\n\nUSER EXPLANATION: ${userExplanation}`,
-            },
-          ],
-          model: "llama-3.3-70b-versatile",
-          response_format: { type: "json_object" },
-          temperature: 0.7,
-        });
+        completion = await withGroqFallback((groqClient) => 
+          groqClient.chat.completions.create({
+            messages: [
+              { role: "system", content: systemPrompt },
+              {
+                role: "user",
+                content: `SOURCE: ${transcript}\n\nUSER EXPLANATION: ${userExplanation}`,
+              },
+            ],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" },
+            temperature: 0.7,
+          })
+        );
         break;
       } catch (err) {
         attempts++;

@@ -11,15 +11,30 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const MONGO_URI = process.env.MONGO_URI;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEYS = Object.entries(process.env)
+    .filter(([name, value]) => /^GEMINI_API_KEY/i.test(name) && value)
+    .map(([, value]) => value);
 
-if (!MONGO_URI || !GEMINI_API_KEY) {
-    console.error("❌ Missing MONGO_URI or GEMINI_API_KEY in .env");
+if (!MONGO_URI || GEMINI_API_KEYS.length === 0) {
+    console.error("❌ Missing MONGO_URI or GEMINI_API_KEY entries in .env");
     process.exit(1);
 }
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+// Global state for keys
+let currentKeyIndex = 0;
+let genAI = new GoogleGenerativeAI(GEMINI_API_KEYS[currentKeyIndex]);
+let model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+function switchToNextKey() {
+    currentKeyIndex++;
+    if (currentKeyIndex < GEMINI_API_KEYS.length) {
+        console.log(`🔄 Switching to Gemini API Key #${currentKeyIndex + 1}...`);
+        genAI = new GoogleGenerativeAI(GEMINI_API_KEYS[currentKeyIndex]);
+        model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        return true;
+    }
+    return false;
+}
 
 async function connectDB() {
     try {
@@ -57,8 +72,16 @@ async function generateBatch(difficulty, count, existingQuestions) {
             if (parsed.length > 0) return parsed;
             throw new Error("Zero questions in JSON array");
         } catch (err) {
-            console.error(`⚠️ Retry for ${difficulty} (${retries} left):`, err.message);
+            console.error(`⚠️ Error for ${difficulty}:`, err.message);
+            
+            // Try switching to next key if we hit a rate limit or other error
+            if (switchToNextKey()) {
+                console.log("♻️ Retrying with new key...");
+                continue; // retry loop with same retries count but new key
+            }
+
             retries--;
+            console.warn(`⏳ Retrying in 2s... (${retries} retries left)`);
             await new Promise(r => setTimeout(r, 2000));
         }
     }
