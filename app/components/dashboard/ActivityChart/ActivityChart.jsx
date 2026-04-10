@@ -73,7 +73,7 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
   if (isLoading) {
     return (
       <div
-        className="backdrop-blur-[12px] border rounded-2xl overflow-hidden shadow-xl h-full flex flex-col"
+        className="backdrop-blur-[12px] border rounded-2xl overflow-hidden shadow-xl h-full flex flex-col min-h-[350px]"
         style={{
           backgroundColor: t.cardBg,
           borderColor: t.cardBorder,
@@ -119,7 +119,7 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
       <motion.div
         whileHover={{ y: -2 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        className="backdrop-blur-[12px] border rounded-2xl overflow-hidden shadow-xl h-full flex flex-col"
+        className="backdrop-blur-[12px] border rounded-2xl overflow-hidden shadow-xl h-full flex flex-col min-h-[350px]"
         style={{
           backgroundColor: t.cardBg,
           borderColor: t.cardBorder,
@@ -175,8 +175,8 @@ export const ActivityChart = React.memo(function ActivityChart({ data, selectedD
         </div>
 
         {/* Chart */}
-        <div className="px-2 sm:px-4 py-4 flex-1">
-          <ChartContainer config={chartConfig} className="aspect-auto h-full w-full">
+        <div className="px-2 sm:px-4 py-4 w-full">
+          <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
             <BarChart data={data} margin={{ left: 12, right: 12 }}>
               <CartesianGrid vertical={false} stroke={t.gridColor} />
               <XAxis
