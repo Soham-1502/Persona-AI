@@ -73,12 +73,21 @@ Respond ONLY in JSON with the following structure:
 
     // 3. Gemini Promise
     const geminiPromise = (async () => {
-      return await withGeminiFallback(async (genAI, modelName) => {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        if (!content) throw new Error("Gemini empty");
-        return content;
+      return await withGeminiFallback(async (client, modelName, provider) => {
+        if (provider === 'gemini') {
+          const model = client.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(prompt);
+          const content = result.response.text();
+          if (!content) throw new Error("Gemini empty");
+          return content;
+        } else {
+          const completion = await client.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: modelName,
+            temperature: 0.3,
+          });
+          return completion.choices[0]?.message?.content || "";
+        }
       });
     })();
     aiPromises.push(geminiPromise);

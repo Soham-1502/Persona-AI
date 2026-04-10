@@ -129,13 +129,24 @@ ${avoidClause}`;
 
     // 3. Gemini Promise (with fallback chain)
     const geminiPromise = (async () => {
-      return await withGeminiFallback(async (genAI, modelName) => {
+      return await withGeminiFallback(async (client, modelName, provider) => {
         console.log(`🏁 Racing: Gemini (${modelName})...`);
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent(prompt);
-        const content = result.response.text();
-        if (!content) throw new Error("Gemini returned empty content");
-        return { content, source: `Gemini (${modelName})` };
+        if (provider === 'gemini') {
+          const model = client.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(prompt);
+          const content = result.response.text();
+          if (!content) throw new Error("Gemini returned empty content");
+          return { content, source: `Gemini (${modelName})` };
+        } else {
+          const completion = await client.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: modelName,
+            temperature: 0.7,
+          });
+          const content = completion.choices[0]?.message?.content;
+          if (!content) throw new Error("Groq fallback empty");
+          return { content, source: `Groq Fallback (${modelName})` };
+        }
       });
     })();
     aiPromises.push(geminiPromise);

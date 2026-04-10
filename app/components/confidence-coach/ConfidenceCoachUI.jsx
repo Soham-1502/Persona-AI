@@ -8,6 +8,7 @@ import { AudioAnalyzer } from "./AudioAnalyzer";
 import { getAuthToken } from "@/lib/auth-client";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CATEGORY_MAP } from "@/lib/data";
 
 const METRIC_TO_CATEGORY = {
@@ -1223,29 +1224,37 @@ export function ConfidenceCoachUI() {
                                 <div className="flex flex-col sm:flex-row gap-4 mb-4">
                                     <div className="flex-1 min-w-0">
                                         <label className="block text-sm font-medium mb-2">Scenario Type</label>
-                                        <select
-                                            value={scenarioCategory}
-                                            onChange={(e) => setScenarioCategory(e.target.value)}
-                                            className="w-full p-2.5 sm:p-3 rounded-lg border border-input bg-background"
+                                        <Select 
+                                            value={scenarioCategory} 
+                                            onValueChange={setScenarioCategory}
                                             disabled={isGeneratingQuestion}
                                         >
-                                            {scenarios.map(s => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
+                                            <SelectTrigger className="w-full h-12 rounded-xl bg-secondary/20 border-border font-bold">
+                                                <SelectValue placeholder="Select Scenario" />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl bg-card border-border">
+                                                {scenarios.map(s => (
+                                                    <SelectItem key={s} value={s} className="rounded-lg font-medium">{s}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <label className="block text-sm font-medium mb-2">Difficulty</label>
-                                        <select
-                                            value={difficulty}
-                                            onChange={(e) => setDifficulty(e.target.value)}
-                                            className="w-full p-2.5 sm:p-3 rounded-lg border border-input bg-background"
+                                        <Select 
+                                            value={difficulty} 
+                                            onValueChange={setDifficulty}
                                             disabled={isGeneratingQuestion}
                                         >
-                                            <option value="Beginner">Beginner</option>
-                                            <option value="Intermediate">Intermediate</option>
-                                            <option value="Expert">Expert</option>
-                                        </select>
+                                            <SelectTrigger className="w-full h-12 rounded-xl bg-secondary/20 border-border font-bold">
+                                                <SelectValue placeholder="Select Difficulty" />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl bg-card border-border">
+                                                {["Beginner", "Intermediate", "Expert"].map(level => (
+                                                    <SelectItem key={level} value={level} className="rounded-lg font-medium">{level}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
 
